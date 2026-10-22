@@ -3,3 +3,6 @@ dist
 standalone
 *.local
 .claude/
+__pycache__/
+*.pyc
+*.egg-info/

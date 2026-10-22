@@ -1,0 +1,60 @@
+{
+ "actions": [],
+ "creation": "2026-10-22 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "ai_section",
+  "anthropic_api_key",
+  "ai_model",
+  "ai_effort"
+ ],
+ "fields": [
+  {
+   "fieldname": "ai_section",
+   "fieldtype": "Section Break",
+   "label": "Read drawings with AI"
+  },
+  {
+   "fieldname": "anthropic_api_key",
+   "fieldtype": "Password",
+   "label": "Anthropic API Key",
+   "description": "Used on the server only, never sent to browsers. Each drawing reading is billed to this key."
+  },
+  {
+   "fieldname": "ai_model",
+   "fieldtype": "Data",
+   "label": "AI Model",
+   "default": "claude-opus-5-5"
+  },
+  {
+   "fieldname": "ai_effort",
+   "fieldtype": "Select",
+   "label": "AI Effort",
+   "options": "low\nmedium\nhigh\nxhigh\nmax",
+   "default": "high"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-10-22 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "PMC 3D Progress",
+ "name": "PMC Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "print": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -1,0 +1,318 @@
+{
+ "$defs": {
+  "__schema0": {
+   "type": "object",
+   "properties": {
+    "present": {
+     "type": "boolean"
+    },
+    "widthMm": {
+     "type": "number"
+    },
+    "depthMm": {
+     "type": "number"
+    }
+   },
+   "additionalProperties": false,
+   "required": [
+    "present",
+    "widthMm",
+    "depthMm"
+   ]
+  }
+ },
+ "type": "object",
+ "properties": {
+  "projectName": {
+   "type": "string",
+   "description": "Project / building name as written on the drawing title block, e.g. \"Security Cabin\"."
+  },
+  "buildingName": {
+   "type": "string"
+  },
+  "xSpansMm": {
+   "type": "array",
+   "description": "Centre-to-centre spacing between consecutive vertical grid lines, left to right, in mm.",
+   "items": {
+    "type": "number"
+   }
+  },
+  "ySpansMm": {
+   "type": "array",
+   "description": "Centre-to-centre spacing between consecutive horizontal grid lines, bottom (front) to top, in mm.",
+   "items": {
+    "type": "number"
+   }
+  },
+  "columnTypes": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "type": "string"
+     },
+     "widthMm": {
+      "type": "number"
+     },
+     "depthMm": {
+      "type": "number"
+     },
+     "footingCode": {
+      "type": "string"
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "code",
+     "widthMm",
+     "depthMm",
+     "footingCode"
+    ]
+   }
+  },
+  "footingTypes": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "type": "string"
+     },
+     "lengthMm": {
+      "type": "number"
+     },
+     "widthMm": {
+      "type": "number"
+     },
+     "depthMm": {
+      "type": "number"
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "code",
+     "lengthMm",
+     "widthMm",
+     "depthMm"
+    ]
+   }
+  },
+  "columns": {
+   "type": "array",
+   "description": "Every column position.",
+   "items": {
+    "type": "object",
+    "properties": {
+     "grid": {
+      "type": "string",
+      "description": "Grid point like \"X1Y1\" (X from left, Y from bottom/front)."
+     },
+     "columnCode": {
+      "type": "string"
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "grid",
+     "columnCode"
+    ]
+   }
+  },
+  "foundationDepthMm": {
+   "type": "number",
+   "description": "Bottom of footing below ground / plinth level, mm (positive number)."
+  },
+  "roofLevelMm": {
+   "type": "number",
+   "description": "Top of roof beams = bottom of roof slab, above ground / plinth level, mm."
+  },
+  "plinthBeam": {
+   "$ref": "#/$defs/__schema0"
+  },
+  "roofBeam": {
+   "$ref": "#/$defs/__schema0"
+  },
+  "slab": {
+   "type": "object",
+   "properties": {
+    "present": {
+     "type": "boolean"
+    },
+    "thicknessMm": {
+     "type": "number"
+    },
+    "overhangMm": {
+     "type": "number"
+    }
+   },
+   "additionalProperties": false,
+   "required": [
+    "present",
+    "thicknessMm",
+    "overhangMm"
+   ]
+  },
+  "walls": {
+   "type": "object",
+   "properties": {
+    "present": {
+     "type": "boolean"
+    },
+    "thicknessMm": {
+     "type": "number"
+    },
+    "alsoOnInternalGridLines": {
+     "type": "boolean"
+    }
+   },
+   "additionalProperties": false,
+   "required": [
+    "present",
+    "thicknessMm",
+    "alsoOnInternalGridLines"
+   ]
+  },
+  "openingTypes": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "mark": {
+      "type": "string"
+     },
+     "kind": {
+      "type": "string",
+      "description": "{enum: [\"door\",\"window\",\"ventilator\"]}"
+     },
+     "widthMm": {
+      "type": "number"
+     },
+     "heightMm": {
+      "type": "number"
+     },
+     "sillMm": {
+      "type": "number",
+      "description": "Height of the opening bottom above floor; 0 for doors."
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "mark",
+     "kind",
+     "widthMm",
+     "heightMm",
+     "sillMm"
+    ]
+   }
+  },
+  "openings": {
+   "type": "array",
+   "description": "Every door / window / ventilator placed in a wall.",
+   "items": {
+    "type": "object",
+    "properties": {
+     "mark": {
+      "type": "string"
+     },
+     "fromGrid": {
+      "type": "string",
+      "description": "Grid point at one end of the wall the opening is in, e.g. \"X1Y1\"."
+     },
+     "toGrid": {
+      "type": "string",
+      "description": "Grid point at the other end of that wall, on the same grid line, e.g. \"X2Y1\"."
+     },
+     "centreFromStartMm": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Distance from fromGrid to the opening centre along the wall, mm; null if centred."
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "mark",
+     "fromGrid",
+     "toGrid",
+     "centreFromStartMm"
+    ]
+   }
+  },
+  "lintel": {
+   "type": "object",
+   "properties": {
+    "present": {
+     "type": "boolean"
+    },
+    "depthMm": {
+     "type": "number"
+    }
+   },
+   "additionalProperties": false,
+   "required": [
+    "present",
+    "depthMm"
+   ]
+  },
+  "chhajja": {
+   "type": "object",
+   "properties": {
+    "present": {
+     "type": "boolean"
+    },
+    "projectionMm": {
+     "type": "number"
+    },
+    "thicknessMm": {
+     "type": "number"
+    }
+   },
+   "additionalProperties": false,
+   "required": [
+    "present",
+    "projectionMm",
+    "thicknessMm"
+   ]
+  },
+  "assumptions": {
+   "type": "array",
+   "description": "Every value NOT written on the drawing that you assumed, and why. Empty if none.",
+   "items": {
+    "type": "string"
+   }
+  },
+  "confidence": {
+   "type": "string",
+   "description": "{enum: [\"high\",\"medium\",\"low\"]}"
+  }
+ },
+ "additionalProperties": false,
+ "required": [
+  "projectName",
+  "buildingName",
+  "xSpansMm",
+  "ySpansMm",
+  "columnTypes",
+  "footingTypes",
+  "columns",
+  "foundationDepthMm",
+  "roofLevelMm",
+  "plinthBeam",
+  "roofBeam",
+  "slab",
+  "walls",
+  "openingTypes",
+  "openings",
+  "lintel",
+  "chhajja",
+  "assumptions",
+  "confidence"
+ ],
+ "description": "{$schema: \"https://json-schema.org/draft/2020-12/schema\"}"
+}

@@ -1,40 +1,96 @@
-# PMC 3D Progress — local prototype
+# PMC 3D Progress
 
-A desktop-first web prototype for **construction Project Management Consultancy (PMC)**:
-open a project, view its 3D structural model, click a footing / column / beam / slab, see its
-planned and approved quantities, record daily progress, and review it through a
+Construction **Project Management Consultancy (PMC)** progress monitoring on an interactive 3D
+building model: open a project, view its 3D model, click a footing / column / beam / slab, see
+its planned and approved quantities, record daily progress, and review it through a
 Draft → Submitted → Approved / Returned workflow.
 
-Everything runs locally in the browser with mock data. **No server, cloud database,
-account, API key or ERPNext instance is needed.** The data layer is behind a repository
-interface so it can later be pointed at ERPNext/Frappe (see
-[docs/ERPNEXT_INTEGRATION.md](docs/ERPNEXT_INTEGRATION.md)).
+The same UI runs in two ways:
 
-> The sample security cabins are conceptual demonstration models, **not engineering-approved
-> designs**. Quantities are illustrative.
+| | Local / single file | Frappe app (`pmc_3d_progress`) |
+|---|---|---|
+| Data | this browser only | Frappe server database + files |
+| Users | demo role switch | Frappe login + PMC roles |
+| AI drawing reader | your key, kept in the browser | key in **PMC Settings**, runs on the server |
+| Start | `standalone/PMC-3D-Progress.html` | `https://<site>/pmc-3d` |
 
-## Run it
+> Sample cabins and generated quantities are for progress monitoring, **not engineering-approved
+> designs**.
 
-Requires Node.js 20.19+ or 22.12+ (tested with Node 24).
+## Frappe app — install on a site
 
+Requires Frappe v15/v16 (developed for v16, like the other Dux Digitech apps). ERPNext is not required.
+
+```bash
+bench get-app https://github.com/Dux-Digitech-6534/pmc_3d_progress
+```
+```bash
+bench --site <site> install-app pmc_3d_progress
+```
+```bash
+bench --site <site> migrate && bench restart
+```
+
+The built page is committed (`pmc_3d_progress/www/pmc-3d.html` + `pmc_3d_progress/public/frontend/`),
+so the server needs **no Node build**; `bench get-app` also installs the Python dependency
+(`anthropic==1.12.1`). Install on a **test site first**.
+
+After installing:
+
+1. Give users the roles **PMC Site Engineer** (records work), **PMC Reviewer** (approves /
+   returns), **PMC Owner** (views approved progress). A System Manager may act as any of them; a
+   user with several PMC roles picks one in the top bar.
+2. Optional, for *Read drawing with AI*: Desk → **PMC Settings** → enter the Anthropic API key
+   (model `claude-opus-5-5`, effort `high` by default). The reading runs in a background job,
+   so the site's **workers must be running** (they are in a normal production setup).
+3. Open **/pmc-3d** (also on the apps screen as "PMC 3D Progress"). Not logged in → login page.
+
+Notes:
+- Drawings up to 20 MB: Frappe's upload limit (`max_file_size`, default 10 MB on many sites) may
+  need raising in site config for large PDFs.
+- Records: PMC Project, PMC Model (each revision; failed imports kept), PMC Element, PMC DPR
+  (+ PMC DPR Photo), PMC Drawing. All writes go through `pmc_3d_progress/api.py`, which re-checks
+  role, workflow and quantity rules (`pmc_3d_progress/domain.py`); DocType permissions give PMC
+  roles read access only.
+- Updating: `git pull` in `apps/pmc_3d_progress`, then `bench --site <site> migrate && bench restart`.
+
+## Develop
+
+Requires Node.js 20.19+ or 22.12+ (tested with Node 24). All npm commands run in `frontend/`.
+
+```bash
+cd frontend
+```
 ```bash
 npm install
-npm run dev          # http://localhost:5183
+```
+```bash
+npm run dev          # local mode, http://localhost:5183
 ```
 
-Other commands:
+Other commands (in `frontend/`):
 
 ```bash
-npm test             # unit tests (Vitest): progress, workflow totals, bulk allocation, import, persistence
-npm run build        # type-check + production build into dist/
-npm run preview      # serve the production build on http://localhost:5184
+npm test                   # Vitest unit tests (rules, builder, AI schema shared with the server)
+npm run build:frappe       # rebuild the Frappe page into ../pmc_3d_progress (commit the result)
+npm run dev:frappe-mock    # the Frappe version of the UI against a dev-only mock API, http://localhost:5187
+npm run build:standalone   # single-file local version → ../standalone/PMC-3D-Progress.html
 npm run generate:samples   # regenerate the two sample model JSON files
 ```
+
+Python rules (no Frappe needed), from the repository root:
+
+```bash
+python3 -m unittest discover -s pmc_3d_progress/tests -t .
+```
+
+After changing `frontend/src/ai/drawingSchema.ts`, regenerate the server copy with
+`WRITE_AI_SCHEMA=1 npx vitest run tests/aiSchema.test.ts` (a test fails while they differ).
 
 ## Single-file version (no server)
 
 ```bash
-npm run build:standalone   # → standalone/PMC-3D-Progress.html
+npm run build:standalone   # in frontend/ → standalone/PMC-3D-Progress.html
 ```
 
 One self-contained HTML file (~0.9 MB, all JS/CSS/sample models inlined, no internet needed).
@@ -183,15 +239,25 @@ database, then reseeds. If localStorage is blocked, a banner warns that nothing 
 ## Project structure
 
 ```
-src/
-  domain/        framework-free rules: types, progress, allocation, workflow, model validation
-  data/          repository interface, LocalRepository (localStorage), seed, samples, photo store
-  components/    ModelViewer (Three.js), ElementPanel, EntryForm, BulkEntryForm, dialogs, UI bits
-  pages/         Dashboard, Projects, Workspace, DprList, ModelRegister
-  state/         AppContext (current project, role, selection, data loading)
-tests/           Vitest unit tests (38)
-scripts/         sample model generator
-docs/            model format, ERPNext integration notes
+pyproject.toml, license.txt     Frappe app packaging (flit), as for other Dux Digitech apps
+pmc_3d_progress/                the Frappe app
+  hooks.py, install.py          app metadata, apps-screen entry (/pmc-3d), PMC roles
+  api.py                        whitelisted methods = the PmcRepository interface, with role checks
+  domain.py                     server-side rules (Python port of frontend/src/domain)
+  ai.py, ai_schema.json         "Read drawing with AI" on the server (background job)
+  www/pmc-3d.html, pmc_3d.py    the full-screen page (generated by `npm run build:frappe`)
+  public/frontend/              built JS/CSS for that page (generated, committed)
+  pmc_3d_progress/doctype/      PMC Project, PMC Model, PMC Element, PMC DPR (+ Photo), PMC Drawing, PMC Settings
+  tests/test_domain.py          Python unit tests (plain unittest, no Frappe needed)
+frontend/                       the React UI (same code for the local and the Frappe versions)
+  src/domain/                   framework-free rules: types, progress, allocation, workflow, model validation
+  src/data/                     PmcRepository, LocalRepository (browser), FrappeRepository (server), files
+  src/components/, src/pages/   UI
+  src/ai/                       drawing reader (browser key locally, server job on Frappe)
+  tests/                        Vitest unit tests
+  dev/frappeMock.ts             dev-only stand-in for the Frappe API (npm run dev:frappe-mock), never built
+standalone/                     single-file build output (git-ignored)
+docs/                           model format, ERPNext integration notes
 ```
 
 ## Assumptions
@@ -205,8 +271,14 @@ docs/            model format, ERPNext integration notes
 
 ## Limitations (not implemented)
 
-- No real authentication, users or permissions — the role switch is a demo only.
-- No server; data is per-browser and per-device. Clearing site data loses it.
+- **Frappe app not yet run on a real Frappe site.** The Python rules are unit-tested and the UI was
+  checked against a mock of the API (`npm run dev:frappe-mock`), but `api.py`, `ai.py`, the DocTypes
+  and the `/pmc-3d` page must be tested on a test site before production.
+- Local / single-file version: no real authentication (the role switch is a demo only), and data
+  is per-browser and per-device; clearing site data loses it.
+- Frappe version: approval is the app's own Draft/Submitted/Approved/Returned status (enforced in
+  `api.py`), not a Frappe Workflow; no link to ERPNext Project yet; deleting records is done by an
+  administrator in Desk (the page has no "clear all data").
 - Only the documented JSON box format is imported. **No IFC, RVT, DWG, SKP or GLB/glTF import.**
 - Geometry is axis-aligned boxes and straight walls with rectangular openings. No sloped / curved members, stairs, finishes, MEP or furniture.
 - No revision diff/migration tool; progress on old revisions is kept as history only.

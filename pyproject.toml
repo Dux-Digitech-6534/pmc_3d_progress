@@ -1,0 +1,28 @@
+[project]
+name = "pmc_3d_progress"
+authors = [
+    { name = "Dux Digitech", email = "support@duxdigitech.in" }
+]
+description = "PMC 3D Progress - construction progress monitoring on an interactive 3D building model"
+requires-python = ">=3.10"
+readme = "README.md"
+dynamic = ["version"]
+dependencies = [
+    # "frappe~=16.0.0" # Installed and managed by bench.
+    # Reading drawings with AI (server side, key in PMC Settings). Pinned for reproducible installs.
+    "anthropic==1.12.1",
+]
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.bench.dev-dependencies]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "tab"
