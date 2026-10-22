@@ -1,0 +1,982 @@
+{
+  "format": "pmc-procedural-model",
+  "formatVersion": 1,
+  "project": {
+    "id": "PMC-SEC-002",
+    "name": "Security Cabin B",
+    "location": "Service Gate (demo site)",
+    "client": "Demo Owner"
+  },
+  "model": {
+    "id": "SEC-CABIN-B",
+    "name": "Security Cabin B — Structure",
+    "revision": "R01",
+    "lengthUnit": "m",
+    "upAxis": "y",
+    "source": {
+      "type": "procedural",
+      "generator": "scripts/generate-samples.mjs",
+      "disclaimer": "Conceptual demonstration model — not an engineering-approved design. Quantities are illustrative."
+    }
+  },
+  "buildings": [
+    {
+      "id": "BLD-SCB",
+      "name": "Security Cabin B"
+    }
+  ],
+  "levels": [
+    {
+      "id": "FDN",
+      "name": "Foundation",
+      "buildingId": "BLD-SCB",
+      "elevation": -1
+    },
+    {
+      "id": "GF",
+      "name": "Ground Floor",
+      "buildingId": "BLD-SCB",
+      "elevation": 0
+    },
+    {
+      "id": "RF",
+      "name": "Roof",
+      "buildingId": "BLD-SCB",
+      "elevation": 3.2
+    }
+  ],
+  "activities": [
+    {
+      "code": "REINF",
+      "name": "Reinforcement",
+      "unit": "kg"
+    },
+    {
+      "code": "SHUT",
+      "name": "Shuttering",
+      "unit": "m2"
+    },
+    {
+      "code": "CONC",
+      "name": "Concreting",
+      "unit": "m3"
+    }
+  ],
+  "elements": [
+    {
+      "id": "SCB-F001",
+      "code": "F-01",
+      "type": "footing",
+      "buildingId": "BLD-SCB",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -2.25,
+          -0.825,
+          -1.6
+        ],
+        "size": [
+          1.4,
+          0.45,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 70.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.52,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.882,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-F002",
+      "code": "F-02",
+      "type": "footing",
+      "buildingId": "BLD-SCB",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0,
+          -0.825,
+          -1.6
+        ],
+        "size": [
+          1.4,
+          0.45,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 70.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.52,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.882,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-F003",
+      "code": "F-03",
+      "type": "footing",
+      "buildingId": "BLD-SCB",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2.25,
+          -0.825,
+          -1.6
+        ],
+        "size": [
+          1.4,
+          0.45,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 70.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.52,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.882,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-F004",
+      "code": "F-04",
+      "type": "footing",
+      "buildingId": "BLD-SCB",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -2.25,
+          -0.825,
+          1.6
+        ],
+        "size": [
+          1.4,
+          0.45,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 70.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.52,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.882,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-F005",
+      "code": "F-05",
+      "type": "footing",
+      "buildingId": "BLD-SCB",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0,
+          -0.825,
+          1.6
+        ],
+        "size": [
+          1.4,
+          0.45,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 70.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.52,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.882,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-F006",
+      "code": "F-06",
+      "type": "footing",
+      "buildingId": "BLD-SCB",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2.25,
+          -0.825,
+          1.6
+        ],
+        "size": [
+          1.4,
+          0.45,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 70.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.52,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.882,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-C001",
+      "code": "C-01",
+      "type": "column",
+      "buildingId": "BLD-SCB",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -2.25,
+          1.3,
+          -1.6
+        ],
+        "size": [
+          0.3,
+          3.8,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 61.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 4.56,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.342,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-C002",
+      "code": "C-02",
+      "type": "column",
+      "buildingId": "BLD-SCB",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0,
+          1.3,
+          -1.6
+        ],
+        "size": [
+          0.3,
+          3.8,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 61.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 4.56,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.342,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-C003",
+      "code": "C-03",
+      "type": "column",
+      "buildingId": "BLD-SCB",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2.25,
+          1.3,
+          -1.6
+        ],
+        "size": [
+          0.3,
+          3.8,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 61.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 4.56,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.342,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-C004",
+      "code": "C-04",
+      "type": "column",
+      "buildingId": "BLD-SCB",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -2.25,
+          1.3,
+          1.6
+        ],
+        "size": [
+          0.3,
+          3.8,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 61.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 4.56,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.342,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-C005",
+      "code": "C-05",
+      "type": "column",
+      "buildingId": "BLD-SCB",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0,
+          1.3,
+          1.6
+        ],
+        "size": [
+          0.3,
+          3.8,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 61.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 4.56,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.342,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-C006",
+      "code": "C-06",
+      "type": "column",
+      "buildingId": "BLD-SCB",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2.25,
+          1.3,
+          1.6
+        ],
+        "size": [
+          0.3,
+          3.8,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 61.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 4.56,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.342,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-PB001",
+      "code": "PB-01",
+      "type": "beam",
+      "buildingId": "BLD-SCB",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.125,
+          0,
+          -1.6
+        ],
+        "size": [
+          1.95,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 20.2,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 1.62,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.135,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-PB002",
+      "code": "PB-02",
+      "type": "beam",
+      "buildingId": "BLD-SCB",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          1.125,
+          0,
+          -1.6
+        ],
+        "size": [
+          1.95,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 20.2,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 1.62,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.135,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-PB003",
+      "code": "PB-03",
+      "type": "beam",
+      "buildingId": "BLD-SCB",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.125,
+          0,
+          1.6
+        ],
+        "size": [
+          1.95,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 20.2,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 1.62,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.135,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-PB004",
+      "code": "PB-04",
+      "type": "beam",
+      "buildingId": "BLD-SCB",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          1.125,
+          0,
+          1.6
+        ],
+        "size": [
+          1.95,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 20.2,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 1.62,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.135,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-PB005",
+      "code": "PB-05",
+      "type": "beam",
+      "buildingId": "BLD-SCB",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -2.25,
+          0,
+          0
+        ],
+        "size": [
+          0.23,
+          0.3,
+          2.9
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 30,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.41,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.2,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-PB006",
+      "code": "PB-06",
+      "type": "beam",
+      "buildingId": "BLD-SCB",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "size": [
+          0.23,
+          0.3,
+          2.9
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 30,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.41,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.2,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-PB007",
+      "code": "PB-07",
+      "type": "beam",
+      "buildingId": "BLD-SCB",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2.25,
+          0,
+          0
+        ],
+        "size": [
+          0.23,
+          0.3,
+          2.9
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 30,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.41,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.2,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-B001",
+      "code": "B-01",
+      "type": "beam",
+      "buildingId": "BLD-SCB",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.125,
+          2.975,
+          -1.6
+        ],
+        "size": [
+          1.95,
+          0.45,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 39.5,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.34,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.263,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-B002",
+      "code": "B-02",
+      "type": "beam",
+      "buildingId": "BLD-SCB",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          1.125,
+          2.975,
+          -1.6
+        ],
+        "size": [
+          1.95,
+          0.45,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 39.5,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.34,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.263,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-B003",
+      "code": "B-03",
+      "type": "beam",
+      "buildingId": "BLD-SCB",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.125,
+          2.975,
+          1.6
+        ],
+        "size": [
+          1.95,
+          0.45,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 39.5,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.34,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.263,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-B004",
+      "code": "B-04",
+      "type": "beam",
+      "buildingId": "BLD-SCB",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          1.125,
+          2.975,
+          1.6
+        ],
+        "size": [
+          1.95,
+          0.45,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 39.5,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.34,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.263,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-B005",
+      "code": "B-05",
+      "type": "beam",
+      "buildingId": "BLD-SCB",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -2.25,
+          2.975,
+          0
+        ],
+        "size": [
+          0.3,
+          0.45,
+          2.9
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 58.7,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 3.48,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.392,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-B006",
+      "code": "B-06",
+      "type": "beam",
+      "buildingId": "BLD-SCB",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0,
+          2.975,
+          0
+        ],
+        "size": [
+          0.3,
+          0.45,
+          2.9
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 58.7,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 3.48,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.392,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-B007",
+      "code": "B-07",
+      "type": "beam",
+      "buildingId": "BLD-SCB",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2.25,
+          2.975,
+          0
+        ],
+        "size": [
+          0.3,
+          0.45,
+          2.9
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 58.7,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 3.48,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.392,
+          "unit": "m3"
+        }
+      }
+    },
+    {
+      "id": "SCB-S001",
+      "code": "SL-01",
+      "type": "slab",
+      "buildingId": "BLD-SCB",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0,
+          3.2625,
+          0
+        ],
+        "size": [
+          5.7,
+          0.125,
+          4.4
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 27.61,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 3.135,
+          "unit": "m3"
+        }
+      },
+      "notes": "Reinforcement quantity awaiting bar bending schedule (BBS) — intentionally not configured in this sample."
+    }
+  ]
+}
