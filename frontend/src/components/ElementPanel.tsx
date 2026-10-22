@@ -1,3 +1,4 @@
+import { IS_FRAPPE } from '../config';
 import { useMemo, useState } from 'react';
 import { computeActivityProgress, formatQty } from '../domain/progress';
 import { ROLE_LABELS, UNIT_LABELS, type ActivityDef, type ElementRecord, type ProgressEntry } from '../domain/types';
@@ -59,7 +60,7 @@ export function ElementPanel({
           {permissions.canCreate(role) ? (
             <BulkEntryForm elements={selected} activities={activities} entries={entries} onDone={() => undefined} />
           ) : (
-            <p className="muted">{ROLE_LABELS[role]} can view progress only. Switch to Site Engineer to record work (demo role switch).</p>
+            <p className="muted">{ROLE_LABELS[role]} can view progress only. {IS_FRAPPE ? 'A PMC Site Engineer records work.' : 'Switch to Site Engineer to record work (demo role switch).'}</p>
           )}
         </div>
       </div>
@@ -184,7 +185,7 @@ function ElementSummary({
       {waiting && (
         <div className="alert alert-info small">
           Work on {el.code} has been submitted and is <b>waiting for PMC approval</b>. It is counted (and the 3D colour changes) only after the PMC Reviewer
-          approves it{role === 'site-engineer' ? ' — switch Demo role to PMC Reviewer to approve it in this demo.' : ' — use “Approve all submitted” below, or Review each entry.'}
+          approves it{role === 'site-engineer' ? (IS_FRAPPE ? '.' : ' — switch Demo role to PMC Reviewer to approve it in this demo.') : ' — use “Approve all submitted” below, or Review each entry.'}
         </div>
       )}
       <p className="hint">Progress = approved quantity ÷ planned quantity, per activity. Drafts, submitted and returned entries are not counted.</p>
