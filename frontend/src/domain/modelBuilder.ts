@@ -92,7 +92,22 @@ export interface BuilderSpec {
   chhajja: { enabled: boolean; projection: number; t: number; overDoors: boolean };
   /** Names of the drawings the values were taken from (stored as provenance). */
   drawingRefs: string[];
+  /**
+   * Single elements the user removed by clicking them in the 3D preview, by element code
+   * (beams "PB-…" / "RB-…", walls "W-…", lintels "L-…", chhajjas "CH-…"). Columns, footings,
+   * doors / windows and the slab are removed through the layout, placements and slab switch.
+   */
+  omit?: string[];
 }
+
+/** What a generated element comes from in the spec, so a click in the 3D preview can edit it. */
+export type ElementRef =
+  | { kind: 'column' | 'footing'; xi: number; yi: number }
+  | { kind: 'beam'; code: string; tag: 'PB' | 'RB' }
+  | { kind: 'wall'; code: string; wall: string }
+  | { kind: 'opening'; row: number }
+  | { kind: 'lintel' | 'chhajja'; code: string; row: number }
+  | { kind: 'slab' };
 
 export interface BuildSummary {
   footings: number;
@@ -116,6 +131,8 @@ export interface BuildResult {
   warnings: string[];
   document: ModelDocument | null;
   summary: BuildSummary | null;
+  /** Element id → where it comes from in the spec. */
+  refs: Record<string, ElementRef>;
 }
 
 const RCC_TYPES: ElementType[] = ['footing', 'column', 'beam', 'slab', 'lintel', 'chhajja'];
@@ -151,7 +168,9 @@ export function parseSpans(text: string): number[] | null {
 export function buildModel(spec: BuilderSpec): BuildResult {
   const errors: string[] = [];
   const warnings: string[] = [];
-  const fail = (): BuildResult => ({ errors, warnings, document: null, summary: null });
+  const refs: Record<string, ElementRef> = {};
+  const omit = new Set(spec.omit ?? []);
+  const fail = (): BuildResult => ({ errors, warnings, document: null, summary: null, refs: {} });
 
   // ---- header ----
   if (!spec.projectId.trim() || !ID_RE.test(spec.projectId.trim())) errors.push('Project ID is required (letters, digits, - _ . only), e.g. PMC-SEC-003.');
@@ -284,6 +303,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
       plannedQuantities: qty(fw * fd * ft, 2 * (fw + fd) * ft, spec.steel.footing),
       notes: `Footing ${p.foot.code} ${p.foot.w}×${p.foot.d}, D ${p.foot.t} mm`,
     });
+    refs[`${prefix}-FTG-${p.key}`] = { kind: 'footing', xi: p.xi, yi: p.yi };
     sum.footings++;
     const cw = mm(p.col.w), cd = mm(p.col.d);
     const bottom = -depth + ft;
@@ -298,6 +318,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
       plannedQuantities: qty(cw * cd * h, 2 * (cw + cd) * h, spec.steel.column),
       notes: `Column ${p.col.code} ${p.col.w}×${p.col.d} mm, from footing top to roof level`,
     });
+    refs[`${prefix}-COL-${p.key}`] = { kind: 'column', xi: p.xi, yi: p.yi };
     sum.columns++;
   });
 
@@ -332,14 +353,16 @@ export function buildModel(spec: BuilderSpec): BuildResult {
     const w = mm(size.w), h = mm(size.h);
     spans.forEach((s) => {
       const ax = s.axis === 'x';
+      const code = `${tag}-${spanKey(s)}`;
+      if (omit.has(code)) return;
       const { len, mid } = clearSpan(s);
       if (len <= 0) {
         warnings.push(`${label} ${s.a.key}–${s.b.key}: columns touch, no beam generated.`);
         return;
       }
       elements.push({
-        id: `${prefix}-${tag}-${spanKey(s)}`,
-        code: `${tag}-${spanKey(s)}`,
+        id: `${prefix}-${code}`,
+        code,
         type: 'beam',
         buildingId: bId,
         levelId,
@@ -351,6 +374,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
         plannedQuantities: qty(w * h * len, (2 * h + w) * len, spec.steel.beam),
         notes: `${label} ${size.w}×${size.h} mm, clear span ${Math.round(len * 1000)} mm`,
       });
+      refs[`${prefix}-${code}`] = { kind: 'beam', code, tag };
       sum.beams++;
     });
   };
@@ -372,7 +396,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
       byWall.set(p.wall, [...(byWall.get(p.wall) ?? []), { p, ot, row }]);
     });
 
-    const wallSpans = spans.filter((s) => spec.walls.internal || isOuter(s));
+    const wallSpans = spans.filter((s) => (spec.walls.internal || isOuter(s)) && !omit.has(`W-${spanKey(s)}`));
     const wallKeys = new Set(wallSpans.map(spanKey));
     spec.openings.forEach((p, row) => {
       if (!wallKeys.has(p.wall)) errors.push(`Opening row ${row + 1}: wall "${p.wall}" does not exist for this grid / column layout.`);
@@ -434,6 +458,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
             plannedQuantities: { FIX: { quantity: 1, unit: 'nos' } },
             notes: `${ot.kind[0].toUpperCase()}${ot.kind.slice(1)} ${ot.mark} ${ot.w}×${ot.h} mm, sill ${ot.sill} mm`,
           });
+          refs[`${prefix}-OPN-${key}-${n + 1}`] = { kind: 'opening', row };
           if (isDoor) sum.doors++;
           else sum.windows++;
 
@@ -441,7 +466,8 @@ export function buildModel(spec: BuilderSpec): BuildResult {
           const top = sill + h;
           let lintelTop = top;
           const bearing = mm(spec.lintel.bearing);
-          if (spec.lintel.enabled) {
+          const lintelCode = `L-${ot.mark}-${key}`;
+          if (spec.lintel.enabled && !omit.has(lintelCode)) {
             const lh = mm(spec.lintel.h);
             if (top + lh > H + EPS) {
               warnings.push(`${ot.mark} on wall ${key}: no room for a ${spec.lintel.h} mm lintel under the roof beam — the roof beam acts as lintel.`);
@@ -453,7 +479,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
               const lt = r(t + 0.01, 4);
               elements.push({
                 id: `${prefix}-LNT-${key}-${n + 1}`,
-                code: `L-${ot.mark}-${key}`,
+                code: lintelCode,
                 type: 'lintel',
                 buildingId: bId,
                 levelId: 'GF',
@@ -461,6 +487,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
                 plannedQuantities: qty(ll * t * lh, 2 * lh * ll + t * w, spec.steel.beam),
                 notes: `RCC lintel ${Math.round(ll * 1000)} × ${spec.walls.t} × ${spec.lintel.h} mm over ${ot.mark}`,
               });
+              refs[`${prefix}-LNT-${key}-${n + 1}`] = { kind: 'lintel', code: lintelCode, row };
               lintelVol += ll * t * lh;
               lintelTop = top + lh;
               sum.lintels++;
@@ -468,7 +495,8 @@ export function buildModel(spec: BuilderSpec): BuildResult {
           }
 
           // chhajja outside, over windows (and doors if chosen), on outer walls only
-          if (spec.chhajja.enabled && isOuter(s) && outSign !== 0 && (!isDoor || spec.chhajja.overDoors)) {
+          const chhajjaCode = `CH-${ot.mark}-${key}`;
+          if (spec.chhajja.enabled && isOuter(s) && outSign !== 0 && (!isDoor || spec.chhajja.overDoors) && !omit.has(chhajjaCode)) {
             const pr = mm(spec.chhajja.projection), ct = mm(spec.chhajja.t);
             const cl = Math.min(w + 2 * bearing, L);
             const cc = Math.max(Math.min(c, L / 2 - cl / 2), -L / 2 + cl / 2);
@@ -478,7 +506,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
             else cp[0] = off;
             elements.push({
               id: `${prefix}-CHJ-${key}-${n + 1}`,
-              code: `CH-${ot.mark}-${key}`,
+              code: chhajjaCode,
               type: 'chhajja',
               buildingId: bId,
               levelId: 'GF',
@@ -486,6 +514,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
               plannedQuantities: qty(cl * pr * ct, cl * pr + (cl + 2 * pr) * ct, spec.steel.slab),
               notes: `Chhajja ${spec.chhajja.projection} mm projection, ${spec.chhajja.t} mm thick over ${ot.mark}`,
             });
+            refs[`${prefix}-CHJ-${key}-${n + 1}`] = { kind: 'chhajja', code: chhajjaCode, row };
             sum.chhajjas++;
           }
         });
@@ -510,6 +539,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
           plannedQuantities: { BRICK: { quantity: r(brick, 3), unit: 'm3' }, PLAST: { quantity: r(plaster, 2), unit: 'm2' } },
           notes: `${spec.walls.t} mm wall, ${Math.round(L * 1000)} × ${Math.round(H * 1000)} mm, ${openings.length} opening(s)`,
         });
+        refs[`${prefix}-WAL-${key}`] = { kind: 'wall', code: `W-${key}`, wall: key };
         sum.walls++;
       });
     }
@@ -536,6 +566,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
       plannedQuantities: qty(sx * sz * t, sx * sz + 2 * (sx + sz) * t, spec.steel.slab),
       notes: `Roof slab ${spec.slab.t} mm, overhang ${spec.slab.overhang} mm`,
     });
+    refs[`${prefix}-SLAB-RF`] = { kind: 'slab' };
     sum.slabs++;
   }
 
@@ -586,7 +617,36 @@ export function buildModel(spec: BuilderSpec): BuildResult {
   sum.steel = r(sum.steel, 1);
   sum.brickwork = r(sum.brickwork, 3);
   sum.plaster = r(sum.plaster, 2);
-  return { errors, warnings, document, summary: sum };
+  if (omit.size) warnings.push(`${omit.size} element${omit.size === 1 ? ' was' : 's were'} removed by hand in the 3D preview (beams / walls / lintels / chhajjas) — check against the drawing.`);
+  return { errors, warnings, document, summary: sum, refs };
+}
+
+/**
+ * The spec without the clicked element. Columns go with their footing (the grid point is
+ * cleared); a wall goes with the doors / windows in it; the others are listed in spec.omit.
+ */
+export function removeElement(spec: BuilderSpec, ref: ElementRef): BuilderSpec {
+  const omitWith = (...codes: string[]) => ({ ...spec, omit: [...new Set([...(spec.omit ?? []), ...codes])] });
+  switch (ref.kind) {
+    case 'column':
+    case 'footing': {
+      // the walls ending at this point change, so the doors / windows placed in them go too
+      const point = `${gridLabel('X', ref.xi)}${gridLabel('Y', ref.yi)}`;
+      return {
+        ...spec,
+        layout: spec.layout.map((row, y) => (y === ref.yi ? row.map((c, x) => (x === ref.xi ? '' : c)) : row)),
+        openings: spec.openings.filter((o) => !o.wall.split('-').includes(point)),
+      };
+    }
+    case 'opening':
+      return { ...spec, openings: spec.openings.filter((_, i) => i !== ref.row) };
+    case 'wall':
+      return { ...omitWith(ref.code), openings: spec.openings.filter((o) => o.wall !== ref.wall) };
+    case 'slab':
+      return { ...spec, slab: { ...spec.slab, enabled: false } };
+    default:
+      return omitWith(ref.code);
+  }
 }
 
 /**
@@ -663,6 +723,7 @@ export function wallOptions(spec: BuilderSpec): { key: string; label: string }[]
   const nx = spec.xSpans.length + 1;
   const ny = spec.ySpans.length + 1;
   const has = (xi: number, yi: number) => !!(spec.layout[yi]?.[xi] ?? '').trim();
+  const omitted = new Set(spec.omit ?? []);
   const out: { key: string; label: string }[] = [];
   for (let yi = 0; yi < ny; yi++) {
     if (!spec.walls.internal && yi !== 0 && yi !== ny - 1) continue;
@@ -680,7 +741,7 @@ export function wallOptions(spec: BuilderSpec): { key: string; label: string }[]
       out.push({ key, label: `${key} · along Y on line ${gridLabel('X', xi)}` });
     });
   }
-  return out;
+  return out.filter((w) => !omitted.has(`W-${w.key}`));
 }
 
 /**

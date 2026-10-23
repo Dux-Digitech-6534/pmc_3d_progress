@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LocalRepository, MemoryStorage } from '../src/data/localRepository';
-import { buildModel, defaultSpec, makeLayout, parseSpans, resizeLayout, wallOptions, withDefaults, type BuilderSpec } from '../src/domain/modelBuilder';
+import { buildModel, defaultSpec, makeLayout, parseSpans, removeElement, resizeLayout, wallOptions, withDefaults, type BuilderSpec } from '../src/domain/modelBuilder';
 import { validateModelDocument } from '../src/domain/modelValidation';
 import { computeActivityProgress } from '../src/domain/progress';
 import { checkQuantity } from '../src/domain/workflow';
@@ -291,5 +291,61 @@ describe('model builder — doors start at the floor', () => {
     const wall = doc.elements.find((e) => e.id === 'SECCABIN-WAL-X1Y1-X2Y1')!.geometry as WallGeometry;
     expect(wall.openings![0].bottom).toBe(0);
     expect(doc.elements.find((e) => e.type === 'door')!.geometry.position[1]).toBeCloseTo(1.05);
+  });
+});
+
+describe('model builder — elements clicked in the 3D preview', () => {
+  const refOf = (spec: BuilderSpec, code: string) => {
+    const res = buildModel(spec);
+    const el = res.document!.elements.find((e) => e.code === code);
+    expect(el, code).toBeDefined();
+    return res.refs[el!.id];
+  };
+  const codes = (spec: BuilderSpec) => buildModel(spec).document!.elements.map((e) => e.code);
+
+  it('maps every generated element back to the form', () => {
+    const res = buildModel(withWalls());
+    expect(res.document!.elements.every((e) => res.refs[e.id])).toBe(true);
+    expect(refOf(withWalls(), 'C1-X2Y1')).toEqual({ kind: 'column', xi: 1, yi: 0 });
+    expect(refOf(withWalls(), 'D-X1Y1-X2Y1')).toEqual({ kind: 'opening', row: 0 });
+  });
+
+  it('removing a column clears its grid point, its footing and the doors / windows in its walls', () => {
+    const spec = withWalls();
+    const next = removeElement(spec, refOf(spec, 'C1-X2Y1'));
+    expect(next.layout[0][1]).toBe('');
+    const left = codes(next);
+    expect(left).not.toContain('C1-X2Y1');
+    expect(left).not.toContain('F1-X2Y1');
+    expect(next.openings.some((o) => o.wall.includes('X2Y1'))).toBe(false);
+    expect(buildModel(next).errors).toEqual([]);
+  });
+
+  it('removes a single beam, wall, lintel or chhajja and can restore it', () => {
+    const spec = withWalls();
+    let next = removeElement(spec, refOf(spec, 'PB-X1Y1-X2Y1'));
+    expect(codes(next)).not.toContain('PB-X1Y1-X2Y1');
+    expect(codes(next)).toContain('RB-X1Y1-X2Y1');
+    next = removeElement(next, refOf(next, 'L-W-X1Y1-X1Y2'));
+    next = removeElement(next, refOf(next, 'CH-W-X1Y1-X1Y2'));
+    expect(codes(next)).not.toContain('L-W-X1Y1-X1Y2');
+    expect(codes(next)).not.toContain('CH-W-X1Y1-X1Y2');
+    expect(codes(next)).toContain('W-X1Y1-X1Y2'); // the window itself stays
+
+    const noWall = removeElement(next, refOf(next, 'W-X1Y1-X2Y1'));
+    expect(codes(noWall)).not.toContain('W-X1Y1-X2Y1');
+    expect(noWall.openings.some((o) => o.wall === 'X1Y1-X2Y1')).toBe(false); // the door in it went too
+    expect(wallOptions(noWall).map((w) => w.key)).not.toContain('X1Y1-X2Y1');
+    expect(buildModel(noWall).warnings.some((w) => w.includes('removed by hand'))).toBe(true);
+
+    expect(codes({ ...noWall, omit: [] })).toContain('PB-X1Y1-X2Y1');
+  });
+
+  it('removing a door / window drops its placement; removing the slab switches it off', () => {
+    const spec = withWalls();
+    const next = removeElement(spec, refOf(spec, 'V-X1Y2-X2Y2'));
+    expect(next.openings).toHaveLength(spec.openings.length - 1);
+    expect(codes(next).some((c) => c.startsWith('V-'))).toBe(false);
+    expect(removeElement(spec, refOf(spec, 'SL-RF')).slab.enabled).toBe(false);
   });
 });

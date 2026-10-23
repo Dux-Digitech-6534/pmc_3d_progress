@@ -1,5 +1,5 @@
 import { IS_FRAPPE } from '../config';
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AiReaderCard } from '../components/AiReaderCard';
 import { ModelViewer } from '../components/ModelViewer';
 import { ConfirmDialog, ErrorList, PageHeader } from '../components/ui';
@@ -22,9 +22,11 @@ import {
   parseSpans,
   resizeLayout,
   openingRange,
+  removeElement,
   wallOptions,
   withDefaults,
   type BuilderSpec,
+  type ElementRef,
   type ColumnType,
   type FootingType,
   type OpeningKind,
@@ -129,7 +131,23 @@ export function ModelBuilder() {
   // Re-frame the camera only when the building size changes, not on every edit (door moves etc.).
   const previewFrameKey = `${spec.xSpans.join('+')}|${spec.ySpans.join('+')}|${spec.roofLevel}|${spec.foundationDepth}`;
   const previewIds = useMemo(() => new Set(preview.map((e) => e.id)), [preview]);
-  const noSelection = useMemo(() => new Set<string>(), []);
+  // Click an element in the live preview to see its details and change or remove it.
+  const [picked, setPicked] = useState<string | null>(null);
+  const [undoSpec, setUndoSpec] = useState<BuilderSpec | null>(null);
+  const pickedEl = picked ? preview.find((e) => e.id === picked) : undefined;
+  const pickedRef = picked ? result.refs[picked] : undefined;
+  const selection = useMemo(() => new Set(pickedEl ? [pickedEl.id] : []), [pickedEl]);
+  /** A removal from the element panel; the previous form can be restored with Undo until the next change. */
+  const undoable = useRef(false);
+  const editFromPanel = (next: BuilderSpec) => {
+    undoable.current = true;
+    setUndoSpec(spec);
+    setSpec(next);
+  };
+  useEffect(() => {
+    if (undoable.current) undoable.current = false;
+    else setUndoSpec(null);
+  }, [spec]);
 
   const existingRevision = models.find((m) => m.projectId === spec.projectId.trim() && m.modelId === spec.modelId.trim() && m.revision === spec.revision.trim());
   const latestOfModel = models.filter((m) => m.projectId === spec.projectId.trim() && m.modelId === spec.modelId.trim() && m.status !== 'Failed').at(-1);
@@ -331,11 +349,55 @@ export function ModelBuilder() {
             <div className="builder-pane builder-pane-3d" data-testid="builder-live-3d">
               {result.document && !spansPending ? (
                 <>
-                  <ModelViewer elements={preview} colors={previewColors} visibleIds={previewIds} selectedIds={noSelection} showLabels={false} onPick={() => {}} resetSignal={resetSignal} frameKey={previewFrameKey} />
-                  <span className="pane-tag">Live 3D preview — updates as you edit</span>
+                  <ModelViewer
+                    elements={preview}
+                    colors={previewColors}
+                    visibleIds={previewIds}
+                    selectedIds={selection}
+                    showLabels={false}
+                    onPick={(id) => setPicked(id)}
+                    resetSignal={resetSignal}
+                    frameKey={previewFrameKey}
+                  />
+                  <span className="pane-tag">Live 3D preview — click an element to see, change or remove it</span>
                   <button className="btn btn-small builder-preview-fit" onClick={() => setResetSignal((n) => n + 1)}>
                     Fit view
                   </button>
+                  {pickedEl && pickedRef ? (
+                    <BuilderElementPanel
+                      el={pickedEl}
+                      elRef={pickedRef}
+                      spec={spec}
+                      elements={preview}
+                      onChange={(next) => setSpec(next)}
+                      onRemove={() => {
+                        editFromPanel(removeElement(spec, pickedRef));
+                        setPicked(null);
+                      }}
+                      onClose={() => setPicked(null)}
+                    />
+                  ) : (
+                    ((spec.omit?.length ?? 0) > 0 || undoSpec) && (
+                      <div className="builder-pick-bar">
+                        {undoSpec && (
+                          <button
+                            className="btn btn-small"
+                            onClick={() => {
+                              setSpec(undoSpec);
+                              setUndoSpec(null);
+                            }}
+                          >
+                            Undo last change
+                          </button>
+                        )}
+                        {(spec.omit?.length ?? 0) > 0 && (
+                          <button className="btn btn-small" onClick={() => editFromPanel({ ...spec, omit: [] })}>
+                            Restore {spec.omit!.length} removed element{spec.omit!.length === 1 ? '' : 's'}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  )}
                 </>
               ) : (
                 <div className="preview-empty">
@@ -1098,6 +1160,291 @@ function Stepper({
         {up}
       </button>
     </div>
+  );
+}
+
+const KIND_LABEL: Record<ElementRef['kind'], string> = {
+  column: 'Column',
+  footing: 'Footing',
+  beam: 'Beam',
+  wall: 'Wall',
+  opening: 'Door / window',
+  lintel: 'Lintel',
+  chhajja: 'Chhajja',
+  slab: 'Roof slab',
+};
+
+/**
+ * Details of the element clicked in the live 3D preview, with the form values that make it
+ * (changed here or in the form — they are the same values) and a Remove button.
+ */
+function BuilderElementPanel({
+  el,
+  elRef,
+  spec,
+  elements,
+  onChange,
+  onRemove,
+  onClose,
+}: {
+  el: ElementRecord;
+  elRef: ElementRef;
+  spec: BuilderSpec;
+  /** All preview elements, to say how many share a size. */
+  elements: ElementRecord[];
+  onChange: (next: BuilderSpec) => void;
+  onRemove: () => void;
+  onClose: () => void;
+}) {
+  const set = (patch: Partial<BuilderSpec>) => onChange({ ...spec, ...patch });
+  const count = (f: (e: ElementRecord) => boolean) => elements.filter(f).length;
+  const size = el.geometry.size.map((m) => Math.round(m * 1000)).join(' × ');
+  const qty = Object.entries(el.plannedQuantities);
+  const all = (n: number, what: string) => <p className="hint">Changes all {n} {what} — they share this size on the drawing.</p>;
+
+  let edit: ReactNode = null;
+  let removeLabel = `Remove ${KIND_LABEL[elRef.kind].toLowerCase()}`;
+  let removeHint = '';
+  switch (elRef.kind) {
+    case 'column':
+    case 'footing': {
+      const code = (spec.layout[elRef.yi]?.[elRef.xi] ?? '').trim();
+      const ci = spec.columnTypes.findIndex((c) => c.code.trim() === code);
+      const col = spec.columnTypes[ci];
+      const fi = col ? spec.footingTypes.findIndex((f) => f.code.trim() === col.footing.trim()) : -1;
+      const foot = spec.footingTypes[fi];
+      const sameCol = spec.layout.flat().filter((c) => c.trim() === code).length;
+      const updCol = (patch: Partial<ColumnType>) => set({ columnTypes: spec.columnTypes.map((c, k) => (k === ci ? { ...c, ...patch } : c)) });
+      const updFoot = (patch: Partial<FootingType>) => set({ footingTypes: spec.footingTypes.map((f, k) => (k === fi ? { ...f, ...patch } : f)) });
+      edit = (
+        <>
+          <div className="pick-row">
+            <span>Grid point</span>
+            <b>
+              {gridLabel('X', elRef.xi)} / {gridLabel('Y', elRef.yi)}
+            </b>
+          </div>
+          <label className="pick-row">
+            <span>Column type here</span>
+            <select
+              value={code}
+              onChange={(e) => set({ layout: spec.layout.map((row, y) => (y === elRef.yi ? row.map((c, x) => (x === elRef.xi ? e.target.value : c)) : row)) })}
+            >
+              {spec.columnTypes.map((c) => (
+                <option key={c.code} value={c.code.trim()}>
+                  {c.code} · {c.w}×{c.d}
+                </option>
+              ))}
+            </select>
+          </label>
+          {col && elRef.kind === 'column' && (
+            <>
+              <div className="pick-row">
+                <span>{col.code} size (mm)</span>
+                <span>
+                  <N value={col.w} onChange={(w) => updCol({ w })} label="Column size X" width={64} /> ×{' '}
+                  <N value={col.d} onChange={(d) => updCol({ d })} label="Column size Y" width={64} />
+                </span>
+              </div>
+              {all(sameCol, `${col.code} columns`)}
+            </>
+          )}
+          {col && elRef.kind === 'footing' && (
+            <>
+              <label className="pick-row">
+                <span>Footing of {col.code}</span>
+                <select value={col.footing.trim()} onChange={(e) => updCol({ footing: e.target.value })}>
+                  {spec.footingTypes.map((f) => (
+                    <option key={f.code} value={f.code.trim()}>
+                      {f.code} · {f.w}×{f.d}×{f.t}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {foot && (
+                <div className="pick-row">
+                  <span>{foot.code} L × W × D (mm)</span>
+                  <span>
+                    <N value={foot.w} onChange={(w) => updFoot({ w })} label="Footing length" width={58} /> ×{' '}
+                    <N value={foot.d} onChange={(d) => updFoot({ d })} label="Footing width" width={58} /> ×{' '}
+                    <N value={foot.t} onChange={(t) => updFoot({ t })} label="Footing depth" width={52} />
+                  </span>
+                </div>
+              )}
+              {foot && all(spec.layout.flat().filter((c) => spec.columnTypes.find((t) => t.code.trim() === c.trim())?.footing.trim() === foot.code.trim()).length, `${foot.code} footings`)}
+            </>
+          )}
+        </>
+      );
+      removeLabel = elRef.kind === 'column' ? 'Remove column + its footing' : 'Remove footing + its column';
+      removeHint = 'The grid point is left empty; beams and walls then run between the next columns on the line.';
+      break;
+    }
+    case 'beam': {
+      const key = elRef.tag === 'PB' ? 'plinthBeam' : 'roofBeam';
+      const b = spec[key];
+      edit = (
+        <>
+          <div className="pick-row">
+            <span>{elRef.tag === 'PB' ? 'Plinth' : 'Roof'} beam W × D (mm)</span>
+            <span>
+              <N value={b.w} onChange={(w) => set({ [key]: { ...b, w } })} label="Beam width" width={64} /> ×{' '}
+              <N value={b.h} onChange={(h) => set({ [key]: { ...b, h } })} label="Beam depth" width={64} />
+            </span>
+          </div>
+          {all(count((e) => e.type === 'beam' && e.code.startsWith(`${elRef.tag}-`)), elRef.tag === 'PB' ? 'plinth beams' : 'roof beams')}
+        </>
+      );
+      removeHint = 'Only this beam is removed. Restore it with "Restore removed elements".';
+      break;
+    }
+    case 'wall': {
+      const inWall = spec.openings.map((o, i) => ({ o, i })).filter(({ o }) => o.wall === elRef.wall);
+      edit = (
+        <>
+          <div className="pick-row">
+            <span>Wall thickness (mm)</span>
+            <N value={spec.walls.t} onChange={(t) => set({ walls: { ...spec.walls, t } })} label="Wall thickness" width={64} />
+          </div>
+          {all(count((e) => e.type === 'wall'), 'walls')}
+          <div className="pick-row">
+            <span>Doors / windows</span>
+            <span>{inWall.length ? inWall.map(({ o }) => o.mark).join(', ') : 'none'}</span>
+          </div>
+          {spec.openingTypes.length > 0 && (
+            <div className="pick-actions">
+              {spec.openingTypes.map((t) => (
+                <button key={t.mark} className="btn btn-small" onClick={() => set({ openings: [...spec.openings, { mark: t.mark.trim(), wall: elRef.wall, offset: null }] })}>
+                  + {t.mark} ({t.kind})
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      );
+      removeHint = inWall.length ? `The ${inWall.length} door/window(s) in it are removed too.` : 'Only this wall is removed.';
+      break;
+    }
+    case 'opening': {
+      const p = spec.openings[elRef.row];
+      const range = p ? openingRange(spec, p) : null;
+      const upd = (patch: Partial<OpeningPlacement>) => set({ openings: spec.openings.map((o, k) => (k === elRef.row ? { ...o, ...patch } : o)) });
+      edit = p && (
+        <>
+          <div className="pick-row">
+            <span>Wall</span>
+            <b>{p.wall}</b>
+          </div>
+          <label className="pick-row">
+            <span>Mark</span>
+            <select value={p.mark} onChange={(e) => upd({ mark: e.target.value })}>
+              {spec.openingTypes.map((t) => (
+                <option key={t.mark} value={t.mark.trim()}>
+                  {t.mark} · {t.kind} {t.w}×{t.h}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="pick-row">
+            <span>Position (mm from first grid point)</span>
+            <Stepper
+              value={p.offset ?? range?.centre ?? 0}
+              onChange={(offset) => upd({ offset })}
+              label="Opening position"
+              min={range?.min ?? 0}
+              max={range?.max}
+              step={100}
+              down="◀"
+              up="▶"
+            />
+          </div>
+          <div className="pick-actions">
+            <button className="link" onClick={() => upd({ offset: null })}>
+              Centre in the wall
+            </button>
+          </div>
+        </>
+      );
+      removeHint = 'Its lintel and chhajja go with it.';
+      break;
+    }
+    case 'lintel':
+      edit = (
+        <div className="pick-row">
+          <span>Lintel depth / bearing (mm)</span>
+          <span>
+            <N value={spec.lintel.h} onChange={(h) => set({ lintel: { ...spec.lintel, h } })} label="Lintel depth" width={58} /> /{' '}
+            <N value={spec.lintel.bearing} onChange={(bearing) => set({ lintel: { ...spec.lintel, bearing } })} label="Lintel bearing" width={58} />
+          </span>
+        </div>
+      );
+      removeHint = 'Only this lintel is removed (all lintels: untick "RCC lintel" in section 5).';
+      break;
+    case 'chhajja':
+      edit = (
+        <div className="pick-row">
+          <span>Projection / thick (mm)</span>
+          <span>
+            <N value={spec.chhajja.projection} onChange={(projection) => set({ chhajja: { ...spec.chhajja, projection } })} label="Chhajja projection" width={58} /> /{' '}
+            <N value={spec.chhajja.t} onChange={(t) => set({ chhajja: { ...spec.chhajja, t } })} label="Chhajja thickness" width={52} />
+          </span>
+        </div>
+      );
+      removeHint = 'Only this chhajja is removed.';
+      break;
+    case 'slab':
+      edit = (
+        <>
+          <div className="pick-row">
+            <span>Thickness (mm)</span>
+            <N value={spec.slab.t} onChange={(t) => set({ slab: { ...spec.slab, t } })} label="Slab thickness" width={64} />
+          </div>
+          <div className="pick-row">
+            <span>Overhang (mm)</span>
+            <N value={spec.slab.overhang} onChange={(overhang) => set({ slab: { ...spec.slab, overhang } })} label="Slab overhang" width={64} />
+          </div>
+        </>
+      );
+      removeHint = 'Switches "Roof slab" off in section 4.';
+      break;
+  }
+
+  return (
+    <aside className="builder-pick" aria-label="Selected element">
+      <div className="builder-pick-head">
+        <div>
+          <span className="muted small">{KIND_LABEL[elRef.kind]}</span>
+          <h3>{el.code}</h3>
+        </div>
+        <button className="btn-icon" aria-label="Close" onClick={onClose}>
+          ×
+        </button>
+      </div>
+      <div className="pick-row">
+        <span>Size X × Y × Z (mm)</span>
+        <span>{size}</span>
+      </div>
+      <div className="pick-row">
+        <span>Level</span>
+        <span>{el.levelId}</span>
+      </div>
+      {qty.map(([k, q]) => (
+        <div className="pick-row" key={k}>
+          <span>Planned {k}</span>
+          <span>
+            {q.quantity} {q.unit}
+          </span>
+        </div>
+      ))}
+      {el.notes && <p className="hint">{el.notes}</p>}
+      <div className="builder-pick-edit">{edit}</div>
+      <div className="builder-pick-foot">
+        <button className="btn btn-danger btn-small" onClick={onRemove}>
+          {removeLabel}
+        </button>
+        {removeHint && <p className="hint">{removeHint}</p>}
+      </div>
+    </aside>
   );
 }
 
