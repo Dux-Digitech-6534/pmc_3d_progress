@@ -71,6 +71,31 @@ export function ModelBuilder() {
   const [resetSignal, setResetSignal] = useState(0);
   // Left panel (sticky, always on screen): drawing and live 3D preview, side by side with the form.
   const [view, setView] = useState<'split' | 'drawing' | '3d'>('split');
+  // Full screen: the left panel covers the whole screen, drawing and 3D side by side.
+  const [full, setFullState] = useState(false);
+  const setFull = (on: boolean) => {
+    setFullState(on);
+    if (on) {
+      setView('split');
+      document.documentElement.requestFullscreen?.().catch(() => {
+        /* not allowed here: the panel still fills the browser window */
+      });
+    } else if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {});
+    }
+  };
+  useEffect(() => {
+    if (!full) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFull(false);
+    // Esc in browser full screen only leaves full screen (no keydown), so follow that too.
+    const onFs = () => !document.fullscreenElement && setFullState(false);
+    window.addEventListener('keydown', onKey);
+    document.addEventListener('fullscreenchange', onFs);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('fullscreenchange', onFs);
+    };
+  }, [full]); // eslint-disable-line react-hooks/exhaustive-deps
   const prevProjectId = useRef(spec.projectId);
   const inFlight = useRef(false); // synchronous double-click guard for Create
 
@@ -293,7 +318,7 @@ export function ModelBuilder() {
 
       <div className="builder">
         {/* ---------------- left: drawings ---------------- */}
-        <section className="card builder-drawing">
+        <section className={`card builder-drawing ${full ? 'builder-full' : ''}`}>
           <div className="builder-drawing-head">
             <div className="view-tabs" role="tablist" aria-label="Left panel view">
               {(
@@ -308,13 +333,23 @@ export function ModelBuilder() {
                 </button>
               ))}
             </div>
-            <label className={`btn btn-primary btn-small ${busy ? 'disabled' : ''}`}>
-              Upload PDF / image…
-              <input type="file" accept={DRAWING_ACCEPT} multiple hidden disabled={busy} onChange={(e) => { void onFiles(e.target.files); e.target.value = ''; }} />
-            </label>
+            <div className="builder-drawing-actions">
+              <button
+                className="btn btn-small"
+                title={full ? 'Back to the form (Esc)' : 'Drawing and 3D model side by side on the whole screen'}
+                onClick={() => setFull(!full)}
+              >
+                {full ? '✕ Exit full screen' : '⛶ Full screen'}
+              </button>
+              <label className={`btn btn-primary btn-small ${busy ? 'disabled' : ''}`}>
+                Upload PDF / image…
+                <input type="file" accept={DRAWING_ACCEPT} multiple hidden disabled={busy} onChange={(e) => { void onFiles(e.target.files); e.target.value = ''; }} />
+              </label>
+            </div>
           </div>
           {uploadErrors.length > 0 && <ErrorList title="Not uploaded" errors={uploadErrors} />}
 
+          <div className="builder-panes">
           {view !== '3d' && (
             <div className="builder-pane builder-pane-drawing">
               {drawings.length > 0 && (
@@ -412,6 +447,7 @@ export function ModelBuilder() {
               )}
             </div>
           )}
+          </div>
 
           <div className="builder-dock">
             <div className="dock-summary">
@@ -1459,7 +1495,12 @@ function N({ value, onChange, label, width = 90 }: { value: number; onChange: (n
 function DrawingView({ meta }: { meta: DrawingMeta }) {
   const [url, setUrl] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
-  const [zoom, setZoom] = useState(1);
+  // null = fit: the whole drawing visible in the panel. A number = width as a share of the panel.
+  const [zoom, setZoom] = useState<number | null>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  /** The zoom the drawing is shown at now (when fitted: its fitted width / panel width). */
+  const currentZoom = () => zoom ?? (imgRef.current && wrapRef.current ? imgRef.current.clientWidth / Math.max(1, wrapRef.current.clientWidth) : 1);
   useEffect(() => {
     let u: string | null = null;
     let alive = true;
@@ -1489,22 +1530,25 @@ function DrawingView({ meta }: { meta: DrawingMeta }) {
   return (
     <div className="drawing-view">
       <div className="drawing-zoom">
-        <button className="btn btn-small" onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))} aria-label="Zoom out">
+        <button className="btn btn-small" onClick={() => setZoom(Math.max(0.25, currentZoom() / 1.25))} aria-label="Zoom out">
           −
         </button>
-        <span className="small">{Math.round(zoom * 100)}%</span>
-        <button className="btn btn-small" onClick={() => setZoom((z) => Math.min(6, z * 1.25))} aria-label="Zoom in">
+        <span className="small">{zoom === null ? 'Fit' : `${Math.round(zoom * 100)}%`}</span>
+        <button className="btn btn-small" onClick={() => setZoom(Math.min(6, currentZoom() * 1.25))} aria-label="Zoom in">
           +
         </button>
-        <button className="btn btn-small" onClick={() => setZoom(1)}>
+        <button className="btn btn-small" onClick={() => setZoom(null)} title="Whole drawing in the panel">
           Fit
+        </button>
+        <button className="btn btn-small" onClick={() => setZoom(1)} title="Drawing as wide as the panel">
+          Fit width
         </button>
         <a className="link small" href={url} target="_blank" rel="noreferrer">
           Open in new tab
         </a>
       </div>
-      <div className="drawing-img-wrap">
-        <img src={url} alt={meta.name} style={{ width: `${zoom * 100}%` }} draggable={false} />
+      <div className={`drawing-img-wrap ${zoom === null ? 'fit' : ''}`} ref={wrapRef}>
+        <img ref={imgRef} src={url} alt={meta.name} style={zoom === null ? undefined : { width: `${zoom * 100}%` }} draggable={false} />
       </div>
     </div>
   );

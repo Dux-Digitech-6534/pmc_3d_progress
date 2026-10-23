@@ -1434,11 +1434,12 @@ textarea {
 
 /* ---------- Model Builder ---------- */
 .page-wide {
-  max-width: 1700px;
+  max-width: none;
 }
 .builder {
   display: grid;
-  grid-template-columns: minmax(380px, 1fr) minmax(520px, 1.05fr);
+  /* the drawing / 3D panel gets the larger share; the form keeps a readable width */
+  grid-template-columns: minmax(420px, 1.25fr) minmax(500px, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -1455,7 +1456,38 @@ textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+}
+.builder-drawing-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+/* drawing and 3D share the panel height (stacked); side by side in full screen */
+.builder-panes {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.card.builder-drawing.builder-full {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  height: auto;
+  min-height: 0;
+  border-radius: 0;
+  margin: 0;
+  padding: 10px 14px;
+}
+.builder-drawing.builder-full .builder-panes {
+  flex-direction: row;
+}
+.builder-drawing.builder-full .builder-pane {
+  flex: 1 1 0;
+  min-width: 0;
 }
 .drawing-tabs {
   display: flex;
@@ -1532,6 +1564,7 @@ textarea {
 }
 .drawing-img-wrap {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -1541,6 +1574,18 @@ textarea {
   display: block;
   max-width: none;
   user-select: none;
+}
+/* Fit: the whole drawing visible, centred */
+.drawing-img-wrap.fit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.drawing-img-wrap.fit img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 .form-grid {
   display: grid;
