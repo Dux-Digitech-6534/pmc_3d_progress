@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { readingToSpec, type DrawingReading } from '../ai/drawingSchema';
 import { AI_MODEL, aiErrorMessage, forgetApiKey, getApiKey, readDrawingsWithAI, saveApiKey } from '../ai/drawingReader';
+import { forgetGeminiKey, GEMINI_MODEL, getGeminiKey, readDrawingsWithGemini, saveGeminiKey } from '../ai/geminiReader';
 import { readDrawingsOnServer } from '../ai/serverReader';
 import { IS_FRAPPE } from '../config';
 import { loadDrawing, type DrawingMeta } from '../data/drawingStore';
@@ -8,6 +9,40 @@ import { errorMessages, RepositoryError } from '../data/repository';
 import { useApp } from '../state/AppContext';
 import type { BuilderSpec } from '../domain/modelBuilder';
 import { ErrorList } from './ui';
+
+// Local build only: which AI reads the drawing, each with its own key in this browser.
+type Provider = 'gemini' | 'claude';
+const PROVIDER_STORAGE = 'pmc3d.aiProvider';
+const PROVIDERS = {
+  gemini: {
+    label: 'Google Gemini (free tier)',
+    model: GEMINI_MODEL,
+    placeholder: 'AIza…',
+    getKey: getGeminiKey,
+    saveKey: saveGeminiKey,
+    forgetKey: forgetGeminiKey,
+    read: readDrawingsWithGemini,
+    hint: 'Get a free key at aistudio.google.com (Google login, no card). The key is saved only in this browser and sent only to Google. On the free tier Google may use the drawings to improve its products, so do not send confidential client drawings, and the daily limit is small.',
+  },
+  claude: {
+    label: 'Anthropic Claude (paid)',
+    model: AI_MODEL,
+    placeholder: 'sk-ant-…',
+    getKey: getApiKey,
+    saveKey: saveApiKey,
+    forgetKey: forgetApiKey,
+    read: readDrawingsWithAI,
+    hint: 'The key is saved only in this browser on this computer and is sent only to api.anthropic.com. Each reading is billed to that key. Anyone using this browser can use it, so do not save it on a shared computer. Get a key at console.anthropic.com.',
+  },
+} as const;
+
+function storedProvider(): Provider {
+  try {
+    return localStorage.getItem(PROVIDER_STORAGE) === 'claude' ? 'claude' : 'gemini';
+  } catch {
+    return 'gemini';
+  }
+}
 
 interface Outcome {
   reading: DrawingReading;
@@ -34,7 +69,9 @@ export function AiReaderCard({
 }) {
   const { session } = useApp();
   // Local: the user's own key in this browser. Frappe: the key is in PMC Settings on the server.
-  const [key, setKey] = useState(() => (IS_FRAPPE ? '' : getApiKey()));
+  const [provider, setProvider] = useState<Provider>(storedProvider);
+  const p = PROVIDERS[provider];
+  const [key, setKey] = useState(() => (IS_FRAPPE ? '' : PROVIDERS[storedProvider()].getKey()));
   const [keyInput, setKeyInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -73,7 +110,7 @@ export function AiReaderCard({
           if (!blob) throw new Error(`${d.name} is no longer in browser storage. Upload it again.`);
           files.push({ name: d.name, kind: d.kind, blob });
         }
-        res = await readDrawingsWithAI(files, key, abort.current.signal);
+        res = await p.read(files, key, abort.current.signal);
       }
       const { spec: next, notes } = readingToSpec(res.reading, spec);
       setPrevious(spec);
@@ -92,7 +129,7 @@ export function AiReaderCard({
       <section className="card ai-card">
         <h2 className="card-title">Read the drawing with AI</h2>
         <p className="small">
-          AI reading is not set up on this server yet. An administrator enters the Anthropic API key in <b>PMC Settings</b> (Frappe Desk). Until then,
+          AI reading is not set up on this server yet. An administrator chooses the AI (Google Gemini or Anthropic Claude) and enters its API key in <b>PMC Settings</b> (Frappe Desk). Until then,
           fill the form below by hand from the drawing.
         </p>
       </section>
@@ -104,16 +141,37 @@ export function AiReaderCard({
       <section className="card ai-card">
         <h2 className="card-title">Read the drawing with AI</h2>
         <p className="small">
-          The AI ({AI_MODEL}) reads the uploaded drawing and fills this form — grid, columns, footings, beams, slab, walls, doors and windows. It needs
-          internet and your own <b>Anthropic API key</b> (each reading is billed to that key).
+          The AI reads the uploaded drawing and fills this form — grid, columns, footings, beams, slab, walls, doors and windows. It needs internet and
+          an API key.
         </p>
         <div className="ai-key-row">
+          <select
+            value={provider}
+            aria-label="AI"
+            onChange={(e) => {
+              const next = e.target.value as Provider;
+              setProvider(next);
+              setErrors([]);
+              try {
+                localStorage.setItem(PROVIDER_STORAGE, next);
+              } catch {
+                /* remembered for this visit only */
+              }
+              setKey(PROVIDERS[next].getKey());
+            }}
+          >
+            {(Object.keys(PROVIDERS) as Provider[]).map((id) => (
+              <option key={id} value={id}>
+                {PROVIDERS[id].label}
+              </option>
+            ))}
+          </select>
           <input
             type="password"
-            placeholder="sk-ant-…"
+            placeholder={p.placeholder}
             value={keyInput}
             onChange={(e) => setKeyInput(e.target.value)}
-            aria-label="Anthropic API key"
+            aria-label={`${p.label} API key`}
             autoComplete="off"
           />
           <button
@@ -121,7 +179,7 @@ export function AiReaderCard({
             disabled={!keyInput.trim()}
             onClick={() => {
               try {
-                saveApiKey(keyInput);
+                p.saveKey(keyInput);
                 setKey(keyInput.trim());
                 setKeyInput('');
               } catch {
@@ -132,10 +190,7 @@ export function AiReaderCard({
             Save key
           </button>
         </div>
-        <p className="hint">
-          The key is saved only in this browser on this computer and is sent only to api.anthropic.com. Anyone using this browser can use it, so do
-          not save it on a shared computer. Get a key at console.anthropic.com.
-        </p>
+        <p className="hint">{p.hint}</p>
         <ErrorList errors={errors} title="Problem" />
       </section>
     );
@@ -149,11 +204,11 @@ export function AiReaderCard({
           <span className="muted small">read on the server</span>
         ) : (
           <span className="muted small">
-            key …{key.slice(-4)} ·{' '}
+            {p.label} · {p.model} · key …{key.slice(-4)} ·{' '}
             <button
               className="link"
               onClick={() => {
-                forgetApiKey();
+                p.forgetKey();
                 setKey('');
               }}
               disabled={busy}

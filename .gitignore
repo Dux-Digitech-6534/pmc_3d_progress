@@ -6,3 +6,4 @@ standalone
 __pycache__/
 *.pyc
 *.egg-info/
+tsconfig.tsbuildinfo

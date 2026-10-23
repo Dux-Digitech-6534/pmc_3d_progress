@@ -1,11 +1,13 @@
-"""Read a construction drawing with Claude on the server ("Read drawing with AI" in Model Builder).
+"""Read a construction drawing with AI on the server ("Read drawing with AI" in Model Builder).
 
-The Anthropic API key lives in PMC Settings and never reaches a browser. A reading takes
+PMC Settings chooses the provider — Google Gemini (has a free tier, used for testing) or Anthropic
+Claude — and holds its API key, which never reaches a browser. A reading takes
 1-3 minutes, longer than a web request may run, so it runs as a background job:
 start_reading() queues it and returns an id, the page polls get_reading(id) every few seconds.
 
-The answer must match ai_schema.json (exported from frontend/src/ai/drawingSchema.ts by
-frontend/tests/aiSchema.test.ts); the page turns it into the Model Builder form.
+The answer must match ai_schema.json for Claude / gemini_schema.json for Gemini (same shape, the
+Gemini one with every sub-schema inlined), both exported from frontend/src/ai/drawingSchema.ts by
+frontend/tests/aiSchema.test.ts; the page turns it into the Model Builder form.
 """
 
 import base64
@@ -19,11 +21,15 @@ import frappe
 from pmc_3d_progress.api import _parse, _require_modeller, _throw
 
 DEFAULT_MODEL = "claude-opus-5-5"
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
+GEMINI = "Google Gemini"
 MAX_REQUEST_BYTES = 30 * 1024 * 1024  # API request limit is 32 MB; keep headroom
+MAX_GEMINI_REQUEST_BYTES = 19 * 1024 * 1024  # Gemini inline data limit is 20 MB per request
 MAX_IMAGE_EDGE = 2400  # px — enough to read dimension text; bigger images are scaled down
 MAX_IMAGE_BYTES = int(3.5 * 1024 * 1024)
 RESULT_TTL = 3600
 SCHEMA = json.loads(pathlib.Path(__file__).with_name("ai_schema.json").read_text(encoding="utf-8"))
+GEMINI_SCHEMA = json.loads(pathlib.Path(__file__).with_name("gemini_schema.json").read_text(encoding="utf-8"))
 
 SYSTEM = """You read construction drawings (plans, sections, elevations, schedules) and extract the data needed to build a simple 3D structural model of the building, including its walls, doors and windows.
 
@@ -53,12 +59,20 @@ def _key(reading_id):
 
 
 def _settings():
+	"""(provider, key, model, effort) of the provider chosen in PMC Settings; key is None if not set."""
 	s = frappe.get_single("PMC Settings")
+	if (s.ai_provider or GEMINI) == GEMINI:
+		return GEMINI, s.get_password("gemini_api_key", raise_exception=False), (s.gemini_model or DEFAULT_GEMINI_MODEL).strip(), None
 	return (
+		"Anthropic Claude",
 		s.get_password("anthropic_api_key", raise_exception=False),
 		(s.ai_model or DEFAULT_MODEL).strip(),
 		s.ai_effort or "high",
 	)
+
+
+def is_configured():
+	return bool(_settings()[1])
 
 
 @frappe.whitelist(methods=["POST"])
@@ -71,10 +85,10 @@ def start_reading(drawing_ids):
 	for name in ids:
 		if not frappe.db.exists("PMC Drawing", name):
 			_throw("A drawing is no longer on the server. Upload it again.")
-	key, _model, _effort = _settings()
+	provider, key, _model, _effort = _settings()
 	if not key:
 		_throw(
-			"AI reading is not set up on this server. An administrator enters the Anthropic API key in PMC Settings."
+			f"AI reading is not set up on this server. An administrator enters the {provider} API key in PMC Settings."
 		)
 	reading_id = frappe.generate_hash(length=16)
 	_cache().set_value(_key(reading_id), {"status": "queued", "user": frappe.session.user}, expires_in_sec=RESULT_TTL)
@@ -137,7 +151,100 @@ def _content_blocks(drawing_ids):
 	return blocks
 
 
+class GeminiError(Exception):
+	"""A failed Gemini call, already in plain words for the engineer."""
+
+
+def _gemini_parts(blocks):
+	"""Claude content blocks → Gemini parts (same drawings, same prompt)."""
+	parts = []
+	for b in blocks:
+		if b["type"] == "text":
+			parts.append({"text": b["text"]})
+		else:
+			if b["type"] == "document":
+				parts.append({"text": f"Drawing: {b['title']}"})
+			parts.append({"inline_data": {"mime_type": b["source"]["media_type"], "data": b["source"]["data"]}})
+	size = sum(len(p["inline_data"]["data"]) for p in parts if "inline_data" in p)
+	if size > MAX_GEMINI_REQUEST_BYTES:
+		raise GeminiError(
+			f"The drawings are too large to send together ({size / 1024 / 1024:.1f} MB after encoding, Gemini limit about 20 MB). "
+			"Remove some drawings or upload smaller files."
+		)
+	return parts
+
+
+def _gemini_http_message(status, api_message):
+	if status == 400 and "api key" in api_message.lower():
+		return "The Gemini API key in PMC Settings was rejected. Check that it is a valid key from aistudio.google.com."
+	if status in (401, 403):
+		return "The Gemini API key in PMC Settings was rejected or may not use this model. Create a new key at aistudio.google.com."
+	if status == 404:
+		return f"The Gemini model in PMC Settings is not available for this key: {api_message}"
+	if status == 429:
+		return "The free Gemini limit is used up for now (too many requests or tokens). Wait a minute — or until tomorrow for the daily limit — and try again."
+	if status >= 500:
+		return "The Gemini service had a temporary problem. Try again in a moment."
+	return f"Gemini request failed ({status}): {api_message}"
+
+
+def _read_with_gemini(key, model, blocks):
+	"""Returns (reading, model, input_tokens, output_tokens)."""
+	import requests
+
+	try:
+		res = requests.post(
+			f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+			headers={"Content-Type": "application/json", "x-goog-api-key": key},
+			json={
+				"system_instruction": {"parts": [{"text": SYSTEM}]},
+				"contents": [{"role": "user", "parts": _gemini_parts(blocks)}],
+				"generationConfig": {
+					"responseMimeType": "application/json",
+					"responseJsonSchema": GEMINI_SCHEMA,
+					"maxOutputTokens": 32000,
+				},
+			},
+			timeout=600,
+		)
+	except requests.Timeout:
+		raise GeminiError("The AI took too long to answer. Try again, or upload a smaller / clearer drawing.")
+	except requests.RequestException:
+		raise GeminiError("The server could not reach generativelanguage.googleapis.com. Check the server's internet access.")
+	try:
+		body = res.json()
+	except ValueError:
+		body = {}
+	if not res.ok:
+		raise GeminiError(_gemini_http_message(res.status_code, (body.get("error") or {}).get("message") or res.reason))
+	block = (body.get("promptFeedback") or {}).get("blockReason")
+	if block:
+		raise GeminiError(f"Gemini declined to read this drawing ({block}).")
+	cand = (body.get("candidates") or [{}])[0]
+	finish = cand.get("finishReason")
+	if finish == "MAX_TOKENS":
+		raise GeminiError("The drawing has more detail than one reading can return. Try uploading one sheet at a time.")
+	if finish and finish != "STOP":
+		raise GeminiError(f"Gemini stopped without an answer ({finish}). Try again.")
+	text = "".join(p.get("text", "") for p in (cand.get("content") or {}).get("parts", []) if not p.get("thought"))
+	try:
+		reading = json.loads(text)
+	except ValueError:
+		raise GeminiError("The Gemini answer could not be read as model data. Try again.")
+	if not isinstance(reading, dict) or any(k not in reading for k in GEMINI_SCHEMA["required"]):
+		raise GeminiError("The Gemini answer did not have all the model data. Try again.")
+	usage = body.get("usageMetadata") or {}
+	return (
+		reading,
+		body.get("modelVersion") or model,
+		usage.get("promptTokenCount", 0),
+		usage.get("candidatesTokenCount", 0) + usage.get("thoughtsTokenCount", 0),
+	)
+
+
 def _error_message(e):
+	if isinstance(e, (GeminiError, ValueError)):
+		return str(e)
 	import anthropic
 
 	if isinstance(e, anthropic.AuthenticationError):
@@ -159,14 +266,27 @@ def _error_message(e):
 
 def run_reading(reading_id, drawing_ids, user):
 	"""Background job: read the drawings and store the result for get_reading()."""
-	import anthropic
-
 	started = time.time()
 	cache = _cache()
 	cache.set_value(_key(reading_id), {"status": "running", "user": user}, expires_in_sec=RESULT_TTL)
 	try:
-		key, model, effort = _settings()
+		provider, key, model, effort = _settings()
 		content = _content_blocks(drawing_ids)
+		if provider == GEMINI:
+			reading, used_model, tokens_in, tokens_out = _read_with_gemini(key, model, content)
+			state = {
+				"status": "done",
+				"user": user,
+				"reading": reading,
+				"model": used_model,
+				"inputTokens": tokens_in,
+				"outputTokens": tokens_out,
+				"seconds": round(time.time() - started),
+			}
+			cache.set_value(_key(reading_id), state, expires_in_sec=RESULT_TTL)
+			return
+		import anthropic
+
 		client = anthropic.Anthropic(api_key=key, max_retries=2, timeout=600)
 		response = client.beta.messages.create(
 			model=model,

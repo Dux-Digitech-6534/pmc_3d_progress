@@ -1,0 +1,337 @@
+{
+ "type": "object",
+ "properties": {
+  "projectName": {
+   "description": "Project / building name as written on the drawing title block, e.g. \"Security Cabin\".",
+   "type": "string"
+  },
+  "buildingName": {
+   "type": "string"
+  },
+  "xSpansMm": {
+   "description": "Centre-to-centre spacing between consecutive vertical grid lines, left to right, in mm.",
+   "type": "array",
+   "items": {
+    "type": "number"
+   }
+  },
+  "ySpansMm": {
+   "description": "Centre-to-centre spacing between consecutive horizontal grid lines, bottom (front) to top, in mm.",
+   "type": "array",
+   "items": {
+    "type": "number"
+   }
+  },
+  "columnTypes": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "type": "string"
+     },
+     "widthMm": {
+      "type": "number"
+     },
+     "depthMm": {
+      "type": "number"
+     },
+     "footingCode": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "code",
+     "widthMm",
+     "depthMm",
+     "footingCode"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "footingTypes": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "type": "string"
+     },
+     "lengthMm": {
+      "type": "number"
+     },
+     "widthMm": {
+      "type": "number"
+     },
+     "depthMm": {
+      "type": "number"
+     }
+    },
+    "required": [
+     "code",
+     "lengthMm",
+     "widthMm",
+     "depthMm"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "columns": {
+   "description": "Every column position.",
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "grid": {
+      "description": "Grid point like \"X1Y1\" (X from left, Y from bottom/front).",
+      "type": "string"
+     },
+     "columnCode": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "grid",
+     "columnCode"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "foundationDepthMm": {
+   "description": "Bottom of footing below ground / plinth level, mm (positive number).",
+   "type": "number"
+  },
+  "roofLevelMm": {
+   "description": "Top of roof beams = bottom of roof slab, above ground / plinth level, mm.",
+   "type": "number"
+  },
+  "plinthBeam": {
+   "type": "object",
+   "properties": {
+    "present": {
+     "type": "boolean"
+    },
+    "widthMm": {
+     "type": "number"
+    },
+    "depthMm": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "present",
+    "widthMm",
+    "depthMm"
+   ],
+   "additionalProperties": false
+  },
+  "roofBeam": {
+   "type": "object",
+   "properties": {
+    "present": {
+     "type": "boolean"
+    },
+    "widthMm": {
+     "type": "number"
+    },
+    "depthMm": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "present",
+    "widthMm",
+    "depthMm"
+   ],
+   "additionalProperties": false
+  },
+  "slab": {
+   "type": "object",
+   "properties": {
+    "present": {
+     "type": "boolean"
+    },
+    "thicknessMm": {
+     "type": "number"
+    },
+    "overhangMm": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "present",
+    "thicknessMm",
+    "overhangMm"
+   ],
+   "additionalProperties": false
+  },
+  "walls": {
+   "type": "object",
+   "properties": {
+    "present": {
+     "type": "boolean"
+    },
+    "thicknessMm": {
+     "type": "number"
+    },
+    "alsoOnInternalGridLines": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "present",
+    "thicknessMm",
+    "alsoOnInternalGridLines"
+   ],
+   "additionalProperties": false
+  },
+  "openingTypes": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "mark": {
+      "type": "string"
+     },
+     "kind": {
+      "type": "string",
+      "enum": [
+       "door",
+       "window",
+       "ventilator"
+      ]
+     },
+     "widthMm": {
+      "type": "number"
+     },
+     "heightMm": {
+      "type": "number"
+     },
+     "sillMm": {
+      "description": "Height of the opening bottom above floor; 0 for doors.",
+      "type": "number"
+     }
+    },
+    "required": [
+     "mark",
+     "kind",
+     "widthMm",
+     "heightMm",
+     "sillMm"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "openings": {
+   "description": "Every door / window / ventilator placed in a wall.",
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "mark": {
+      "type": "string"
+     },
+     "fromGrid": {
+      "description": "Grid point at one end of the wall the opening is in, e.g. \"X1Y1\".",
+      "type": "string"
+     },
+     "toGrid": {
+      "description": "Grid point at the other end of that wall, on the same grid line, e.g. \"X2Y1\".",
+      "type": "string"
+     },
+     "centreFromStartMm": {
+      "description": "Distance from fromGrid to the opening centre along the wall, mm; null if centred.",
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "required": [
+     "mark",
+     "fromGrid",
+     "toGrid",
+     "centreFromStartMm"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "lintel": {
+   "type": "object",
+   "properties": {
+    "present": {
+     "type": "boolean"
+    },
+    "depthMm": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "present",
+    "depthMm"
+   ],
+   "additionalProperties": false
+  },
+  "chhajja": {
+   "type": "object",
+   "properties": {
+    "present": {
+     "type": "boolean"
+    },
+    "projectionMm": {
+     "type": "number"
+    },
+    "thicknessMm": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "present",
+    "projectionMm",
+    "thicknessMm"
+   ],
+   "additionalProperties": false
+  },
+  "assumptions": {
+   "description": "Every value NOT written on the drawing that you assumed, and why. Empty if none.",
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  },
+  "confidence": {
+   "type": "string",
+   "enum": [
+    "high",
+    "medium",
+    "low"
+   ]
+  }
+ },
+ "required": [
+  "projectName",
+  "buildingName",
+  "xSpansMm",
+  "ySpansMm",
+  "columnTypes",
+  "footingTypes",
+  "columns",
+  "foundationDepthMm",
+  "roofLevelMm",
+  "plinthBeam",
+  "roofBeam",
+  "slab",
+  "walls",
+  "openingTypes",
+  "openings",
+  "lintel",
+  "chhajja",
+  "assumptions",
+  "confidence"
+ ],
+ "additionalProperties": false
+}

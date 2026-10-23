@@ -49,7 +49,7 @@ const MAX_REQUEST_BYTES = 30 * 1024 * 1024; // API request limit is 32 MB; keep 
 const MAX_IMAGE_EDGE = 2400; // px — enough to read dimension text; bigger images are scaled down
 const MAX_IMAGE_BYTES = 3.5 * 1024 * 1024; // per image, before base64 (the API allows 5 MB encoded)
 
-const SYSTEM = `You read construction drawings (plans, sections, elevations, schedules) and extract the data needed to build a simple 3D structural model of the building, including its walls, doors and windows.
+export const SYSTEM = `You read construction drawings (plans, sections, elevations, schedules) and extract the data needed to build a simple 3D structural model of the building, including its walls, doors and windows.
 
 Coordinate and naming conventions you must follow, whatever labels the drawing uses:
 - Grid lines: X1, X2, … are the vertical column lines on the plan from LEFT to RIGHT. Y1, Y2, … are the horizontal column lines from the BOTTOM edge of the plan (the front / entrance side) to the TOP. If the drawing has its own grid labels (A, B, C / 1, 2, 3), map them to this convention and say so in assumptions.
@@ -61,9 +61,9 @@ Coordinate and naming conventions you must follow, whatever labels the drawing u
 
 Only use values you can read or reasonably derive from the drawing. When something is not shown (for example footing depth, beam depth or roof level), use a typical value for a small single-storey RCC building and list it in assumptions, so an engineer can check it. Set confidence to "low" if the drawing is unclear or not a building drawing.`;
 
-const USER_TEXT = `Read the attached drawing(s) and return the structured data for the 3D model. Look at every view — plan, section, elevation, schedules and notes — before answering.`;
+export const USER_TEXT = `Read the attached drawing(s) and return the structured data for the 3D model. Look at every view — plan, section, elevation, schedules and notes — before answering.`;
 
-async function blobToBase64(blob: Blob): Promise<string> {
+export async function blobToBase64(blob: Blob): Promise<string> {
   const buf = new Uint8Array(await blob.arrayBuffer());
   let bin = '';
   const CHUNK = 0x8000;
@@ -72,7 +72,7 @@ async function blobToBase64(blob: Blob): Promise<string> {
 }
 
 /** Scale large photos / scans down so they fit the per-image limit while keeping text legible. */
-async function prepareImage(blob: Blob): Promise<{ data: string; mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' }> {
+export async function prepareImage(blob: Blob): Promise<{ data: string; mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' }> {
   const type = blob.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
   const bitmap = await createImageBitmap(blob);
   const edge = Math.max(bitmap.width, bitmap.height);

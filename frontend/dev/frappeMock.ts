@@ -124,7 +124,7 @@ export function frappeMock(): Plugin {
               case 'ai.start_reading':
                 throw Object.assign(new Error(), {
                   code: 'validation',
-                  details: ['AI reading is not set up on this server. An administrator enters the Anthropic API key in PMC Settings.'],
+                  details: ['AI reading is not set up on this server. An administrator chooses the AI and enters its API key in PMC Settings.'],
                 });
               default:
                 throw Object.assign(new Error(), { code: 'not-found', details: [`Unknown method ${method} (mock).`] });

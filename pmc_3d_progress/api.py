@@ -290,12 +290,13 @@ def get_session():
 	"""Who is using the page and which PMC roles they may act as."""
 	if frappe.session.user == "Guest":
 		frappe.throw("Please log in.", frappe.AuthenticationError)
-	key = frappe.get_single("PMC Settings").get_password("anthropic_api_key", raise_exception=False)
+	from pmc_3d_progress.ai import is_configured  # ai imports this module
+
 	return {
 		"user": frappe.session.user,
 		"fullName": get_fullname(frappe.session.user),
 		"roles": _user_roles(),
-		"aiConfigured": bool(key),
+		"aiConfigured": is_configured(),
 	}
 
 

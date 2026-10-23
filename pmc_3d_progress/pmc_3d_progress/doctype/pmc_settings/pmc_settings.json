@@ -5,6 +5,9 @@
  "engine": "InnoDB",
  "field_order": [
   "ai_section",
+  "ai_provider",
+  "gemini_api_key",
+  "gemini_model",
   "anthropic_api_key",
   "ai_model",
   "ai_effort"
@@ -16,28 +19,53 @@
    "label": "Read drawings with AI"
   },
   {
+   "fieldname": "ai_provider",
+   "fieldtype": "Select",
+   "label": "AI Provider",
+   "options": "Google Gemini\nAnthropic Claude",
+   "default": "Google Gemini",
+   "description": "Which AI reads the uploaded drawings. Only the key of the chosen provider is used."
+  },
+  {
+   "fieldname": "gemini_api_key",
+   "fieldtype": "Password",
+   "label": "Gemini API Key",
+   "depends_on": "eval:doc.ai_provider != 'Anthropic Claude'",
+   "description": "From aistudio.google.com/apikey. Used on the server only, never sent to browsers. On the free tier Google may use the drawings to improve its products and the daily limit is small."
+  },
+  {
+   "fieldname": "gemini_model",
+   "fieldtype": "Data",
+   "label": "Gemini Model",
+   "default": "gemini-3.8-flash",
+   "depends_on": "eval:doc.ai_provider != 'Anthropic Claude'"
+  },
+  {
    "fieldname": "anthropic_api_key",
    "fieldtype": "Password",
    "label": "Anthropic API Key",
+   "depends_on": "eval:doc.ai_provider == 'Anthropic Claude'",
    "description": "Used on the server only, never sent to browsers. Each drawing reading is billed to this key."
   },
   {
    "fieldname": "ai_model",
    "fieldtype": "Data",
    "label": "AI Model",
-   "default": "claude-opus-5-5"
+   "default": "claude-opus-5-5",
+   "depends_on": "eval:doc.ai_provider == 'Anthropic Claude'"
   },
   {
    "fieldname": "ai_effort",
    "fieldtype": "Select",
    "label": "AI Effort",
    "options": "low\nmedium\nhigh\nxhigh\nmax",
-   "default": "high"
+   "default": "high",
+   "depends_on": "eval:doc.ai_provider == 'Anthropic Claude'"
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-22 12:00:00.000000",
+ "modified": "2026-10-23 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "PMC 3D Progress",
  "name": "PMC Settings",
