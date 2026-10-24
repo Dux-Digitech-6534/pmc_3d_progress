@@ -1793,6 +1793,30 @@ textarea {
 .pick-row select {
   max-width: 160px;
 }
+.pick-qty {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 6px;
+}
+.pick-qty-head {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 2px;
+  font-weight: 600;
+  color: var(--navy);
+}
+.pick-qty-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pick-qty-input input {
+  width: 78px;
+}
+.pick-manual .pick-qty-input input {
+  border-color: var(--amber);
+  background: var(--amber-soft);
+}
 .builder-pick-edit {
   border-top: 1px solid var(--border);
   margin-top: 4px;

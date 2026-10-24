@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LocalRepository, MemoryStorage } from '../src/data/localRepository';
-import { buildModel, defaultSpec, makeLayout, parseSpans, removeElement, resizeLayout, wallOptions, withDefaults, type BuilderSpec } from '../src/domain/modelBuilder';
+import { blankSpec, buildModel, defaultSpec, headerErrors, makeLayout, parseSpans, removeElement, resizeLayout, wallOptions, withDefaults, type BuilderSpec } from '../src/domain/modelBuilder';
 import { validateModelDocument } from '../src/domain/modelValidation';
 import { computeActivityProgress } from '../src/domain/progress';
 import { checkQuantity } from '../src/domain/workflow';
@@ -347,5 +347,41 @@ describe('model builder — elements clicked in the 3D preview', () => {
     expect(next.openings).toHaveLength(spec.openings.length - 1);
     expect(codes(next).some((c) => c.startsWith('V-'))).toBe(false);
     expect(removeElement(spec, refOf(spec, 'SL-RF')).slab.enabled).toBe(false);
+  });
+});
+
+describe('model builder — planned quantities typed in by hand', () => {
+  const footing = (spec: BuilderSpec) => buildModel(spec).document!.elements.find((e) => e.code === 'F1-X1Y1')!;
+
+  it('uses the typed value instead of the calculated one, and keeps the calculated one as "auto"', () => {
+    const base = frameOnly();
+    const calc = footing(base).plannedQuantities.REINF.quantity;
+    const spec = { ...base, qtyOverride: { 'F1-X1Y1': { REINF: 31.5, CONC: 0.6 } } };
+    const res = buildModel(spec);
+    const el = res.document!.elements.find((e) => e.code === 'F1-X1Y1')!;
+    expect(el.plannedQuantities.REINF).toEqual({ quantity: 31.5, unit: 'kg' });
+    expect(el.plannedQuantities.CONC.quantity).toBe(0.6);
+    expect(res.auto[el.id].REINF).toBe(calc);
+    expect(res.summary!.steel).toBeCloseTo(buildModel(base).summary!.steel + 31.5 - calc, 1);
+    expect(res.warnings.some((w) => w.includes('entered by hand'))).toBe(true);
+    expect(validateModelDocument(res.document).errors).toEqual([]);
+  });
+
+  it('adds a quantity the rates left out (steel rate 0) and refuses a bad number', () => {
+    const base = { ...frameOnly(), steel: { ...frameOnly().steel, footing: 0 } };
+    expect(footing(base).plannedQuantities.REINF).toBeUndefined();
+    expect(footing({ ...base, qtyOverride: { 'F1-X1Y1': { REINF: 20 } } }).plannedQuantities.REINF).toEqual({ quantity: 20, unit: 'kg' });
+    expect(buildModel({ ...base, qtyOverride: { 'F1-X1Y1': { CONC: NaN } } }).errors[0]).toMatch(/F1-X1Y1: planned Concreting must be a number/);
+    // an activity that does not apply to the element is ignored
+    expect(footing({ ...base, qtyOverride: { 'F1-X1Y1': { BRICK: 5 } } }).plannedQuantities.BRICK).toBeUndefined();
+  });
+});
+
+describe('model builder — blank form for a new project', () => {
+  it('has no project or model names, so they must be filled before creating', () => {
+    const b = blankSpec();
+    expect([b.projectId, b.projectName, b.modelId, b.buildingName]).toEqual(['', '', '', '']);
+    expect(headerErrors(b)).toHaveLength(4);
+    expect(headerErrors(defaultSpec())).toEqual([]);
   });
 });

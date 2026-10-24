@@ -98,6 +98,12 @@ export interface BuilderSpec {
    * doors / windows and the slab are removed through the layout, placements and slab switch.
    */
   omit?: string[];
+  /**
+   * Planned quantities typed in by hand, by element code and activity code (e.g.
+   * { "F1-X1Y1": { REINF: 31.5 } }). They replace the calculated value; without an entry the
+   * quantity is calculated ("Auto").
+   */
+  qtyOverride?: Record<string, Record<string, number>>;
 }
 
 /** What a generated element comes from in the spec, so a click in the 3D preview can edit it. */
@@ -133,9 +139,28 @@ export interface BuildResult {
   summary: BuildSummary | null;
   /** Element id → where it comes from in the spec. */
   refs: Record<string, ElementRef>;
+  /** Element id → the calculated planned quantity per activity, before any typed-in value. */
+  auto: Record<string, Record<string, number>>;
 }
 
 const RCC_TYPES: ElementType[] = ['footing', 'column', 'beam', 'slab', 'lintel', 'chhajja'];
+
+/** The activities every built model has, and the element types each applies to. */
+export const ACTIVITIES: { code: string; name: string; unit: 'kg' | 'm2' | 'm3' | 'nos'; appliesTo: ElementType[] }[] = [
+  { code: 'REINF', name: 'Reinforcement', unit: 'kg', appliesTo: RCC_TYPES },
+  { code: 'SHUT', name: 'Shuttering', unit: 'm2', appliesTo: RCC_TYPES },
+  { code: 'CONC', name: 'Concreting', unit: 'm3', appliesTo: RCC_TYPES },
+  { code: 'BRICK', name: 'Brickwork', unit: 'm3', appliesTo: ['wall'] },
+  { code: 'PLAST', name: 'Plaster', unit: 'm2', appliesTo: ['wall'] },
+  { code: 'FIX', name: 'Fixing', unit: 'nos', appliesTo: ['door', 'window'] },
+];
+const SUMMARY_KEY: Record<string, 'concrete' | 'shuttering' | 'steel' | 'brickwork' | 'plaster' | undefined> = {
+  CONC: 'concrete',
+  SHUT: 'shuttering',
+  REINF: 'steel',
+  BRICK: 'brickwork',
+  PLAST: 'plaster',
+};
 
 const r = (n: number, d: number) => Math.round(n * 10 ** d) / 10 ** d;
 const mm = (n: number) => n / 1000;
@@ -165,19 +190,25 @@ export function parseSpans(text: string): number[] | null {
   return nums.length && nums.every(pos) ? nums : null;
 }
 
-export function buildModel(spec: BuilderSpec): BuildResult {
+/** Problems with the project / model names (section 1). */
+export function headerErrors(spec: BuilderSpec): string[] {
   const errors: string[] = [];
-  const warnings: string[] = [];
-  const refs: Record<string, ElementRef> = {};
-  const omit = new Set(spec.omit ?? []);
-  const fail = (): BuildResult => ({ errors, warnings, document: null, summary: null, refs: {} });
-
-  // ---- header ----
   if (!spec.projectId.trim() || !ID_RE.test(spec.projectId.trim())) errors.push('Project ID is required (letters, digits, - _ . only), e.g. PMC-SEC-003.');
   if (!spec.projectName.trim()) errors.push('Project name is required.');
   if (!spec.modelId.trim() || !ID_RE.test(spec.modelId.trim())) errors.push('Model ID is required (letters, digits, - _ . only), e.g. SEC-CABIN-D85.');
   if (!spec.revision.trim()) errors.push('Revision is required, e.g. R01.');
   if (!spec.buildingName.trim()) errors.push('Building name is required.');
+  return errors;
+}
+
+export function buildModel(spec: BuilderSpec): BuildResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const refs: Record<string, ElementRef> = {};
+  const omit = new Set(spec.omit ?? []);
+  const fail = (): BuildResult => ({ errors, warnings, document: null, summary: null, refs: {}, auto: {} });
+
+  errors.push(...headerErrors(spec));
 
   // ---- grid ----
   if (!spec.xSpans.every(pos)) errors.push('X spacings must be positive numbers (mm).');
@@ -601,16 +632,33 @@ export function buildModel(spec: BuilderSpec): BuildResult {
       { id: 'GF', name: 'Ground / Plinth', buildingId: bId, elevation: 0 },
       { id: 'RF', name: 'Roof', buildingId: bId, elevation: r(roof, 3) },
     ],
-    activities: [
-      { code: 'REINF', name: 'Reinforcement', unit: 'kg', appliesTo: RCC_TYPES },
-      { code: 'SHUT', name: 'Shuttering', unit: 'm2', appliesTo: RCC_TYPES },
-      { code: 'CONC', name: 'Concreting', unit: 'm3', appliesTo: RCC_TYPES },
-      { code: 'BRICK', name: 'Brickwork', unit: 'm3', appliesTo: ['wall'] },
-      { code: 'PLAST', name: 'Plaster', unit: 'm2', appliesTo: ['wall'] },
-      { code: 'FIX', name: 'Fixing', unit: 'nos', appliesTo: ['door', 'window'] },
-    ],
+    activities: ACTIVITIES.map((a) => ({ ...a, appliesTo: [...a.appliesTo] })),
     elements,
   } as ModelDocument;
+
+  // ---- planned quantities typed in by hand replace the calculated ones ----
+  const auto: Record<string, Record<string, number>> = {};
+  let typed = 0;
+  for (const e of elements) {
+    auto[e.id] = Object.fromEntries(Object.entries(e.plannedQuantities).map(([k, q]) => [k, q.quantity]));
+    const over = spec.qtyOverride?.[e.code];
+    if (!over) continue;
+    for (const [act, value] of Object.entries(over)) {
+      const def = ACTIVITIES.find((a) => a.code === act);
+      if (!def || !def.appliesTo.includes(e.type)) continue; // stale entry after a change of the model
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+        errors.push(`${e.code}: planned ${def.name} must be a number of 0 or more (${def.unit}), or set back to Auto.`);
+        continue;
+      }
+      const before = e.plannedQuantities[act]?.quantity ?? 0;
+      e.plannedQuantities[act] = { quantity: value, unit: def.unit };
+      const key = SUMMARY_KEY[act];
+      if (key) sum[key] += value - before;
+      typed++;
+    }
+  }
+  if (errors.length) return fail();
+  if (typed) warnings.push(`${typed} planned quantit${typed === 1 ? 'y was' : 'ies were'} entered by hand instead of calculated — check against the drawing / BOQ.`);
 
   sum.concrete = r(sum.concrete, 3);
   sum.shuttering = r(sum.shuttering, 2);
@@ -618,7 +666,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
   sum.brickwork = r(sum.brickwork, 3);
   sum.plaster = r(sum.plaster, 2);
   if (omit.size) warnings.push(`${omit.size} element${omit.size === 1 ? ' was' : 's were'} removed by hand in the 3D preview (beams / walls / lintels / chhajjas) — check against the drawing.`);
-  return { errors, warnings, document, summary: sum, refs };
+  return { errors, warnings, document, summary: sum, refs, auto };
 }
 
 /**
@@ -693,6 +741,11 @@ export function defaultSpec(): BuilderSpec {
     chhajja: { enabled: true, projection: 450, t: 75, overDoors: true },
     drawingRefs: [],
   };
+}
+
+/** A new project: the default frame, but no project / model names, so nothing old is reused. */
+export function blankSpec(): BuilderSpec {
+  return { ...defaultSpec(), projectId: '', projectName: '', modelId: '', modelName: '', buildingName: '', location: '', revision: 'R01' };
 }
 
 /**

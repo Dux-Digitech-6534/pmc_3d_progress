@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { startBlankBuilder } from './ModelBuilder';
 import { ConfirmDialog, EmptyState, ErrorList, fmtDateTime, PageHeader, Spinner } from '../components/ui';
 import { errorMessages, type ImportModelOutcome } from '../data/repository';
 import { invalidSampleText, SAMPLE_MODELS, sampleText } from '../data/samples';
@@ -81,7 +82,7 @@ export function ModelRegister() {
         title="Model Register"
         subtitle="All 3D models you have created, per project. When a model is changed it gets a new version (R02, R03 …); the Active one is shown in 3D."
         actions={
-          <button className="btn btn-primary" onClick={() => go('builder')}>
+          <button className="btn btn-primary" onClick={() => { startBlankBuilder(); go('builder'); }}>
             New model from drawing
           </button>
         }
@@ -94,7 +95,7 @@ export function ModelRegister() {
           <EmptyState
             title="No models yet"
             action={
-              <button className="btn btn-primary" onClick={() => go('builder')}>
+              <button className="btn btn-primary" onClick={() => { startBlankBuilder(); go('builder'); }}>
                 New model from drawing
               </button>
             }

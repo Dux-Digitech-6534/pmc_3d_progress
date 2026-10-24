@@ -15,7 +15,10 @@ import {
   type DrawingMeta,
 } from '../data/drawingStore';
 import {
+  ACTIVITIES,
+  blankSpec,
   buildModel,
+  headerErrors,
   defaultSpec,
   gridLabel,
   makeLayout,
@@ -39,6 +42,25 @@ import { downloadText } from '../lib/download';
 import { useApp } from '../state/AppContext';
 
 const DRAFT_KEY = 'pmc3d.v1.builder';
+
+/** Open the Model Builder on a blank form (new project): no project, so no old drawings either. */
+export function startBlankBuilder() {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(blankSpec()));
+  } catch {
+    /* storage blocked: the builder opens with its defaults */
+  }
+}
+
+/** Names the preview needs while the form's own are still empty. */
+const withPreviewNames = (s: BuilderSpec): BuilderSpec => ({
+  ...s,
+  projectId: s.projectId.trim() || 'NEW-PROJECT',
+  projectName: s.projectName.trim() || 'New project',
+  modelId: s.modelId.trim() || 'MODEL',
+  revision: s.revision.trim() || 'R01',
+  buildingName: s.buildingName.trim() || 'Building',
+});
 
 const readDraft = (): BuilderSpec | null => {
   try {
@@ -137,10 +159,16 @@ export function ModelBuilder() {
   const columnCodes = spec.columnTypes.map((c) => c.code.trim()).filter(Boolean);
   const footingCodes = spec.footingTypes.map((f) => f.code.trim()).filter(Boolean);
 
-  const result = useMemo(() => buildModel({ ...spec, drawingRefs: drawings.map((d) => d.name) }), [spec, drawings]);
+  // The 3D preview is built even while the project / model names are still empty (a new blank
+  // form); "result" — used to create the model — has the missing names as errors.
+  const built = useMemo(() => buildModel({ ...withPreviewNames(spec), drawingRefs: drawings.map((d) => d.name) }), [spec, drawings]);
+  const result = useMemo(() => {
+    const missing = headerErrors(spec);
+    return missing.length ? { ...built, errors: [...missing, ...built.errors], document: null } : built;
+  }, [built, spec]);
   const preview = useMemo<ElementRecord[]>(
     () =>
-      (result.document?.elements ?? []).map((e) => ({
+      (built.document?.elements ?? []).map((e) => ({
         ...e,
         key: e.id,
         projectId: spec.projectId,
@@ -150,7 +178,7 @@ export function ModelBuilder() {
         buildingName: spec.buildingName,
         levelName: e.levelId,
       })),
-    [result.document], // eslint-disable-line react-hooks/exhaustive-deps
+    [built.document], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const previewColors = useMemo(() => new Map(preview.map((e) => [e.id, TYPE_COLORS[e.type]])), [preview]);
   // Re-frame the camera only when the building size changes, not on every edit (door moves etc.).
@@ -160,7 +188,7 @@ export function ModelBuilder() {
   const [picked, setPicked] = useState<string | null>(null);
   const [undoSpec, setUndoSpec] = useState<BuilderSpec | null>(null);
   const pickedEl = picked ? preview.find((e) => e.id === picked) : undefined;
-  const pickedRef = picked ? result.refs[picked] : undefined;
+  const pickedRef = picked ? built.refs[picked] : undefined;
   const selection = useMemo(() => new Set(pickedEl ? [pickedEl.id] : []), [pickedEl]);
   /** A removal from the element panel; the previous form can be restored with Undo until the next change. */
   const undoable = useRef(false);
@@ -201,7 +229,7 @@ export function ModelBuilder() {
 
   function startFrom(pid: string) {
     if (pid === '__new__') {
-      const fresh = defaultSpec();
+      const fresh = blankSpec();
       setXText(fresh.xSpans.join(', '));
       setYText(fresh.ySpans.join(', '));
       prevProjectId.current = fresh.projectId;
@@ -382,7 +410,7 @@ export function ModelBuilder() {
 
           {view !== 'drawing' && (
             <div className="builder-pane builder-pane-3d" data-testid="builder-live-3d">
-              {result.document && !spansPending ? (
+              {built.document && !spansPending ? (
                 <>
                   <ModelViewer
                     elements={preview}
@@ -404,6 +432,7 @@ export function ModelBuilder() {
                       elRef={pickedRef}
                       spec={spec}
                       elements={preview}
+                      auto={built.auto[pickedEl.id]}
                       onChange={(next) => setSpec(next)}
                       onRemove={() => {
                         editFromPanel(removeElement(spec, pickedRef));
@@ -537,6 +566,19 @@ export function ModelBuilder() {
                 <input value={spec.modelName} onChange={(e) => setSpec({ modelName: e.target.value })} placeholder={`${spec.buildingName || 'Building'} — Structure`} />
               </label>
             </div>
+            {(() => {
+              // a model for another building going into an existing project by mistake
+              const pid = spec.projectId.trim();
+              const project = projects.find((p) => p.id === pid);
+              const others = [...new Set(models.filter((m) => m.projectId === pid && m.status !== 'Failed' && m.modelId !== spec.modelId.trim()).map((m) => m.modelId))];
+              if (!project || !others.length) return null;
+              return (
+                <p className="alert alert-warn small" style={{ margin: '8px 0 0' }}>
+                  Project <b>{pid}</b> ({project.name}) already exists with model{others.length === 1 ? '' : 's'} <b>{others.join(', ')}</b>. This model will be
+                  added to the same project. For a different building or site, use a new Project ID (Start from → New project).
+                </p>
+              );
+            })()}
             {existingRevision && (
               <p className="field-error">
                 {spec.modelId} {spec.revision} already exists in this project. Revisions are never overwritten —{' '}
@@ -1219,6 +1261,7 @@ function BuilderElementPanel({
   elRef,
   spec,
   elements,
+  auto,
   onChange,
   onRemove,
   onClose,
@@ -1228,6 +1271,8 @@ function BuilderElementPanel({
   spec: BuilderSpec;
   /** All preview elements, to say how many share a size. */
   elements: ElementRecord[];
+  /** Calculated planned quantity per activity (before typed-in values). */
+  auto: Record<string, number> | undefined;
   onChange: (next: BuilderSpec) => void;
   onRemove: () => void;
   onClose: () => void;
@@ -1235,7 +1280,6 @@ function BuilderElementPanel({
   const set = (patch: Partial<BuilderSpec>) => onChange({ ...spec, ...patch });
   const count = (f: (e: ElementRecord) => boolean) => elements.filter(f).length;
   const size = el.geometry.size.map((m) => Math.round(m * 1000)).join(' × ');
-  const qty = Object.entries(el.plannedQuantities);
   const all = (n: number, what: string) => <p className="hint">Changes all {n} {what} — they share this size on the drawing.</p>;
 
   let edit: ReactNode = null;
@@ -1464,14 +1508,51 @@ function BuilderElementPanel({
         <span>Level</span>
         <span>{el.levelId}</span>
       </div>
-      {qty.map(([k, q]) => (
-        <div className="pick-row" key={k}>
-          <span>Planned {k}</span>
-          <span>
-            {q.quantity} {q.unit}
-          </span>
+      <div className="pick-qty">
+        <div className="pick-qty-head">
+          <span>Planned quantity</span>
+          <span className="muted small">Auto = calculated from the size · type to enter your own</span>
         </div>
-      ))}
+        {ACTIVITIES.filter((a) => a.appliesTo.includes(el.type)).map((a) => {
+          const typed = spec.qtyOverride?.[el.code]?.[a.code];
+          const manual = typed !== undefined;
+          const calc = auto?.[a.code];
+          const setQty = (v: number | undefined) => {
+            const forEl = { ...(spec.qtyOverride?.[el.code] ?? {}) };
+            if (v === undefined) delete forEl[a.code];
+            else forEl[a.code] = v;
+            const all = { ...(spec.qtyOverride ?? {}) };
+            if (Object.keys(forEl).length) all[el.code] = forEl;
+            else delete all[el.code];
+            set({ qtyOverride: all });
+          };
+          return (
+            <div className={`pick-row ${manual ? 'pick-manual' : ''}`} key={a.code}>
+              <span>
+                {a.name}
+                <span className="muted small"> · {manual ? `manual (auto ${calc ?? 0})` : 'auto'}</span>
+              </span>
+              <span className="pick-qty-input">
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={manual ? (Number.isFinite(typed) ? typed : '') : (calc ?? '')}
+                  placeholder="0"
+                  aria-label={`Planned ${a.name}`}
+                  onChange={(e) => setQty(e.target.value === '' ? NaN : Number(e.target.value))}
+                />
+                <span className="muted small">{a.unit.replace('2', '²').replace('3', '³')}</span>
+                {manual && (
+                  <button className="link small" title={`Back to the calculated ${calc ?? 0}`} onClick={() => setQty(undefined)}>
+                    ↺ Auto
+                  </button>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
       {el.notes && <p className="hint">{el.notes}</p>}
       <div className="builder-pick-edit">{edit}</div>
       <div className="builder-pick-foot">
