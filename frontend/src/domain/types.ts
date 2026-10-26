@@ -126,7 +126,15 @@ export interface Project {
 }
 
 export type ModelSourceType = 'Bundled sample (procedural JSON)' | 'Uploaded JSON file' | 'Model Builder (from drawing)';
-export type ModelImportStatus = 'Active' | 'Superseded' | 'Failed';
+/**
+ * Active = shown in 3D and used for progress. Pending Approval = planning submitted by a site
+ * engineer, waiting for the PMC reviewer; Returned = sent back with remarks. Neither is used for
+ * progress, and both may be replaced by a corrected submission of the same revision.
+ */
+export type ModelImportStatus = 'Active' | 'Superseded' | 'Failed' | 'Pending Approval' | 'Returned';
+
+/** Statuses of a model that is still being planned (not approved yet). */
+export const PLANNING_STATUSES: readonly ModelImportStatus[] = ['Pending Approval', 'Returned'];
 
 export interface ModelRecord {
   /** projectId|modelId|revision — the permanent mapping key for elements and progress. */
@@ -145,6 +153,10 @@ export interface ModelRecord {
   errors?: string[];
   /** The validated document. Absent for failed imports. */
   document?: ModelDocument;
+  /** PMC review of a submitted planning: remarks (required when returned), who and when. */
+  reviewRemarks?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
 }
 
 /** An element resolved in the context of a project + model revision. */

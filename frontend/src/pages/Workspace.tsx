@@ -124,14 +124,14 @@ export function Workspace() {
   if (!data.model) {
     return (
       <EmptyState
-        title={`No model imported for ${data.project.name}`}
+        title={`No approved model for ${data.project.name} yet`}
         action={
           <button className="btn btn-primary" onClick={() => go('models')}>
-            Open Model Register to import
+            Open Model Register
           </button>
         }
       >
-        Import a model JSON file (a sample for this project is bundled) — the same viewer and forms will work without any code change.
+        No approved model yet. A planning made in the Model Builder becomes the 3D model once the PMC Reviewer approves it in the Model Register.
       </EmptyState>
     );
   }

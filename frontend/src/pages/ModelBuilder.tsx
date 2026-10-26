@@ -41,12 +41,24 @@ import {
   type OpeningPlacement,
   type OpeningType,
 } from '../domain/modelBuilder';
-import { ELEMENT_TYPES, type ElementRecord, type ElementType, type ModelRecord } from '../domain/types';
+import { ELEMENT_TYPES, PLANNING_STATUSES, type ElementRecord, type ElementType, type ModelRecord } from '../domain/types';
 import { TYPE_COLORS } from '../lib/colors';
 import { downloadText } from '../lib/download';
 import { useApp } from '../state/AppContext';
 
 const DRAFT_KEY = 'pmc3d.v1.builder';
+
+/** Open a submitted planning in the Model Builder to correct it (same revision, so it replaces the submission). */
+export function openModelInBuilder(model: ModelRecord): boolean {
+  const saved = (model.document?.model.source as { builderSpec?: Partial<BuilderSpec> } | undefined)?.builderSpec;
+  if (!saved) return false;
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...withDefaults(saved), revision: model.revision }));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Open the Model Builder on a blank form (new project): no project, so no old drawings either. */
 export function startBlankBuilder() {
@@ -83,7 +95,9 @@ const nextRevision = (rev: string) => {
 };
 
 export function ModelBuilder() {
-  const { repo, projects, projectId, setProjectId, refresh, notify, go } = useApp();
+  const { repo, projects, projectId, setProjectId, refresh, notify, go, role } = useApp();
+  // A PMC reviewer's model is approved at once; anyone else's planning waits for the PMC.
+  const approvesOwn = role === 'pmc-reviewer';
   const [spec, setSpecState] = useState<BuilderSpec>(() => readDraft() ?? defaultSpec());
   const [xText, setXText] = useState(() => formatSpans(spec.xSpans));
   const [yText, setYText] = useState(() => formatSpans(spec.ySpans));
@@ -208,7 +222,11 @@ export function ModelBuilder() {
     else setUndoSpec(null);
   }, [spec]);
 
-  const existingRevision = models.find((m) => m.projectId === spec.projectId.trim() && m.modelId === spec.modelId.trim() && m.revision === spec.revision.trim());
+  const sameRevision = models.find((m) => m.projectId === spec.projectId.trim() && m.modelId === spec.modelId.trim() && m.revision === spec.revision.trim());
+  // a planning still waiting for (or returned by) the PMC is replaced by the corrected one
+  const replacing = sameRevision && PLANNING_STATUSES.includes(sameRevision.status) ? sameRevision : undefined;
+  const existingRevision = replacing ? undefined : sameRevision;
+  const createLabel = approvesOwn ? `Approve & create ${spec.revision}` : `${replacing ? 'Resubmit' : 'Submit'} ${spec.revision} for PMC approval`;
   const latestOfModel = models.filter((m) => m.projectId === spec.projectId.trim() && m.modelId === spec.modelId.trim() && m.status !== 'Failed').at(-1);
 
   function applySpans(axis: 'x' | 'y', text: string) {
@@ -341,10 +359,15 @@ export function ModelBuilder() {
         text: JSON.stringify(result.document, null, 2),
         sourceName: drawings.length ? `Model Builder — ${drawings.map((d) => d.name).join(', ')}` : 'Model Builder',
         sourceType: 'Model Builder (from drawing)',
+        role,
       });
       if (out.ok && out.record) {
         setCreated(out.record);
-        notify(`Created ${out.record.name} ${out.record.revision} — ${out.record.elementCount} elements.`);
+        notify(
+          out.record.status === 'Pending Approval'
+            ? `${out.record.name} ${out.record.revision} sent to the PMC for approval — it becomes the 3D model once approved.`
+            : `Created ${out.record.name} ${out.record.revision} — ${out.record.elementCount} elements.`,
+        );
         if (out.record.projectId !== projectId) setProjectId(out.record.projectId);
         else await refresh();
       } else {
@@ -537,8 +560,8 @@ export function ModelBuilder() {
               )}
             </div>
             {created ? (
-              <button className="btn btn-small" onClick={() => go('workspace')}>
-                Open in 3D Workspace
+              <button className="btn btn-small" onClick={() => go(created.status === 'Active' ? 'workspace' : 'models')}>
+                {created.status === 'Active' ? 'Open in 3D Workspace' : 'Open Model Register'}
               </button>
             ) : null}
             <button
@@ -547,7 +570,7 @@ export function ModelBuilder() {
               title={existingRevision ? `${spec.modelId} ${spec.revision} already exists — change the revision` : undefined}
               onClick={() => void create()}
             >
-              {busy ? 'Working…' : `Create model ${spec.revision}`}
+              {busy ? 'Working…' : createLabel}
             </button>
           </div>
         </section>
@@ -642,6 +665,17 @@ export function ModelBuilder() {
                 </p>
               );
             })()}
+            {replacing && (
+              <p className={`alert ${replacing.status === 'Returned' ? 'alert-warn' : 'alert-info'} small`} style={{ margin: '8px 0 0' }}>
+                {spec.modelId} {spec.revision} is {replacing.status === 'Returned' ? 'returned by the PMC' : 'waiting for PMC approval'} — {approvesOwn ? 'approving' : 'submitting'} replaces it with this form.
+                {replacing.reviewRemarks && (
+                  <>
+                    {' '}
+                    PMC remarks: <b>{replacing.reviewRemarks}</b>
+                  </>
+                )}
+              </p>
+            )}
             {existingRevision && (
               <p className="field-error">
                 {spec.modelId} {spec.revision} already exists in this project. Revisions are never overwritten —{' '}
@@ -1261,7 +1295,7 @@ export function ModelBuilder() {
             )}
             <div className="card-actions">
               <button className="btn btn-primary" disabled={!result.document || busy || !!existingRevision || spansPending} onClick={() => void create()}>
-                {busy ? 'Working…' : `Create model ${spec.revision}`}
+                {busy ? 'Working…' : createLabel}
               </button>
               <button
                 className="btn"

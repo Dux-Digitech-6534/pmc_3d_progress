@@ -2022,3 +2022,28 @@ details.advanced[open] > summary {
   gap: 4px;
   margin: 6px 0 4px;
 }
+
+/* planning waiting for / returned by the PMC */
+.badge-model-pending-approval {
+  background: var(--amber-soft);
+  color: var(--amber);
+  border-color: #f5d48a;
+}
+.badge-model-returned {
+  background: var(--red-soft);
+  color: var(--red);
+}
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stack textarea {
+  width: 100%;
+}

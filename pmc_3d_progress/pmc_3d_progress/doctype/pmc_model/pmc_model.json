@@ -16,6 +16,9 @@
   "source_name",
   "imported_on",
   "element_count",
+  "review_remarks",
+  "reviewed_by",
+  "reviewed_on",
   "section_break_1",
   "warnings",
   "errors",
@@ -64,7 +67,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Active\nSuperseded\nFailed",
+   "options": "Active\nSuperseded\nFailed\nPending Approval\nReturned",
    "default": "Active",
    "in_list_view": 1,
    "in_standard_filter": 1
@@ -93,6 +96,23 @@
    "fieldname": "element_count",
    "fieldtype": "Int",
    "label": "Elements"
+  },
+  {
+   "fieldname": "review_remarks",
+   "fieldtype": "Small Text",
+   "label": "Review Remarks",
+   "description": "PMC remarks when the planning was approved or returned."
+  },
+  {
+   "fieldname": "reviewed_by",
+   "fieldtype": "Link",
+   "label": "Reviewed By",
+   "options": "User"
+  },
+  {
+   "fieldname": "reviewed_on",
+   "fieldtype": "Datetime",
+   "label": "Reviewed On"
   },
   {
    "fieldname": "section_break_1",
@@ -127,7 +147,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-22 12:00:00.000000",
+ "modified": "2026-10-26 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "PMC 3D Progress",
  "name": "PMC Model",

@@ -82,7 +82,9 @@ export function frappeMock(): Plugin {
               case 'api.get_project_model':
                 return r.getProjectModel(args.project_id);
               case 'api.import_model':
-                return r.importModel({ text: args.text, sourceName: args.source_name, sourceType: args.source_type, targetProjectId: args.target_project_id ?? undefined });
+                return r.importModel({ text: args.text, sourceName: args.source_name, sourceType: args.source_type, targetProjectId: args.target_project_id ?? undefined, role: args.role ?? undefined });
+              case 'api.review_model':
+                return r.reviewModel(args.model_key, args.decision, args.remarks ?? '', args.role);
               case 'api.set_active_model':
                 return r.setActiveModel(args.model_key);
               case 'api.list_progress_entries':

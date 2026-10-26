@@ -28,6 +28,8 @@ export interface PmcRepository {
   listElements(projectId: string): Promise<ElementRecord[]>;
   importModel(input: ImportModelInput): Promise<ImportModelOutcome>;
   setActiveModel(modelKey: string): Promise<void>;
+  /** PMC reviewer: approve a submitted planning (it becomes the Active model) or return it with remarks. */
+  reviewModel(modelKey: string, decision: 'approve' | 'return', remarks: string, role: Role): Promise<void>;
 
   /** Entries for a project. By default all revisions; pass modelKey to scope to one revision. */
   listProgressEntries(projectId: string, opts?: { modelKey?: string }): Promise<ProgressEntry[]>;
@@ -48,6 +50,11 @@ export interface ImportModelInput {
   sourceType: ModelSourceType;
   /** If given, the file's project.id must match. If omitted, the project is created when missing. */
   targetProjectId?: string;
+  /**
+   * Who creates it. A PMC reviewer's model is active at once; anyone else's waits for PMC approval
+   * ("Pending Approval"). Omitted (JSON import, samples): active at once, as before.
+   */
+  role?: Role;
 }
 
 export interface ImportModelOutcome {

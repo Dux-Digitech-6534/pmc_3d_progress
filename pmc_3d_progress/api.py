@@ -17,6 +17,8 @@ from frappe.utils import cint, flt, get_datetime, get_fullname, now_datetime, no
 
 from pmc_3d_progress import domain
 
+# a submitted planning that is not approved yet (not used for progress)
+PLANNING_STATUSES = ("Pending Approval", "Returned")
 ROLE_TO_FRAPPE = {"site-engineer": "PMC Site Engineer", "pmc-reviewer": "PMC Reviewer", "owner": "PMC Owner"}
 MAX_MODEL_TEXT = 10 * 1024 * 1024
 DPR_FIELDS = [
@@ -163,6 +165,9 @@ def _model_dict(m, with_document=True):
 		"warnings": _json(m.warnings, []),
 		"errors": _json(m.errors, []) if failed else None,
 		"document": _json(m.document) if with_document and not failed else None,
+		"reviewRemarks": m.get("review_remarks") or None,
+		"reviewedBy": get_fullname(m.reviewed_by) if m.get("reviewed_by") else None,
+		"reviewedAt": _iso(m.reviewed_on) if m.get("reviewed_on") else None,
 	}
 
 
@@ -358,9 +363,11 @@ def get_project_model(project_id):
 
 
 @frappe.whitelist(methods=["POST"])
-def import_model(text, source_name, source_type, target_project_id=None):
+def import_model(text, source_name, source_type, target_project_id=None, role=None):
 	"""Validate and store a model revision (same rules and messages as the local prototype)."""
 	_require_modeller()
+	if role:
+		_act_as(role)
 	if not isinstance(text, str) or len(text) > MAX_MODEL_TEXT:
 		_throw("The model file is too large (limit 10 MB).")
 	source_name = (source_name or "model.json")[:140]
@@ -411,6 +418,12 @@ def import_model(text, source_name, source_type, target_project_id=None):
 		)
 
 	key = f"{pid}|{mid}|{rev}"
+	# a submission still waiting for (or returned by) the PMC may be replaced by a corrected one
+	waiting = frappe.db.get_value("PMC Model", {"model_key": key, "status": ["in", PLANNING_STATUSES]}, "name")
+	if waiting:
+		frappe.db.delete("PMC Element", {"pmc_model": waiting})
+		frappe.delete_doc("PMC Model", waiting, ignore_permissions=True, force=True)
+	pending = bool(role) and role != "pmc-reviewer"
 	if frappe.db.exists("PMC Model", {"model_key": key}):
 		return failed(
 			[
@@ -435,9 +448,11 @@ def import_model(text, source_name, source_type, target_project_id=None):
 		created_project = True
 
 	previous = frappe.db.get_value("PMC Project", pid, "active_model")
-	superseded_key = frappe.db.get_value("PMC Model", previous, "model_key") if previous else None
-	for name in frappe.get_all("PMC Model", filters={"project": pid, "status": "Active"}, pluck="name"):
-		frappe.db.set_value("PMC Model", name, "status", "Superseded")
+	superseded_key = None
+	if not pending:
+		superseded_key = frappe.db.get_value("PMC Model", previous, "model_key") if previous else None
+		for name in frappe.get_all("PMC Model", filters={"project": pid, "status": "Active"}, pluck="name"):
+			frappe.db.set_value("PMC Model", name, "status", "Superseded")
 
 	model = frappe.get_doc(
 		{
@@ -447,7 +462,7 @@ def import_model(text, source_name, source_type, target_project_id=None):
 			"model_id": mid,
 			"revision": rev,
 			"model_name": doc["model"]["name"],
-			"status": "Active",
+			"status": "Pending Approval" if pending else "Active",
 			"source_type": source_type,
 			"source_name": source_name,
 			"imported_on": now_datetime(),
@@ -476,7 +491,8 @@ def import_model(text, source_name, source_type, target_project_id=None):
 			}
 		).insert(ignore_permissions=True)
 
-	frappe.db.set_value("PMC Project", pid, "active_model", model.name)
+	if not pending:
+		frappe.db.set_value("PMC Project", pid, "active_model", model.name)
 	return {
 		"ok": True,
 		"errors": [],
@@ -488,12 +504,45 @@ def import_model(text, source_name, source_type, target_project_id=None):
 
 
 @frappe.whitelist(methods=["POST"])
+def review_model(model_key, decision, remarks=None, role=None):
+	"""PMC reviewer: approve a submitted planning (it becomes the Active model) or return it with remarks."""
+	_act_as(role)
+	if role != "pmc-reviewer":
+		_throw("Only the PMC Reviewer can approve or return a planning.", frappe.PermissionError)
+	target = frappe.db.get_value("PMC Model", {"model_key": model_key}, ["name", "project", "status"], as_dict=True)
+	if not target or target.status != "Pending Approval":
+		_throw(
+			"This planning is not waiting for approval (it may have been reviewed or replaced). Refresh the list.",
+			PMCConflictError,
+		)
+	note = (remarks or "").strip()
+	if decision not in ("approve", "return"):
+		_throw("Choose approve or return.")
+	if decision == "return" and not note:
+		_throw("Write what has to be corrected when returning a planning.")
+	reviewed = {"review_remarks": note or None, "reviewed_by": frappe.session.user, "reviewed_on": now_datetime()}
+	if decision == "return":
+		frappe.db.set_value("PMC Model", target.name, {**reviewed, "status": "Returned"})
+		return
+	for name in frappe.get_all(
+		"PMC Model", filters={"project": target.project, "status": ["not in", ["Failed", *PLANNING_STATUSES]]}, pluck="name"
+	):
+		frappe.db.set_value("PMC Model", name, "status", "Superseded")
+	frappe.db.set_value("PMC Model", target.name, {**reviewed, "status": "Active"})
+	frappe.db.set_value("PMC Project", target.project, "active_model", target.name)
+
+
+@frappe.whitelist(methods=["POST"])
 def set_active_model(model_key):
 	_require_modeller()
 	target = frappe.db.get_value("PMC Model", {"model_key": model_key}, ["name", "project", "status", "document"], as_dict=True)
 	if not target or target.status == "Failed" or not target.document or not target.project:
 		_throw("That model revision cannot be activated.", frappe.DoesNotExistError)
-	for name in frappe.get_all("PMC Model", filters={"project": target.project, "status": ["!=", "Failed"]}, pluck="name"):
+	if target.status in PLANNING_STATUSES:
+		_throw("This planning is not approved yet — the PMC Reviewer approves it in the Model Register.", frappe.PermissionError)
+	for name in frappe.get_all(
+		"PMC Model", filters={"project": target.project, "status": ["not in", ["Failed", *PLANNING_STATUSES]]}, pluck="name"
+	):
 		frappe.db.set_value("PMC Model", name, "status", "Active" if name == target.name else "Superseded")
 	frappe.db.set_value("PMC Project", target.project, "active_model", target.name)
 

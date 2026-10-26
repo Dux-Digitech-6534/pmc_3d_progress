@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { startBlankBuilder } from './ModelBuilder';
-import { ConfirmDialog, EmptyState, ErrorList, fmtDateTime, PageHeader, Spinner } from '../components/ui';
+import { openModelInBuilder, startBlankBuilder } from './ModelBuilder';
+import { ConfirmDialog, EmptyState, ErrorList, fmtDateTime, Modal, PageHeader, Spinner } from '../components/ui';
 import { errorMessages, type ImportModelOutcome } from '../data/repository';
 import { invalidSampleText, SAMPLE_MODELS, sampleText } from '../data/samples';
-import type { ModelRecord, ModelSourceType } from '../domain/types';
+import { PLANNING_STATUSES, type ModelRecord, type ModelSourceType } from '../domain/types';
 import { downloadText } from '../lib/download';
 import { useApp } from '../state/AppContext';
 
@@ -17,7 +17,39 @@ const HOW_MADE: Record<string, string> = {
 };
 
 export function ModelRegister() {
-  const { repo, projects, projectId, setProjectId, data, refresh, notify, go } = useApp();
+  const { repo, projects, projectId, setProjectId, data, refresh, notify, go, role } = useApp();
+  const [review, setReview] = useState<{ model: ModelRecord; decision: 'approve' | 'return' } | null>(null);
+  const [remarks, setRemarks] = useState('');
+  const [reviewErrors, setReviewErrors] = useState<string[]>([]);
+  const [reviewing, setReviewing] = useState(false);
+
+  async function sendReview() {
+    if (!review || reviewing) return;
+    setReviewing(true);
+    setReviewErrors([]);
+    try {
+      await repo.reviewModel(review.model.key, review.decision, remarks, role);
+      notify(
+        review.decision === 'approve'
+          ? `${review.model.name} ${review.model.revision} approved — it is now the 3D model of ${projectName(review.model.projectId)}.`
+          : `${review.model.name} ${review.model.revision} returned to the site engineer.`,
+      );
+      setReview(null);
+      setRemarks('');
+      if (review.decision === 'approve' && review.model.projectId !== projectId) setProjectId(review.model.projectId);
+      else await refresh();
+      setModels(await repo.listModels());
+    } catch (e) {
+      setReviewErrors(errorMessages(e));
+    } finally {
+      setReviewing(false);
+    }
+  }
+
+  function correctInBuilder(m: ModelRecord) {
+    if (!openModelInBuilder(m)) return notify('This model was not made in the Model Builder, so it cannot be opened there.', 'error');
+    go('builder');
+  }
   const [models, setModels] = useState<ModelRecord[] | null>(null);
   const [target, setTarget] = useState<string>('__file__');
   const [busy, setBusy] = useState(false);
@@ -78,6 +110,33 @@ export function ModelRegister() {
 
   return (
     <div className="page">
+      {review && (
+        <Modal
+          title={`${review.decision === 'approve' ? 'Approve' : 'Return'} planning ${review.model.name} ${review.model.revision}`}
+          onClose={() => !reviewing && setReview(null)}
+          footer={
+            <>
+              <button className="btn" onClick={() => setReview(null)} disabled={reviewing}>
+                Cancel
+              </button>
+              <button className={`btn ${review.decision === 'approve' ? 'btn-primary' : 'btn-danger'}`} onClick={() => void sendReview()} disabled={reviewing}>
+                {reviewing ? 'Working…' : review.decision === 'approve' ? 'Approve — make it the 3D model' : 'Return to site engineer'}
+              </button>
+            </>
+          }
+        >
+          <p className="small">
+            {review.decision === 'approve'
+              ? `The planning becomes the active 3D model of ${projectName(review.model.projectId)}; site progress is entered against it.`
+              : 'The site engineer sees your remarks, corrects the planning in the Model Builder and submits it again.'}
+          </p>
+          <label className="stack">
+            <span className="field-label">{review.decision === 'approve' ? 'Remarks (optional)' : 'What has to be corrected? (required)'}</span>
+            <textarea rows={3} value={remarks} onChange={(e) => setRemarks(e.target.value)} maxLength={500} />
+          </label>
+          <ErrorList errors={reviewErrors} title="Not saved" />
+        </Modal>
+      )}
       <PageHeader
         title="Model Register"
         subtitle="All 3D models you have created, per project. When a model is changed it gets a new version (R02, R03 …); the Active one is shown in 3D."
@@ -121,13 +180,19 @@ export function ModelRegister() {
                   <td>
                     {m.name}
                     <div className="muted small">{HOW_MADE[m.sourceType] ?? m.sourceType}</div>
+                    {m.reviewRemarks && (
+                      <div className={`small ${m.status === 'Returned' ? 'warn-text' : 'muted'}`}>
+                        PMC: {m.reviewRemarks}
+                        {m.reviewedBy ? ` — ${m.reviewedBy}` : ''}
+                      </div>
+                    )}
                   </td>
                   <td>{projectName(m.projectId)}</td>
                   <td>{m.revision}</td>
                   <td className="nowrap">{fmtDateTime(m.importedAt)}</td>
                   <td className="num">{m.elementCount || '—'}</td>
                   <td>
-                    <span className={`badge badge-model-${m.status.toLowerCase()}`}>{m.status}</span>
+                    <span className={`badge badge-model-${m.status.toLowerCase().replace(/\s+/g, '-')}`}>{m.status}</span>
                   </td>
                   <td className="nowrap">
                     {m.status === 'Failed' && (
@@ -144,6 +209,23 @@ export function ModelRegister() {
                       <button className="link" onClick={() => setActivate(m)}>
                         Make active
                       </button>
+                    )}
+                    {PLANNING_STATUSES.includes(m.status) && (
+                      <span className="row-actions">
+                        <button className="link" onClick={() => correctInBuilder(m)}>
+                          {role === 'pmc-reviewer' ? 'Check / correct' : 'Correct'} in Model Builder
+                        </button>
+                        {role === 'pmc-reviewer' && m.status === 'Pending Approval' && (
+                          <>
+                            <button className="btn btn-small btn-primary" onClick={() => (setReview({ model: m, decision: 'approve' }), setRemarks(''), setReviewErrors([]))}>
+                              Approve
+                            </button>
+                            <button className="btn btn-small" onClick={() => (setReview({ model: m, decision: 'return' }), setRemarks(''), setReviewErrors([]))}>
+                              Return
+                            </button>
+                          </>
+                        )}
+                      </span>
                     )}
                   </td>
                 </tr>

@@ -52,7 +52,12 @@ export class FrappeRepository implements PmcRepository {
       source_name: input.sourceName,
       source_type: input.sourceType,
       target_project_id: input.targetProjectId ?? null,
+      role: input.role ?? null,
     });
+  }
+
+  async reviewModel(modelKey: string, decision: 'approve' | 'return', remarks: string, role: Role) {
+    await call(`${M}review_model`, { model_key: modelKey, decision, remarks, role });
   }
 
   async setActiveModel(modelKey: string) {

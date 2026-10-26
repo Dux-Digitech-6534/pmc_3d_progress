@@ -1,7 +1,7 @@
 import { resolveBatchQuantities } from '../domain/allocation';
 import { validateModelDocument } from '../domain/modelValidation';
 import type { ActivityDef, ElementRecord, HistoryItem, ModelRecord, ProgressEntry, Project, Role, Unit } from '../domain/types';
-import { ROLE_LABELS } from '../domain/types';
+import { PLANNING_STATUSES, ROLE_LABELS } from '../domain/types';
 import { checkQuantity, findPossibleDuplicate, permissions, validateDate } from '../domain/workflow';
 import { elementsFromModel, modelKeyOf } from './elements';
 import {
@@ -224,7 +224,11 @@ export class LocalRepository implements PmcRepository {
       }
 
       const key = modelKeyOf(doc.project.id, doc.model.id, doc.model.revision);
-      const models = this.models();
+      // a submission still waiting for (or returned by) the PMC may be replaced by a corrected one
+      let models = this.models();
+      const waiting = models.find((m) => m.key === key && PLANNING_STATUSES.includes(m.status));
+      if (waiting) models = models.filter((m) => m !== waiting);
+      const pending = input.role !== undefined && input.role !== 'pmc-reviewer';
       if (models.some((m) => m.key === key)) {
         return failed(
           [`Model ${doc.model.id} revision ${doc.model.revision} is already imported for ${doc.project.id}. A changed model must use a new revision (e.g. R02); existing revisions are never overwritten.`],
@@ -261,12 +265,18 @@ export class LocalRepository implements PmcRepository {
         sourceType: input.sourceType,
         sourceName: input.sourceName,
         importedAt: this.nowIso(),
-        status: 'Active',
+        status: pending ? 'Pending Approval' : 'Active',
         elementCount: doc.elements.length,
         warnings: v.warnings,
         document: doc,
       };
 
+      if (pending) {
+        // waits for the PMC: the project keeps its current model
+        this.write(K.models, [...models, record]);
+        this.write(K.projects, projects);
+        return { ok: true, errors: [], warnings: v.warnings, record, createdProject };
+      }
       const nextModels = models.map((m) =>
         m.projectId === doc.project.id && m.status === 'Active' ? { ...m, status: 'Superseded' as const } : m,
       );
@@ -279,6 +289,35 @@ export class LocalRepository implements PmcRepository {
     });
   }
 
+  reviewModel(modelKey: string, decision: 'approve' | 'return', remarks: string, role: Role) {
+    return this.op(() => {
+      if (role !== 'pmc-reviewer') throw new RepositoryError('forbidden', 'Only the PMC Reviewer can approve or return a planning.');
+      const models = this.models();
+      const target = models.find((m) => m.key === modelKey);
+      if (!target || target.status !== 'Pending Approval') {
+        throw new RepositoryError('conflict', 'This planning is not waiting for approval (it may have been reviewed or replaced). Refresh the list.');
+      }
+      const note = remarks.trim();
+      if (decision === 'return' && !note) throw new RepositoryError('validation', 'Write what has to be corrected when returning a planning.');
+      const reviewed = { reviewRemarks: note || undefined, reviewedBy: 'PMC Reviewer', reviewedAt: this.nowIso() };
+      if (decision === 'return') {
+        this.write(K.models, models.map((m) => (m.key === modelKey ? { ...m, ...reviewed, status: 'Returned' as const } : m)));
+        return;
+      }
+      this.write(
+        K.models,
+        models.map((m) =>
+          m.projectId !== target.projectId || m.status === 'Failed' || (PLANNING_STATUSES.includes(m.status) && m.key !== modelKey)
+            ? m
+            : m.key === modelKey
+              ? { ...m, ...reviewed, status: 'Active' as const }
+              : { ...m, status: 'Superseded' as const },
+        ),
+      );
+      this.write(K.projects, this.projects().map((p) => (p.id === target.projectId ? { ...p, activeModelKey: modelKey } : p)));
+    });
+  }
+
   setActiveModel(modelKey: string) {
     return this.op(() => {
       const models = this.models();
@@ -286,10 +325,13 @@ export class LocalRepository implements PmcRepository {
       if (!target || target.status === 'Failed' || !target.document) {
         throw new RepositoryError('not-found', 'That model revision cannot be activated.');
       }
+      if (PLANNING_STATUSES.includes(target.status)) {
+        throw new RepositoryError('forbidden', 'This planning is not approved yet — the PMC Reviewer approves it in the Model Register.');
+      }
       this.write(
         K.models,
         models.map((m) =>
-          m.projectId !== target.projectId || m.status === 'Failed'
+          m.projectId !== target.projectId || m.status === 'Failed' || PLANNING_STATUSES.includes(m.status)
             ? m
             : { ...m, status: m.key === modelKey ? ('Active' as const) : ('Superseded' as const) },
         ),
