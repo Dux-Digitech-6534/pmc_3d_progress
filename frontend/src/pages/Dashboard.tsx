@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react';
 import { EntryDetailsModal } from '../components/EntryDetailsModal';
+import { MaterialTable } from '../components/MaterialTable';
+import { MATERIALS, normsOf, projectMaterials, roundMaterial } from '../domain/materials';
+import { downloadText } from '../lib/download';
 import { EmptyState, PageHeader, ProgressBar, Spinner, StatusBadge } from '../components/ui';
 import { ACTIVITY_STATUS_LABELS, formatQty, summarizeActivity, type ActivityStatus } from '../domain/progress';
 import { ELEMENT_TYPES, UNIT_LABELS, type ProgressEntry } from '../domain/types';
@@ -17,6 +20,8 @@ export function Dashboard() {
     const acts = data?.model?.document?.activities ?? [];
     return acts.map((a) => summarizeActivity(data!.elements, a, data!.entries));
   }, [data]);
+
+  const materials = useMemo(() => (data?.model ? projectMaterials(data.elements, data.entries, normsOf(data.model.document)) : null), [data]);
 
   if (loadError) return <EmptyState title="Could not load project data">{loadError}</EmptyState>;
   if (!data) return <Spinner />;
@@ -133,6 +138,65 @@ export function Dashboard() {
               </tbody>
             </table>
           </section>
+
+          {materials && (
+            <section className="card">
+              <div className="card-head-row">
+                <h2 className="card-title">Material requirement</h2>
+                <button
+                  className="btn btn-small"
+                  onClick={() => {
+                    const head = ['Element type', 'Elements', ...MATERIALS.flatMap((m) => [`${m.label} planned (${m.unit})`, `${m.label} used (${m.unit})`])];
+                    const line = (name: string, count: number | string, p: typeof materials.planned, u: typeof materials.used) =>
+                      [name, count, ...MATERIALS.flatMap((m) => [roundMaterial(m.key, p[m.key]), roundMaterial(m.key, u[m.key])])].join(',');
+                    const csv = [
+                      head.join(','),
+                      ...materials.rows.map((r) => line(TYPE_LABELS[r.type], r.count, r.planned, r.used)),
+                      line('Total', elements.length, materials.planned, materials.used),
+                    ].join('\n');
+                    downloadText(`${project.id}-${model.revision}-materials.csv`, csv + '\n', 'text/csv');
+                  }}
+                >
+                  Download CSV
+                </button>
+              </div>
+              <p className="muted small">
+                From the planned quantities of {model.name} {model.revision} and the norms approved with it (concrete {normsOf(model.document).concreteGrade}
+                {normsOf(model.document).wastagePct ? `, ${normsOf(model.document).wastagePct}% wastage` : ''}). "Used" counts approved work only.
+              </p>
+              <MaterialTable planned={materials.planned} used={materials.used} />
+              <h3 className="section-title" style={{ marginTop: 14 }}>Where it goes (planned)</h3>
+              <div className="table-scroll">
+                <table className="table compact">
+                  <thead>
+                    <tr>
+                      <th>Element type</th>
+                      {MATERIALS.filter((m) => materials.planned[m.key] > 0).map((m) => (
+                        <th key={m.key} className="num">
+                          {m.label} <span className="muted small">({m.unit})</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {materials.rows.map((r) => (
+                      <tr key={r.type}>
+                        <td>
+                          {TYPE_LABELS[r.type]} <span className="muted small">× {r.count}</span>
+                        </td>
+                        {MATERIALS.filter((m) => materials.planned[m.key] > 0).map((m) => (
+                          <td key={m.key} className="num">
+                            {r.planned[m.key] > 0 ? roundMaterial(m.key, r.planned[m.key]).toLocaleString('en-IN') : '—'}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="hint">Per element: click it in the 3D Workspace.</p>
+            </section>
+          )}
 
           <div className="two-col">
             <section className="card">

@@ -3,6 +3,8 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { AiReaderCard } from '../components/AiReaderCard';
 import { ModelViewer } from '../components/ModelViewer';
 import { ConfirmDialog, ErrorList, PageHeader } from '../components/ui';
+import { MaterialTable } from '../components/MaterialTable';
+import { CONCRETE_MIXES, materialsFor, plannedOf, withNormDefaults, type MaterialNorms } from '../domain/materials';
 import { errorMessages } from '../data/repository';
 import {
   DRAWING_ACCEPT,
@@ -1199,6 +1201,8 @@ export function ModelBuilder() {
           </section>
           )}
 
+          <NormsCard norms={withNormDefaults(spec.materialNorms)} onChange={(materialNorms) => setSpec({ materialNorms })} />
+
           <section className="card builder-result">
             <h2 className="card-title">{kind === 'free' ? '4' : '6'} · Check and create</h2>
             {result.errors.length > 0 ? (
@@ -1264,6 +1268,12 @@ export function ModelBuilder() {
                       <span>steel (est.)</span>
                     </div>
                   </div>
+                  {result.summary.materials && (
+                    <>
+                      <h3 className="section-title" style={{ marginTop: 12 }}>Material (planned)</h3>
+                      <MaterialTable planned={result.summary.materials} compact />
+                    </>
+                  )}
                 </>
               )
             )}
@@ -1737,6 +1747,10 @@ function BuilderElementPanel({
         })}
       </div>
       {el.notes && <p className="hint">{el.notes}</p>}
+      <div className="pick-mat">
+        <span className="pick-qty-head">Material (planned)</span>
+        <MaterialTable planned={materialsFor(plannedOf(el), withNormDefaults(spec.materialNorms))} compact />
+      </div>
       <div className="builder-pick-edit">{edit}</div>
       <div className="builder-pick-foot">
         <button className="btn btn-danger btn-small" onClick={onRemove}>
@@ -1837,6 +1851,70 @@ function FreeElementsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patc
           </button>
         )}
       </div>
+    </section>
+  );
+}
+
+/** Material norms of the planning: standard values, changed per project when needed. */
+function NormsCard({ norms, onChange }: { norms: MaterialNorms; onChange: (n: MaterialNorms) => void }) {
+  const custom = !CONCRETE_MIXES[norms.concreteGrade];
+  const row = (label: string, value: number, set: (v: number) => void, unit: string) => (
+    <label className="inline">
+      <span className="muted small">{label}</span>
+      <input type="number" min={0} step="any" value={Number.isFinite(value) ? value : ''} onChange={(e) => set(e.target.value === '' ? NaN : Number(e.target.value))} style={{ width: 84 }} aria-label={label} />
+      <span className="muted small">{unit}</span>
+    </label>
+  );
+  return (
+    <section className="card">
+      <h2 className="card-title">Material norms</h2>
+      <p className="muted small">
+        Standard values (nominal mix, IS / DSR practice) are filled in. Change them when the project's specification differs — the PMC approves them with
+        the planning, and cement, sand, aggregate, steel and bricks are worked out from them.
+      </p>
+      <div className="norms-grid">
+        <div>
+          <div className="field-label">Concrete — per m³</div>
+          <label className="inline">
+            <span className="muted small">grade</span>
+            <select
+              value={custom ? '__custom__' : norms.concreteGrade}
+              onChange={(e) =>
+                e.target.value === '__custom__'
+                  ? onChange({ ...norms, concreteGrade: 'Custom' })
+                  : onChange({ ...norms, concreteGrade: e.target.value, concrete: CONCRETE_MIXES[e.target.value] })
+              }
+            >
+              {Object.keys(CONCRETE_MIXES).map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+              <option value="__custom__">Custom</option>
+            </select>
+          </label>
+          {row('cement', norms.concrete.cementKg, (cementKg) => onChange({ ...norms, concreteGrade: 'Custom', concrete: { ...norms.concrete, cementKg } }), 'kg')}
+          {row('sand', norms.concrete.sandM3, (sandM3) => onChange({ ...norms, concreteGrade: 'Custom', concrete: { ...norms.concrete, sandM3 } }), 'm³')}
+          {row('aggregate', norms.concrete.aggregateM3, (aggregateM3) => onChange({ ...norms, concreteGrade: 'Custom', concrete: { ...norms.concrete, aggregateM3 } }), 'm³')}
+        </div>
+        <div>
+          <div className="field-label">Brickwork — per m³</div>
+          {row('bricks', norms.brickwork.bricks, (bricks) => onChange({ ...norms, brickwork: { ...norms.brickwork, bricks } }), 'nos')}
+          {row('cement', norms.brickwork.cementKg, (cementKg) => onChange({ ...norms, brickwork: { ...norms.brickwork, cementKg } }), 'kg')}
+          {row('sand', norms.brickwork.sandM3, (sandM3) => onChange({ ...norms, brickwork: { ...norms.brickwork, sandM3 } }), 'm³')}
+        </div>
+        <div>
+          <div className="field-label">Plaster — per m²</div>
+          {row('cement', norms.plaster.cementKg, (cementKg) => onChange({ ...norms, plaster: { ...norms.plaster, cementKg } }), 'kg')}
+          {row('sand', norms.plaster.sandM3, (sandM3) => onChange({ ...norms, plaster: { ...norms.plaster, sandM3 } }), 'm³')}
+        </div>
+        <div>
+          <div className="field-label">General</div>
+          {row('wastage', norms.wastagePct, (wastagePct) => onChange({ ...norms, wastagePct }), '%')}
+          {row('cement bag', norms.bagKg, (bagKg) => onChange({ ...norms, bagKg }), 'kg')}
+        </div>
+      </div>
+      <p className="hint">Steel comes from the reinforcement quantity (kg) of each element; plaster is counted on both faces of a wall.</p>
     </section>
   );
 }

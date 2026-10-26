@@ -8,6 +8,7 @@
 // the kg-per-m3 rate entered for each element type until a bar bending schedule (BBS) is available.
 // Brickwork (m3) and plaster (m2) are net of openings (and lintels for brickwork).
 
+import { addMaterials, emptyMaterials, materialsFor, normErrors, withNormDefaults, type MaterialNorms, type MaterialQty } from './materials';
 import { ELEMENT_TYPES, type ElementType, type ModelDocument, type WallOpening } from './types';
 
 export interface ColumnType {
@@ -132,6 +133,8 @@ export interface BuilderSpec {
    * quantity is calculated ("Auto").
    */
   qtyOverride?: Record<string, Record<string, number>>;
+  /** Material norms (per m³ concrete / brickwork, per m² plaster); standard values when not set. */
+  materialNorms?: MaterialNorms;
 }
 
 /** What a generated element comes from in the spec, so a click in the 3D preview can edit it. */
@@ -159,6 +162,8 @@ export interface BuildSummary {
   steel: number;
   brickwork: number;
   plaster: number;
+  /** Cement (bags), sand, aggregate, steel, bricks for the planned quantities. */
+  materials?: MaterialQty;
 }
 
 export interface BuildResult {
@@ -703,6 +708,7 @@ function finishModel(spec: BuilderSpec, b: Built): BuildResult {
         footingSchedule: spec.footingTypes,
         openingSchedule: spec.openingTypes,
         steelRatesKgPerM3: spec.steel,
+        materialNorms: withNormDefaults(spec.materialNorms),
         note: 'Built in the Model Builder from values read off the drawing(s). Verify against the approved drawing.',
       },
     },
@@ -737,7 +743,10 @@ function finishModel(spec: BuilderSpec, b: Built): BuildResult {
       typed++;
     }
   }
+  const norms = withNormDefaults(spec.materialNorms);
+  errors.push(...normErrors(norms));
   if (errors.length) return fail();
+  sum.materials = elements.reduce((acc, e) => addMaterials(acc, materialsFor(Object.fromEntries(Object.entries(e.plannedQuantities).map(([k, q]) => [k, q.quantity])), norms)), emptyMaterials());
   if (typed) warnings.push(`${typed} planned quantit${typed === 1 ? 'y was' : 'ies were'} entered by hand instead of calculated — check against the drawing / BOQ.`);
 
   sum.concrete = r(sum.concrete, 3);

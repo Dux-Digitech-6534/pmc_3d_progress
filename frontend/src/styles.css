@@ -2047,3 +2047,45 @@ details.advanced[open] > summary {
 .stack textarea {
   width: 100%;
 }
+
+.card-head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.table-scroll {
+  overflow-x: auto;
+}
+.mat-table td.num,
+.mat-table th.num {
+  white-space: nowrap;
+}
+
+/* Model Builder: material norms */
+.norms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px 16px;
+}
+.norms-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.norms-grid .inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.norms-grid .inline > span:first-child {
+  min-width: 64px;
+}
+.pick-mat {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 6px;
+}
+.pick-mat .table {
+  font-size: 12px;
+}

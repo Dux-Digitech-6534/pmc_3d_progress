@@ -1,5 +1,6 @@
 import { IS_FRAPPE } from '../config';
 import { useMemo, useState } from 'react';
+import { approvedOf, materialsFor, normsOf, plannedOf } from '../domain/materials';
 import { computeActivityProgress, formatQty } from '../domain/progress';
 import { ROLE_LABELS, UNIT_LABELS, type ActivityDef, type ElementRecord, type ProgressEntry } from '../domain/types';
 import { permissions } from '../domain/workflow';
@@ -9,6 +10,7 @@ import { useApp } from '../state/AppContext';
 import { BulkEntryForm } from './BulkEntryForm';
 import { EntryDetailsModal } from './EntryDetailsModal';
 import { EntryForm } from './EntryForm';
+import { MaterialTable } from './MaterialTable';
 import { ConfirmDialog, EmptyState, fmtDate, ProgressBadge, ProgressBar, StatusBadge } from './ui';
 
 /** Right-hand panel of the 3D workspace: details + history + entry form for the selection. */
@@ -116,7 +118,8 @@ function ElementSummary({
   entries: ProgressEntry[];
   projectName: string;
 }) {
-  const { role } = useApp();
+  const { role, data } = useApp();
+  const norms = normsOf(data?.model?.document);
   const progress = useMemo(() => activities.map((a) => computeActivityProgress(el, a, entries)).filter((p) => p.status !== 'not-applicable'), [activities, el, entries]);
   const waiting = role !== 'owner' && progress.some((p) => p.pendingReview > 0);
   return (
@@ -189,6 +192,12 @@ function ElementSummary({
         </div>
       )}
       <p className="hint">Progress = approved quantity ÷ planned quantity, per activity. Drafts, submitted and returned entries are not counted.</p>
+      <h3 className="section-title" style={{ marginTop: 12 }}>Material</h3>
+      <MaterialTable planned={materialsFor(plannedOf(el), norms)} used={materialsFor(approvedOf(el, entries), norms)} compact />
+      <p className="hint">
+        Concrete {norms.concreteGrade}
+        {norms.wastagePct ? `, ${norms.wastagePct}% wastage` : ''} — norms set with the model planning.
+      </p>
     </div>
   );
 }
