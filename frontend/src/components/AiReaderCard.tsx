@@ -75,6 +75,9 @@ export function AiReaderCard({
   const [keyInput, setKeyInput] = useState('');
   // what the engineer wants modelled, when a drawing shows several things (e.g. boundary wall + cabin)
   const [hint, setHint] = useState('');
+  // The structure type chosen in the form tells the AI what to read (a drawing often shows several).
+  const kindNote = spec.kind === 'boundary' ? 'the boundary / compound wall (structureKind "boundary-wall")' : spec.kind === 'free' ? 'every element one by one (structureKind "other")' : '';
+  const fullHint = [kindNote, hint.trim()].filter(Boolean).join('. ');
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
@@ -104,7 +107,7 @@ export function AiReaderCard({
         res = await readDrawingsOnServer(
           drawings.map((d) => d.id),
           abort.current.signal,
-          hint,
+          fullHint,
         );
       } else {
         const files = [];
@@ -113,7 +116,7 @@ export function AiReaderCard({
           if (!blob) throw new Error(`${d.name} is no longer in browser storage. Upload it again.`);
           files.push({ name: d.name, kind: d.kind, blob });
         }
-        res = await p.read(files, key, abort.current.signal, hint);
+        res = await p.read(files, key, abort.current.signal, fullHint);
       }
       const { spec: next, notes } = readingToSpec(res.reading, spec);
       setPrevious(spec);
@@ -230,7 +233,9 @@ export function AiReaderCard({
         </p>
       )}
       <label className="ai-hint">
-        <span className="small">What should be modelled? (optional)</span>
+        <span className="small">
+          Anything else the AI should know? (optional){kindNote && <span className="muted"> — it already reads the {spec.kind === 'boundary' ? 'boundary wall' : 'free model'}</span>}
+        </span>
         <input
           value={hint}
           onChange={(e) => setHint(e.target.value)}

@@ -306,7 +306,7 @@ export function ModelBuilder() {
       return;
     }
     if (next === 'boundary') {
-      const xs = spec.xSpans.length > 1 ? spec.xSpans : Array<number>(10).fill(3000);
+      const xs = Array<number>(10).fill(3000);
       setXText(formatSpans(xs));
       setYText('');
       setSpec({
@@ -322,6 +322,7 @@ export function ModelBuilder() {
         chhajja: { ...spec.chhajja, enabled: false },
         openings: [],
       });
+      if (drawings.length) notify('Boundary wall chosen with typical values (10 panels of 3 m). Click "Read drawing with AI" to read the wall from the drawing.', 'info');
       return;
     }
     const ys = spec.ySpans.length ? spec.ySpans : [3230];
@@ -553,6 +554,28 @@ export function ModelBuilder() {
 
         {/* ---------------- right: form ---------------- */}
         <div className="builder-form">
+          <section className="card">
+            <h2 className="card-title">What is on the drawing?</h2>
+            <p className="muted small">Choose first — the AI then reads the drawing for this type.</p>
+            <div className="kind-tabs" role="radiogroup" aria-label="Structure type">
+              {(
+                [
+                  ['building', 'Building', 'Columns on a grid, beams, roof slab, walls — room, cabin, house'],
+                  ['boundary', 'Boundary wall', 'Piers on a line or around a plot, plinth + top beam, wall panels, no slab'],
+                  ['free', 'Free model', 'Every footing, column, beam, wall … one by one — for anything else'],
+                ] as const
+              ).map(([k, label, hint]) => (
+                <button key={k} role="radio" aria-checked={kind === k} className={`kind-tab ${kind === k ? 'on' : ''}`} onClick={() => setKind(k)}>
+                  <b>{label}</b>
+                  <span>{hint}</span>
+                </button>
+              ))}
+            </div>
+            {kind === 'free' && (
+              <p className="hint">Switching to Free model copies the current model's elements, so you can start from a template and then change anything.</p>
+            )}
+          </section>
+
           <AiReaderCard
             drawings={drawings}
             spec={spec}
@@ -630,26 +653,6 @@ export function ModelBuilder() {
             )}
           </section>
 
-          <section className="card">
-            <h2 className="card-title">Structure type</h2>
-            <div className="kind-tabs" role="radiogroup" aria-label="Structure type">
-              {(
-                [
-                  ['building', 'Building', 'Columns on a grid, beams, roof slab, walls — room, cabin, house'],
-                  ['boundary', 'Boundary wall', 'Piers on a line or around a plot, plinth + top beam, wall panels, no slab'],
-                  ['free', 'Free model', 'Every footing, column, beam, wall … one by one — for anything else'],
-                ] as const
-              ).map(([k, label, hint]) => (
-                <button key={k} role="radio" aria-checked={kind === k} className={`kind-tab ${kind === k ? 'on' : ''}`} onClick={() => setKind(k)}>
-                  <b>{label}</b>
-                  <span>{hint}</span>
-                </button>
-              ))}
-            </div>
-            {kind === 'free' && (
-              <p className="hint">Switching to Free model copies the current model's elements, so you can start from a template and then change anything.</p>
-            )}
-          </section>
 
           {kind === 'free' ? (
             <FreeElementsCard spec={spec} setSpec={setSpec} />
