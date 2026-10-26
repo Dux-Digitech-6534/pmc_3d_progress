@@ -2,6 +2,7 @@ import { resolveBatchQuantities } from '../domain/allocation';
 import { validateModelDocument } from '../domain/modelValidation';
 import type { ActivityDef, ElementRecord, HistoryItem, ModelRecord, ProgressEntry, Project, Role, Unit } from '../domain/types';
 import { PLANNING_STATUSES, ROLE_LABELS } from '../domain/types';
+import { inModelFamily } from '../domain/progress';
 import { checkQuantity, findPossibleDuplicate, permissions, validateDate } from '../domain/workflow';
 import { elementsFromModel, modelKeyOf } from './elements';
 import {
@@ -404,8 +405,8 @@ export class LocalRepository implements PmcRepository {
         if (!permissions.canEdit(role, existing)) {
           throw new RepositoryError('conflict', `Entry ${existing.id} is ${existing.status} and can no longer be edited.`);
         }
-        if (existing.modelKey !== model.key) {
-          throw new RepositoryError('conflict', `Entry ${existing.id} belongs to model revision ${existing.modelRevision}; it cannot be moved to ${model.revision}.`);
+        if (!inModelFamily(existing, model)) {
+          throw new RepositoryError('conflict', `Entry ${existing.id} belongs to model ${existing.modelId} ${existing.modelRevision}, which is not the active model.`);
         }
       }
 
@@ -417,7 +418,7 @@ export class LocalRepository implements PmcRepository {
           activity,
           quantity: input.quantity,
           unit: input.unit,
-          entries: all.filter((e) => e.projectId === input.projectId && e.modelKey === model.key),
+          entries: all.filter((e) => inModelFamily(e, model)),
           excludeEntryId: input.id,
           mode: 'claim',
         }),
@@ -427,7 +428,7 @@ export class LocalRepository implements PmcRepository {
 
       if (!input.confirmDuplicate) {
         const dup = findPossibleDuplicate(
-          all.filter((e) => e.projectId === input.projectId && e.modelKey === model.key),
+          all.filter((e) => inModelFamily(e, model)),
           { id: input.id, elementId: element.id, activityCode: activity.code, date: input.date, quantity: input.quantity },
         );
         if (dup) {
@@ -505,7 +506,7 @@ export class LocalRepository implements PmcRepository {
       const resolved = resolveBatchQuantities(input.mode, input.value, input.elementIds, input.mode === 'total' ? input.allocations : undefined);
       if (!resolved.ok) throw new RepositoryError('validation', resolved.errors);
 
-      const scope = this.entries().filter((e) => e.projectId === input.projectId && e.modelKey === model.key);
+      const scope = this.entries().filter((e) => inModelFamily(e, model));
       const remarks = input.remarks.trim();
       const errors: string[] = [...validateDate(input.date, isoDate(this.now()))];
       if (remarks.length > 500) errors.push('Remarks must be 500 characters or fewer.');
@@ -584,15 +585,15 @@ export class LocalRepository implements PmcRepository {
         throw new RepositoryError('forbidden', `${ROLE_LABELS[role]} cannot submit an entry that is ${entry.status}.`);
       }
       const { elements, activities, model } = this.activeContext(entry.projectId);
-      if (entry.modelKey !== model.key) {
-        throw new RepositoryError('conflict', `Entry ${entryId} was recorded on revision ${entry.modelRevision}, which is no longer active. It is kept as history and cannot be submitted.`);
+      if (!inModelFamily(entry, model)) {
+        throw new RepositoryError('conflict', `Entry ${entryId} was recorded on model ${entry.modelId} ${entry.modelRevision}, which is no longer active. It is kept as history and cannot be submitted.`);
       }
       const errors = checkQuantity({
         element: this.findElement(elements, entry.elementId),
         activity: this.findActivity(activities, entry.activityCode),
         quantity: entry.quantity,
         unit: entry.unit,
-        entries: all.filter((e) => e.projectId === entry.projectId && e.modelKey === entry.modelKey),
+        entries: all.filter((e) => inModelFamily(e, model)),
         excludeEntryId: entry.id,
         mode: 'claim',
       });
@@ -625,15 +626,15 @@ export class LocalRepository implements PmcRepository {
       }
       if (decision === 'approve') {
         const { elements, activities, model } = this.activeContext(entry.projectId);
-        if (entry.modelKey !== model.key) {
-          throw new RepositoryError('conflict', `Entry ${entryId} belongs to inactive revision ${entry.modelRevision}. Progress is never transferred between revisions automatically.`);
+        if (!inModelFamily(entry, model)) {
+          throw new RepositoryError('conflict', `Entry ${entryId} belongs to model ${entry.modelId} ${entry.modelRevision}, which is not the active model.`);
         }
         const errors = checkQuantity({
           element: this.findElement(elements, entry.elementId),
           activity: this.findActivity(activities, entry.activityCode),
           quantity: entry.quantity,
           unit: entry.unit,
-          entries: all.filter((e) => e.projectId === entry.projectId && e.modelKey === entry.modelKey),
+          entries: all.filter((e) => inModelFamily(e, model)),
           excludeEntryId: entry.id,
           mode: 'approve',
         });

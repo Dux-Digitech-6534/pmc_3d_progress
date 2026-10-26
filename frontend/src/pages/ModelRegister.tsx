@@ -46,6 +46,14 @@ export function ModelRegister() {
     }
   }
 
+  /** Approved work of earlier revisions of this model: what still counts, and what is on elements this revision no longer has. */
+  function carryOver(m: ModelRecord) {
+    if (!data || data.project.id !== m.projectId || !m.document) return null;
+    const ids = new Set(m.document.elements.map((e) => e.id));
+    const approved = data.allEntries.filter((e) => e.modelId === m.modelId && e.status === 'Approved');
+    return { kept: approved.filter((e) => ids.has(e.elementId)).length, dropped: approved.filter((e) => !ids.has(e.elementId)) };
+  }
+
   function correctInBuilder(m: ModelRecord) {
     if (!openModelInBuilder(m)) return notify('This model was not made in the Model Builder, so it cannot be opened there.', 'error');
     go('builder');
@@ -130,6 +138,24 @@ export function ModelRegister() {
               ? `The planning becomes the active 3D model of ${projectName(review.model.projectId)}; site progress is entered against it.`
               : 'The site engineer sees your remarks, corrects the planning in the Model Builder and submits it again.'}
           </p>
+          {review.decision === 'approve' &&
+            (() => {
+              const c = carryOver(review.model);
+              if (!c || (!c.kept && !c.dropped.length)) return null;
+              return (
+                <div className={`alert ${c.dropped.length ? 'alert-warn' : 'alert-info'} small`}>
+                  {c.kept} approved entr{c.kept === 1 ? 'y' : 'ies'} of earlier revisions carr{c.kept === 1 ? 'ies' : 'y'} over to the same elements.
+                  {c.dropped.length > 0 && (
+                    <>
+                      {' '}
+                      <b>{c.dropped.length}</b> approved entr{c.dropped.length === 1 ? 'y is' : 'ies are'} on elements this revision no longer has (
+                      {[...new Set(c.dropped.map((e) => e.elementCode))].slice(0, 6).join(', ')}
+                      {new Set(c.dropped.map((e) => e.elementCode)).size > 6 ? ' …' : ''}) — kept in history, not counted.
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           <label className="stack">
             <span className="field-label">{review.decision === 'approve' ? 'Remarks (optional)' : 'What has to be corrected? (required)'}</span>
             <textarea rows={3} value={remarks} onChange={(e) => setRemarks(e.target.value)} maxLength={500} />

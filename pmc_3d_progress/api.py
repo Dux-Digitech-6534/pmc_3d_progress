@@ -246,6 +246,21 @@ def _active_context(project_id):
 	return project, model, document
 
 
+def _family_keys(project_name, model_id):
+	"""Model keys of every revision of one model (same project and model ID)."""
+	return frappe.get_all("PMC Model", filters={"project": project_name, "model_id": model_id}, pluck="model_key")
+
+
+def _family_scope(project, model):
+	"""Entries of every revision of the active model: an element that is still in the active revision
+	keeps the work approved on the earlier ones (matched by its stable element ID)."""
+	return _load_entries({"project": project.name, "model_key": ["in", _family_keys(project.name, model.model_id)]})
+
+
+def _in_family(doc, model):
+	return doc.model_key in _family_keys(doc.project, model.model_id)
+
+
 def _find_element(document, element_id):
 	for e in document.get("elements", []):
 		if e.get("id") == element_id:
@@ -578,7 +593,7 @@ def save_progress_entry(input, role):
 	project, model, document = _active_context(data.get("projectId"))
 	element = _find_element(document, data.get("elementId"))
 	activity = _find_activity(document, data.get("activityCode"))
-	scope = _load_entries({"project": project.name, "model_key": model.model_key})
+	scope = _family_scope(project, model)
 
 	existing = None
 	if data.get("id"):
@@ -587,9 +602,9 @@ def save_progress_entry(input, role):
 		existing = frappe.get_doc("PMC DPR", data["id"])
 		if not domain.can_edit(role, existing.status):
 			_throw(f"Entry {existing.name} is {existing.status} and can no longer be edited.", PMCConflictError)
-		if existing.model_key != model.model_key:
+		if not _in_family(existing, model):
 			_throw(
-				f"Entry {existing.name} belongs to model revision {existing.model_revision}; it cannot be moved to {model.revision}.",
+				f"Entry {existing.name} belongs to model {existing.model_id} {existing.model_revision}, which is not the active model.",
 				PMCConflictError,
 			)
 
@@ -681,7 +696,7 @@ def save_batch_entries(input, role):
 		_throw(resolved["errors"])
 	quantities = resolved["quantities"]
 
-	scope = _load_entries({"project": project.name, "model_key": model.model_key})
+	scope = _family_scope(project, model)
 	remarks = (data.get("remarks") or "").strip()
 	errors = list(domain.validate_date(data.get("date"), nowdate()))
 	if len(remarks) > 500:
@@ -751,9 +766,9 @@ def save_batch_entries(input, role):
 
 def _check_on_active_revision(doc, verb):
 	project, model, document = _active_context(doc.project)
-	if doc.model_key != model.model_key:
+	if not _in_family(doc, model):
 		_throw(
-			f"Entry {doc.name} was recorded on revision {doc.model_revision}, which is no longer active. "
+			f"Entry {doc.name} was recorded on model {doc.model_id} {doc.model_revision}, which is no longer active. "
 			f"It is kept as history and cannot be {verb}.",
 			PMCConflictError,
 		)
@@ -771,7 +786,7 @@ def submit_progress_entry(entry_id, role):
 	if not domain.can_submit(role, doc.status):
 		_throw(f"{domain.ROLE_LABELS[role]} cannot submit an entry that is {doc.status}.", frappe.PermissionError)
 	project, model, document = _check_on_active_revision(doc, "submitted")
-	scope = _load_entries({"project": project.name, "model_key": model.model_key})
+	scope = _family_scope(project, model)
 	errors = domain.check_quantity(
 		_find_element(document, doc.source_element_id),
 		_find_activity(document, doc.activity_code),
@@ -808,13 +823,12 @@ def review_progress_entry(entry_id, decision, remarks, role):
 		_throw("Enter a reason so the site engineer knows what to correct.")
 	if decision == "approve":
 		project, model, document = _active_context(doc.project)
-		if doc.model_key != model.model_key:
+		if not _in_family(doc, model):
 			_throw(
-				f"Entry {entry_id} belongs to inactive revision {doc.model_revision}. "
-				"Progress is never transferred between revisions automatically.",
+				f"Entry {entry_id} belongs to model {doc.model_id} {doc.model_revision}, which is not the active model.",
 				PMCConflictError,
 			)
-		scope = _load_entries({"project": project.name, "model_key": model.model_key})
+		scope = _family_scope(project, model)
 		errors = domain.check_quantity(
 			_find_element(document, doc.source_element_id),
 			_find_activity(document, doc.activity_code),

@@ -1,7 +1,7 @@
 import { IS_FRAPPE } from '../config';
 import { useRef, useState, type ReactNode } from 'react';
 import { errorMessages } from '../data/repository';
-import { formatQty } from '../domain/progress';
+import { formatQty, sameModelFamily } from '../domain/progress';
 import { ROLE_LABELS, UNIT_LABELS, type ProgressEntry } from '../domain/types';
 import { permissions, STATUS_DESCRIPTIONS } from '../domain/workflow';
 import { useApp } from '../state/AppContext';
@@ -32,7 +32,9 @@ export function EntryDetailsModal({
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const inFlight = useRef(false);
-  const oldRevision = activeModelKey !== null && entry.modelKey !== activeModelKey;
+  // an entry of an earlier revision of the same model still counts (carried over); other models' entries are history
+  const oldRevision = activeModelKey !== null && !sameModelFamily(entry.modelKey, activeModelKey);
+  const carried = activeModelKey !== null && entry.modelKey !== activeModelKey && !oldRevision;
 
   async function run(label: string, fn: () => Promise<unknown>) {
     if (inFlight.current) return;
@@ -108,8 +110,12 @@ export function EntryDetailsModal({
       >
         {oldRevision && (
           <div className="alert alert-info">
-            Recorded on model revision <b>{entry.modelRevision}</b>, which is no longer active. It is kept as history and is not transferred to the
-            current revision.
+            Recorded on model <b>{entry.modelId} {entry.modelRevision}</b>, which is not the active model. It is kept as history and not counted.
+          </div>
+        )}
+        {carried && (
+          <div className="alert alert-info">
+            Recorded on revision <b>{entry.modelRevision}</b> of this model — it still counts on the current revision for the same element.
           </div>
         )}
         <div className="detail-grid">

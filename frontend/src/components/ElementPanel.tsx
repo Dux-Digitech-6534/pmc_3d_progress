@@ -1,7 +1,7 @@
 import { IS_FRAPPE } from '../config';
 import { useMemo, useState } from 'react';
 import { approvedOf, materialsFor, normsOf, plannedOf } from '../domain/materials';
-import { computeActivityProgress, formatQty } from '../domain/progress';
+import { computeActivityProgress, formatQty, sameModelFamily } from '../domain/progress';
 import { ROLE_LABELS, UNIT_LABELS, type ActivityDef, type ElementRecord, type ProgressEntry } from '../domain/types';
 import { permissions } from '../domain/workflow';
 import { errorMessages } from '../data/repository';
@@ -76,7 +76,7 @@ export function ElementPanel({
       <History
         element={el}
         entries={entries}
-        olderCount={allEntries.filter((e) => e.elementId === el.id && e.modelKey !== modelKey).length}
+        olderCount={allEntries.filter((e) => e.elementId === el.id && !sameModelFamily(e.modelKey, modelKey)).length}
         onView={setViewing}
         onEdit={setEditing}
       />
@@ -274,7 +274,7 @@ function History({
         />
       )}
       {list.length === 0 ? (
-        <p className="muted small">No entries yet for {element.code} on this revision.</p>
+        <p className="muted small">No entries yet for {element.code}.</p>
       ) : (
         <ul className="history">
           {list.map((e) => (
@@ -285,6 +285,11 @@ function History({
                   <b>{e.activityName}</b> {formatQty(e.quantity, UNIT_LABELS[e.unit])}
                 </span>
                 <span className="muted small">{fmtDate(e.date)}</span>
+                {e.modelRevision !== element.modelRevision && (
+                  <span className="muted small" title="Recorded on an earlier revision of this model; still counted">
+                    · {e.modelRevision}
+                  </span>
+                )}
               </div>
               {(e.remarks || e.reviewRemarks) && (
                 <div className="small history-remarks">
@@ -308,7 +313,7 @@ function History({
         </ul>
       )}
       {olderCount > 0 && (
-        <p className="hint">{olderCount} older entr{olderCount === 1 ? 'y' : 'ies'} recorded on a previous model revision (kept in history, not counted here).</p>
+        <p className="hint">{olderCount} older entr{olderCount === 1 ? 'y' : 'ies'} recorded on another model (kept in history, not counted here).</p>
       )}
     </div>
   );

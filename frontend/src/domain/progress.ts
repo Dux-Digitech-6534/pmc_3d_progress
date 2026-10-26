@@ -10,6 +10,17 @@ export const ACTIVITY_STATUS_LABELS: Record<ActivityStatus, string> = {
   complete: 'Complete',
 };
 
+/**
+ * Revisions of the same model (same project and model ID) share their progress: an element that
+ * is still in a new revision keeps the work approved on the earlier ones (matched by its stable
+ * element ID). Work on elements a revision no longer has stays in the history but is not counted.
+ */
+export const inModelFamily = (e: Pick<ProgressEntry, 'projectId' | 'modelId'>, model: { projectId: string; modelId: string }) =>
+  e.projectId === model.projectId && e.modelId === model.modelId;
+
+/** Same as inModelFamily, for two model keys (project|model|revision). */
+export const sameModelFamily = (keyA: string, keyB: string) => keyA.split('|').slice(0, 2).join('|') === keyB.split('|').slice(0, 2).join('|');
+
 /** Quantities are compared with a small tolerance to absorb floating point noise. */
 export const QTY_EPSILON = 1e-6;
 

@@ -254,10 +254,11 @@ describe('projects, models and persistence', () => {
     expect(again.errors[0]).toMatch(/already imported/);
   });
 
-  it('keeps progress tied to its revision; a new revision starts clean and the old one is superseded', async () => {
+  it('an entry keeps its revision, and its approved work carries over to the next revision of the same model', async () => {
     const { repo, el } = await setup();
+    const planned = el('C-01').plannedQuantities.CONC.quantity; // 0.19
     const e = await repo.saveProgressEntry(
-      { clientRequestId: rid(), projectId: A.projectId, elementId: el('C-01').id, activityCode: 'CONC', date: today, quantity: 0.05, unit: 'm3', remarks: '', photos: [], submit: true },
+      { clientRequestId: rid(), projectId: A.projectId, elementId: el('C-01').id, activityCode: 'CONC', date: today, quantity: 0.15, unit: 'm3', remarks: '', photos: [], submit: true },
       ENG,
     );
     await repo.reviewProgressEntry(e.id, 'approve', '', REV);
@@ -268,8 +269,37 @@ describe('projects, models and persistence', () => {
     expect(res.supersededKey).toContain('|R01');
     const model = await repo.getProjectModel(A.projectId);
     expect(model?.revision).toBe('R02');
-    expect(await repo.listProgressEntries(A.projectId, { modelKey: model!.key })).toHaveLength(0);
-    expect(await repo.listProgressEntries(A.projectId)).toHaveLength(1); // history kept
+    expect(await repo.listProgressEntries(A.projectId, { modelKey: model!.key })).toHaveLength(0); // the entry stays on R01
+    // …but R02 knows the 0.15 m³ already done on C-01: only 0.04 m³ is left
+    await expect(
+      repo.saveProgressEntry(
+        { clientRequestId: rid(), projectId: A.projectId, elementId: el('C-01').id, activityCode: 'CONC', date: today, quantity: 0.1, unit: 'm3', remarks: '', photos: [], submit: false },
+        ENG,
+      ),
+    ).rejects.toThrow(/remaining|exceed|more than/i);
+    const ok = await repo.saveProgressEntry(
+      { clientRequestId: rid(), projectId: A.projectId, elementId: el('C-01').id, activityCode: 'CONC', date: today, quantity: Math.round((planned - 0.15) * 1000) / 1000, unit: 'm3', remarks: '', photos: [], submit: true },
+      ENG,
+    );
+    expect(ok.modelRevision).toBe('R02');
+  });
+
+  it('a submitted entry of the earlier revision can still be approved when its element is in the new one; not when it was removed', async () => {
+    const { repo, el } = await setup();
+    const save = (code: string) =>
+      repo.saveProgressEntry(
+        { clientRequestId: rid(), projectId: A.projectId, elementId: el(code).id, activityCode: 'CONC', date: today, quantity: 0.01, unit: 'm3', remarks: '', photos: [], submit: true },
+        ENG,
+      );
+    const kept = await save('C-01');
+    const r02 = JSON.parse(sampleText(A.json));
+    r02.model.revision = 'R02';
+    const removedId = el('SL-01').id;
+    const gone = await save('SL-01');
+    r02.elements = r02.elements.filter((x: { id: string }) => x.id !== removedId);
+    await repo.importModel({ text: JSON.stringify(r02), sourceName: 'a-r02.json', sourceType: 'Uploaded JSON file' });
+    expect((await repo.reviewProgressEntry(kept.id, 'approve', '', REV)).status).toBe('Approved');
+    await expect(repo.reviewProgressEntry(gone.id, 'approve', '', REV)).rejects.toThrow(/not part of the active model/);
   });
 
   it('reset removes only this app\'s keys', async () => {

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { inModelFamily } from '../domain/progress';
 import { IS_FRAPPE } from '../config';
 import { repository } from '../data/appRepository';
 import { getSession, type SessionInfo } from '../data/frappeRepository';
@@ -133,7 +134,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           model,
           elements,
           allEntries,
-          entries: model ? allEntries.filter((e) => e.modelKey === model.key) : [],
+          // the active model with the work approved on its earlier revisions (see inModelFamily)
+          entries: model ? allEntries.filter((e) => inModelFamily(e, model)) : [],
         });
       } catch (e) {
         if (token === loadToken.current) setLoadError(errorMessages(e).join(' '));
