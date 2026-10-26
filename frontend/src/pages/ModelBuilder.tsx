@@ -23,7 +23,6 @@ import {
   placeOn,
   formatSpans,
   kindOf,
-  toFreeElements,
   headerErrors,
   defaultSpec,
   gridLabel,
@@ -37,7 +36,6 @@ import {
   type BuilderSpec,
   type ElementRef,
   type FreeElement,
-  type StructureKind,
   type ColumnType,
   type FootingType,
   type OpeningKind,
@@ -415,40 +413,6 @@ export function ModelBuilder() {
   const spansPending =
     kind !== 'free' && (!xParsed || !yParsed || xParsed.join(',') !== spec.xSpans.join(',') || yParsed.join(',') !== spec.ySpans.join(','));
 
-  /** Switch the structure type, with sensible starting values for it. */
-  function setKind(next: StructureKind) {
-    if (next === kind) return;
-    if (next === 'free') {
-      const copied = spec.freeElements?.length ? null : built.document ? toFreeElements(built.document) : [];
-      setSpec({ kind: 'free', ...(copied ? { freeElements: copied } : {}) });
-      if (copied?.length) notify(`The ${copied.length} elements of the current model were copied into the free model — change, add or remove them one by one.`, 'info');
-      return;
-    }
-    if (next === 'boundary') {
-      const xs = Array<number>(10).fill(3000);
-      setXText(formatSpans(xs));
-      setYText('');
-      setSpec({
-        kind: 'boundary',
-        xSpans: xs,
-        ySpans: [],
-        layout: makeLayout(xs.length + 1, 1, columnCodes[0] ?? ''),
-        roofLevel: 2100,
-        roofBeam: { ...spec.roofBeam, enabled: true, h: 150 },
-        slab: { ...spec.slab, enabled: false },
-        walls: { ...spec.walls, enabled: true, internal: false },
-        lintel: { ...spec.lintel, enabled: false },
-        chhajja: { ...spec.chhajja, enabled: false },
-        openings: [],
-      });
-      if (drawings.length) notify('Boundary wall chosen with typical values (10 panels of 3 m). Click "Read drawing with AI" to read the wall from the drawing.', 'info');
-      return;
-    }
-    const ys = spec.ySpans.length ? spec.ySpans : [3230];
-    setYText(formatSpans(ys));
-    setSpec({ kind: 'building', ySpans: ys, layout: resizeLayout(spec.layout, spec.xSpans.length + 1, ys.length + 1, columnCodes[0] ?? ''), slab: { ...spec.slab, enabled: true } });
-  }
-
   async function create() {
     if (!result.document || inFlight.current || spansPending) return;
     inFlight.current = true;
@@ -744,28 +708,6 @@ export function ModelBuilder() {
 
         {/* ---------------- right: form ---------------- */}
         <div className="builder-form">
-          <section className="card">
-            <h2 className="card-title">What is on the drawing?</h2>
-            <p className="muted small">Choose first — the AI then reads the drawing for this type.</p>
-            <div className="kind-tabs" role="radiogroup" aria-label="Structure type">
-              {(
-                [
-                  ['building', 'Building', 'Columns on a grid, beams, roof slab, walls — room, cabin, house'],
-                  ['boundary', 'Boundary wall', 'Piers on a line or around a plot, plinth + top beam, wall panels, no slab'],
-                  ['free', 'Free model', 'Every footing, column, beam, wall … one by one — for anything else'],
-                ] as const
-              ).map(([k, label, hint]) => (
-                <button key={k} role="radio" aria-checked={kind === k} className={`kind-tab ${kind === k ? 'on' : ''}`} onClick={() => setKind(k)}>
-                  <b>{label}</b>
-                  <span>{hint}</span>
-                </button>
-              ))}
-            </div>
-            {kind === 'free' && (
-              <p className="hint">Switching to Free model copies the current model's elements, so you can start from a template and then change anything.</p>
-            )}
-          </section>
-
           <AiReaderCard
             drawings={drawings}
             spec={spec}

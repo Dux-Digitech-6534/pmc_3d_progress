@@ -75,9 +75,9 @@ export function AiReaderCard({
   const [keyInput, setKeyInput] = useState('');
   // what the engineer wants modelled, when a drawing shows several things (e.g. boundary wall + cabin)
   const [hint, setHint] = useState('');
-  // The structure type chosen in the form tells the AI what to read (a drawing often shows several).
-  const kindNote = spec.kind === 'boundary' ? 'the boundary / compound wall (structureKind "boundary-wall")' : spec.kind === 'free' ? 'every element one by one (structureKind "other")' : '';
-  const fullHint = [kindNote, hint.trim()].filter(Boolean).join('. ');
+  // The AI works out from the sketch what it shows (building, boundary wall or something else);
+  // the engineer's note only steers it when a drawing shows several things.
+  const fullHint = hint.trim();
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
@@ -234,7 +234,7 @@ export function AiReaderCard({
       )}
       <label className="ai-hint">
         <span className="small">
-          Anything else the AI should know? (optional){kindNote && <span className="muted"> — it already reads the {spec.kind === 'boundary' ? 'boundary wall' : 'free model'}</span>}
+          What should be modelled? (optional — the AI works it out from the sketch; write here only when the drawing shows several things)
         </span>
         <input
           value={hint}
