@@ -927,6 +927,32 @@ export const NEW_ELEMENT: Record<ElementType, Omit<FreeElement, 'code' | 'type' 
   window: { z: 900, l: 1200, w: 40, h: 1200 },
 };
 
+const LINEAR: ElementType[] = ['wall', 'beam', 'lintel'];
+
+/**
+ * Where an element added by hand goes (mm, same frame as `on`): on top of the selected element,
+ * centred on it. A wall / beam / lintel on another wall, beam or lintel takes its length and
+ * direction; a slab takes the footprint of what it sits on; a door or window on a wall goes
+ * inside the wall (door at its bottom, window at the usual sill). Nothing selected: at the centre.
+ */
+export function placeOn(type: ElementType, on: FreeElement | null): Omit<FreeElement, 'code'> {
+  const base = NEW_ELEMENT[type];
+  if (!on) return { type, x: 0, y: 0, ...base };
+  const alongX = on.l >= on.w;
+  const top = on.z + on.h;
+  const centre = { type, x: on.x, y: on.y };
+  if ((type === 'door' || type === 'window') && on.type === 'wall') {
+    const thin = Math.min(on.l, on.w) + 20;
+    const width = Math.min(base.l, Math.max(on.l, on.w));
+    return { ...centre, z: on.z + (type === 'door' ? 0 : base.z), l: alongX ? width : thin, w: alongX ? thin : width, h: Math.min(base.h, on.h) };
+  }
+  if (LINEAR.includes(type) && LINEAR.includes(on.type)) return { ...centre, z: top, l: on.l, w: on.w, h: base.h };
+  if (type === 'slab' && on.l >= 1000 && on.w >= 1000) return { ...centre, z: top, l: on.l, w: on.w, h: base.h };
+  // keep a long element in the direction of what it stands on
+  const turn = LINEAR.includes(type) && !alongX;
+  return { ...centre, z: top, l: turn ? base.w : base.l, w: turn ? base.l : base.w, h: base.h };
+}
+
 /** A free model: every element as listed, quantities from its own box. */
 function buildFree(spec: BuilderSpec, errors: string[], warnings: string[]): BuildResult {
   const fail = (): BuildResult => ({ errors, warnings, document: null, summary: null, refs: {}, auto: {} });

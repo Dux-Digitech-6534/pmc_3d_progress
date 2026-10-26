@@ -20,7 +20,7 @@ import {
   ACTIVITIES,
   blankSpec,
   buildModel,
-  NEW_ELEMENT,
+  placeOn,
   formatSpans,
   kindOf,
   toFreeElements,
@@ -232,28 +232,24 @@ export function ModelBuilder() {
    * model it joins the element list; on a template it is kept as an extra element of the spec.
    */
   function addElement(type: ElementType) {
-    const base = NEW_ELEMENT[type];
     const listKey = kind === 'free' ? 'freeElements' : 'extraElements';
     const list = spec[listKey] ?? [];
-    let x = 0;
-    let y = 0;
-    if (kind === 'free' && pickedRef?.kind === 'free' && spec.freeElements?.[pickedRef.index]) {
-      const fe = spec.freeElements[pickedRef.index];
-      x = fe.x + fe.l / 2 + base.l / 2 + 200;
-      y = fe.y;
-    } else if (kind !== 'free' && pickedEl) {
-      const g = pickedEl.geometry;
-      x = Math.round(g.position[0] * 1000 + g.size[0] * 500 + base.l / 2 + 200);
-      y = Math.round(-g.position[2] * 1000);
-    } else if (kind === 'free' && list.length) {
-      x = Math.max(...list.map((e) => e.x + e.l / 2)) + base.l / 2 + 500;
-    }
+    // on top of the selected element (in a free model its own list entry, else its box in the model)
+    const on =
+      kind === 'free'
+        ? pickedRef?.kind === 'free'
+          ? (spec.freeElements?.[pickedRef.index] ?? null)
+          : null
+        : pickedEl
+          ? boxOf(pickedEl)
+          : null;
+    const placed = placeOn(type, on);
     const tag: Record<ElementType, string> = { footing: 'F', column: 'C', beam: 'B', slab: 'S', wall: 'W', lintel: 'L', chhajja: 'CH', door: 'D', window: 'WN' };
     const taken = new Set([...(built.document?.elements.map((e) => e.code) ?? []), ...list.map((e) => e.code.trim())]);
     let n = 1;
     while (taken.has(`${tag[type]}-N${n}`)) n++;
     const code = `${tag[type]}-N${n}`;
-    setSpec({ [listKey]: [...list, { code, type, x, y, ...base }] });
+    setSpec({ [listKey]: [...list, { code, ...placed }] });
     setPickCode(code);
   }
 
@@ -598,7 +594,7 @@ export function ModelBuilder() {
                       className="btn btn-small"
                       value=""
                       aria-label="Add an element"
-                      title={pickedEl ? `Adds it next to ${pickedEl.code}` : 'Click an element first to add the new one next to it'}
+                      title={pickedEl ? `Adds it on top of ${pickedEl.code} (a door / window goes into a wall)` : 'Click an element first to add the new one on top of it'}
                       onChange={(e) => e.target.value && addElement(e.target.value as ElementType)}
                     >
                       <option value="">+ Add element…</option>

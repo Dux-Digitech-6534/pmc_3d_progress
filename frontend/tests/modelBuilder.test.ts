@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LocalRepository, MemoryStorage } from '../src/data/localRepository';
-import { blankSpec, buildModel, defaultSpec, formatSpans, headerErrors, makeLayout, parseSpans, removeElement, resizeLayout, toFreeElements, wallOptions, withDefaults, type BuilderSpec } from '../src/domain/modelBuilder';
+import { blankSpec, buildModel, placeOn, defaultSpec, formatSpans, headerErrors, makeLayout, parseSpans, removeElement, resizeLayout, toFreeElements, wallOptions, withDefaults, type BuilderSpec } from '../src/domain/modelBuilder';
 import { validateModelDocument } from '../src/domain/modelValidation';
 import { computeActivityProgress } from '../src/domain/progress';
 import { checkQuantity } from '../src/domain/workflow';
@@ -509,5 +509,30 @@ describe('model builder — a door or window inside a wall added by hand', () =>
     expect(w.geometry.shape === 'wall' && w.geometry.openings).toEqual([{ center: 0.5, bottom: 0, width: 0.9, height: 2.1 }]);
     expect(cut.summary!.brickwork).toBeCloseTo(solid.summary!.brickwork - area * 0.23, 3);
     expect(validateModelDocument(cut.document).errors).toEqual([]);
+  });
+});
+
+describe('model builder — an element added on a selected one', () => {
+  const wallY = { code: 'W1', type: 'wall' as const, x: 1000, y: 500, z: 0, l: 230, w: 3000, h: 2700 };
+
+  it('a beam on a wall sits on its top with the same length and direction', () => {
+    expect(placeOn('beam', wallY)).toEqual({ type: 'beam', x: 1000, y: 500, z: 2700, l: 230, w: 3000, h: 300 });
+  });
+
+  it('a column on a footing stands on its top; a slab on a slab takes its footprint', () => {
+    const footing = { code: 'F1', type: 'footing' as const, x: 0, y: 0, z: -1000, l: 1200, w: 1200, h: 300 };
+    expect(placeOn('column', footing)).toMatchObject({ x: 0, y: 0, z: -700, l: 300, w: 300 });
+    const slab = { code: 'S1', type: 'slab' as const, x: 0, y: 0, z: 3000, l: 6000, w: 4000, h: 125 };
+    expect(placeOn('slab', slab)).toMatchObject({ z: 3125, l: 6000, w: 4000 });
+    expect(placeOn('wall', null)).toMatchObject({ x: 0, y: 0, z: 0 });
+  });
+
+  it('a door or window on a wall goes inside it — and cuts its opening there', () => {
+    const door = placeOn('door', wallY);
+    expect(door).toMatchObject({ z: 0, l: 250, w: 900, h: 2100 });
+    expect(placeOn('window', wallY)).toMatchObject({ z: 900 });
+    const res = buildModel({ ...defaultSpec(), openings: [], extraElements: [wallY, { code: 'D1', ...door }] });
+    const w = res.document!.elements.find((e) => e.code === 'W1')!;
+    expect(w.geometry.shape === 'wall' && w.geometry.openings?.length).toBe(1);
   });
 });
