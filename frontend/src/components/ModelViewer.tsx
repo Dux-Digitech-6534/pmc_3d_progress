@@ -11,6 +11,8 @@ export interface ModelViewerProps {
   colors: Map<string, string>;
   /** Elements passing the current filters. Others are drawn as faint ghosts and are not pickable. */
   visibleIds: Set<string>;
+  /** Elements hidden by the user: not drawn at all and not pickable. */
+  hiddenIds?: Set<string>;
   selectedIds: Set<string>;
   showLabels: boolean;
   /** additive = Ctrl/Cmd held. id is null when empty space was clicked. */
@@ -233,7 +235,10 @@ export function ModelViewer(props: ModelViewerProps) {
     const ctx = ctxRef.current;
     if (!ctx) return;
     ctx.objects.forEach((o, id) => {
-      const visible = props.visibleIds.has(id);
+      const hidden = props.hiddenIds?.has(id) ?? false;
+      o.mesh.visible = !hidden;
+      o.edges.visible = !hidden;
+      const visible = props.visibleIds.has(id) && !hidden;
       const selected = props.selectedIds.has(id);
       const m = o.mesh.material;
       m.color.set(props.colors.get(id) ?? '#9aa3ad');
@@ -249,11 +254,11 @@ export function ModelViewer(props: ModelViewerProps) {
       o.edges.material.opacity = visible ? 1 : 0.2;
       o.edges.material.transparent = !visible;
       o.edges.scale.setScalar(selected ? 1.02 : 1);
-      o.label.visible = visible && (props.showLabels || selected);
+      o.label.visible = visible && !hidden && (props.showLabels || selected);
       o.label.element.classList.toggle('selected', selected);
     });
     ctx.render();
-  }, [props.elements, props.colors, props.visibleIds, props.selectedIds, props.showLabels]);
+  }, [props.elements, props.colors, props.visibleIds, props.hiddenIds, props.selectedIds, props.showLabels]);
 
   // --- reset camera ---
   useEffect(() => {

@@ -676,11 +676,13 @@ export function buildModel(spec: BuilderSpec): BuildResult {
     const taken = new Set(elements.map((e) => e.code));
     errors.push(...freeErrors(extras, 'Added element', taken));
     if (errors.length) return fail();
-    extras.forEach((f, i) => {
+    const added = extras.map((f, i) => {
       const id = `${prefix}-X-${f.code.trim().replace(/[^A-Za-z0-9_.-]+/g, '_')}`;
       refs[id] = { kind: 'extra', index: i };
-      elements.push(boxElement(f, id, bId, 0, 0, spec.steel, sum));
+      return boxElement(f, id, bId, 0, 0, spec.steel, sum);
     });
+    cutOpenings(extras, added, sum);
+    elements.push(...added);
     warnings.push(`${extras.length} element${extras.length === 1 ? ' was' : 's were'} added by hand — check their position and size against the drawing.`);
   }
 
@@ -874,6 +876,44 @@ function boxElement(f: FreeElement, id: string, bId: string, cx: number, cy: num
   };
 }
 
+/**
+ * Doors and windows that sit inside a wall box (both from a box list) cut their opening in that
+ * wall: the hole is drawn and its area comes off the wall's brickwork and plaster.
+ * `elements` are the built elements of `boxes`, in the same order.
+ */
+function cutOpenings(boxes: FreeElement[], elements: ModelDocument['elements'], sum: BuildSummary) {
+  boxes.forEach((wb, i) => {
+    if (wb.type !== 'wall') return;
+    const alongX = wb.l >= wb.w;
+    const len = alongX ? wb.l : wb.w;
+    const thick = alongX ? wb.w : wb.l;
+    const holes: WallOpening[] = [];
+    let area = 0;
+    boxes.forEach((ob) => {
+      if (ob.type !== 'door' && ob.type !== 'window') return;
+      const along = alongX ? ob.x - wb.x : ob.y - wb.y;
+      const across = alongX ? ob.y - wb.y : ob.x - wb.x;
+      const width = alongX ? ob.l : ob.w;
+      const inside =
+        Math.abs(across) <= thick / 2 + 50 && Math.abs(along) + width / 2 <= len / 2 + 1 && ob.z >= wb.z - 1 && ob.z + ob.h <= wb.z + wb.h + 1;
+      if (!inside) return;
+      // world offset along the wall: X as is; plan Y runs along −Z in 3D
+      holes.push({ center: r(mm(alongX ? along : -along), 4), bottom: r(mm(ob.z - wb.z), 4), width: r(mm(width), 4), height: r(mm(ob.h), 4) });
+      area += mm(width) * mm(ob.h);
+    });
+    if (!holes.length) return;
+    const e = elements[i];
+    if (e.geometry.shape === 'wall') e.geometry = { ...e.geometry, openings: holes };
+    const t = mm(thick);
+    const brick = Math.max((e.plannedQuantities.BRICK?.quantity ?? 0) - area * t, 0);
+    const plaster = Math.max((e.plannedQuantities.PLAST?.quantity ?? 0) - 2 * area, 0);
+    sum.brickwork -= (e.plannedQuantities.BRICK?.quantity ?? 0) - brick;
+    sum.plaster -= (e.plannedQuantities.PLAST?.quantity ?? 0) - plaster;
+    e.plannedQuantities = { ...e.plannedQuantities, BRICK: { quantity: r(brick, 3), unit: 'm3' }, PLAST: { quantity: r(plaster, 2), unit: 'm2' } };
+    e.notes = `${e.notes}, ${holes.length} opening(s)`;
+  });
+}
+
 /** A starting size (mm) for an element added by hand, by type: what a small RCC building usually has. */
 export const NEW_ELEMENT: Record<ElementType, Omit<FreeElement, 'code' | 'type' | 'x' | 'y'>> = {
   footing: { z: -1000, l: 1200, w: 1200, h: 300 },
@@ -914,6 +954,7 @@ function buildFree(spec: BuilderSpec, errors: string[], warnings: string[]): Bui
     refs[id] = { kind: 'free', index: i };
     return boxElement(f, id, bId, cx, cy, spec.steel, sum);
   });
+  cutOpenings(list, elements, sum);
   warnings.push('Free model: every element is as listed — check positions and sizes against the drawing.');
   const bottoms = list.map((f) => mm(f.z));
   const tops = list.map((f) => mm(f.z + f.h));

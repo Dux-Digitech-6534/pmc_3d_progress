@@ -495,3 +495,19 @@ describe('model builder — elements added by hand on a template', () => {
     expect(res.errors[0]).toMatch(/"C1-X1Y1" is used twice/);
   });
 });
+
+describe('model builder — a door or window inside a wall added by hand', () => {
+  it('cuts its opening and comes off the brickwork and plaster', () => {
+    const wall = { code: 'W1', type: 'wall' as const, x: 0, y: 0, z: 0, l: 3000, w: 230, h: 2700 };
+    const door = { code: 'D1', type: 'door' as const, x: 500, y: 0, z: 0, l: 900, w: 40, h: 2100 };
+    const solid = buildModel({ ...defaultSpec(), openings: [], extraElements: [wall] });
+    const cut = buildModel({ ...defaultSpec(), openings: [], extraElements: [wall, door] });
+    const w = cut.document!.elements.find((e) => e.code === 'W1')!;
+    const area = 0.9 * 2.1;
+    expect(w.plannedQuantities.BRICK.quantity).toBeCloseTo(3 * 0.23 * 2.7 - area * 0.23, 3);
+    expect(w.plannedQuantities.PLAST.quantity).toBeCloseTo(2 * 3 * 2.7 - 2 * area, 2);
+    expect(w.geometry.shape === 'wall' && w.geometry.openings).toEqual([{ center: 0.5, bottom: 0, width: 0.9, height: 2.1 }]);
+    expect(cut.summary!.brickwork).toBeCloseTo(solid.summary!.brickwork - area * 0.23, 3);
+    expect(validateModelDocument(cut.document).errors).toEqual([]);
+  });
+});

@@ -211,6 +211,9 @@ export function ModelBuilder() {
   const [picked, setPicked] = useState<string | null>(null);
   // an element just added by hand is selected once the preview has it
   const [pickCode, setPickCode] = useState<string | null>(null);
+  // hidden in the preview only (to look inside / behind) — not removed from the model
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
+  const [hiddenTypes, setHiddenTypes] = useState<Set<ElementType>>(() => new Set());
   const [undoSpec, setUndoSpec] = useState<BuilderSpec | null>(null);
   const pickedEl = picked ? preview.find((e) => e.id === picked) : undefined;
   const pickedRef = picked ? built.refs[picked] : undefined;
@@ -252,6 +255,64 @@ export function ModelBuilder() {
     const code = `${tag[type]}-N${n}`;
     setSpec({ [listKey]: [...list, { code, type, x, y, ...base }] });
     setPickCode(code);
+  }
+
+  const hiddenAll = useMemo(
+    () => new Set([...hiddenIds, ...(built.document?.elements.filter((e) => hiddenTypes.has(e.type)).map((e) => e.id) ?? [])]),
+    [hiddenIds, hiddenTypes, built],
+  );
+  const typesPresent = useMemo(() => ELEMENT_TYPES.filter((t) => built.document?.elements.some((e) => e.type === t)), [built]);
+
+  /** An element of the built model as a box element (mm from the model centre). */
+  const boxOf = (e: Pick<ElementRecord, 'code' | 'type' | 'geometry'>, code = e.code): FreeElement => {
+    const [px, py, pz] = e.geometry.position;
+    const [sx, sy, sz] = e.geometry.size;
+    return { code, type: e.type, x: Math.round(px * 1000), y: Math.round(-pz * 1000) + 0, z: Math.round((py - sy / 2) * 1000), l: Math.round(sx * 1000), w: Math.round(sz * 1000), h: Math.round(sy * 1000) };
+  };
+  const freeCode = (base: string, taken: Set<string>) => {
+    let n = 2;
+    while (taken.has(`${base}-${n}`)) n++;
+    return `${base}-${n}`;
+  };
+
+  /** A copy next to the element (to its right). Template elements are copied as elements added by hand. */
+  function duplicate(e: ElementRecord, ref: ElementRef) {
+    const listKey = ref.kind === 'free' ? 'freeElements' : 'extraElements';
+    const list = spec[listKey] ?? [];
+    const taken = new Set([...(built.document?.elements.map((x) => x.code) ?? []), ...list.map((x) => x.code.trim())]);
+    const src = (ref.kind === 'free' || ref.kind === 'extra') && list[ref.index] ? list[ref.index] : boxOf(e);
+    const code = freeCode(src.code.trim().replace(/-\d+$/, ''), taken);
+    setSpec({ [listKey]: [...list, { ...src, code, x: src.x + src.l + 200 }] });
+    setPickCode(code);
+  }
+
+  /**
+   * Change one element of the template on its own: it leaves the template (spec.omit) and comes back as
+   * an element added by hand with the same code and box, so length, width and height can be set. A
+   * wall takes its doors / windows (with their lintels and chhajjas) along, as boxes.
+   */
+  function detach(e: ElementRecord, ref: ElementRef) {
+    if (!built.document || !('code' in ref)) return;
+    const extras = [...(spec.extraElements ?? [])];
+    let openings = spec.openings;
+    const omit = new Set(spec.omit ?? []);
+    omit.add(ref.code);
+    extras.push(boxOf(e));
+    if (ref.kind === 'wall') {
+      const rows = new Set(spec.openings.map((o, i) => (o.wall === ref.wall ? i : -1)).filter((i) => i >= 0));
+      const taken = new Set([...built.document.elements.map((x) => x.code), ...extras.map((x) => x.code)]);
+      for (const x of built.document.elements) {
+        const r = built.refs[x.id];
+        if (r && (r.kind === 'opening' || r.kind === 'lintel' || r.kind === 'chhajja') && rows.has(r.row)) {
+          const code = taken.has(x.code) && x.code !== e.code ? freeCode(x.code, taken) : x.code;
+          taken.add(code);
+          extras.push(boxOf(x, code));
+        }
+      }
+      openings = spec.openings.filter((_, i) => !rows.has(i));
+    }
+    editFromPanel({ ...spec, omit: [...omit], extraElements: extras, openings });
+    setPickCode(e.code);
   }
 
   /** A removal from the element panel; the previous form can be restored with Undo until the next change. */
@@ -525,6 +586,7 @@ export function ModelBuilder() {
                     colors={previewColors}
                     visibleIds={previewIds}
                     selectedIds={selection}
+                    hiddenIds={hiddenAll}
                     showLabels={false}
                     onPick={(id) => setPicked(id)}
                     resetSignal={resetSignal}
@@ -546,6 +608,35 @@ export function ModelBuilder() {
                         </option>
                       ))}
                     </select>
+                    <select
+                      className="btn btn-small"
+                      value=""
+                      aria-label="Show or hide element types"
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!v) return;
+                        if (v === '__all__') {
+                          setHiddenIds(new Set());
+                          setHiddenTypes(new Set());
+                          return;
+                        }
+                        const t = v as ElementType;
+                        setHiddenTypes((h) => {
+                          const n = new Set(h);
+                          if (n.has(t)) n.delete(t);
+                          else n.add(t);
+                          return n;
+                        });
+                      }}
+                    >
+                      <option value="">👁 Show / hide…</option>
+                      {typesPresent.map((t) => (
+                        <option key={t} value={t}>
+                          {hiddenTypes.has(t) ? 'Show' : 'Hide'} {t}s
+                        </option>
+                      ))}
+                      {hiddenAll.size > 0 && <option value="__all__">Show all</option>}
+                    </select>
                     <button className="btn btn-small" onClick={() => setResetSignal((n) => n + 1)}>
                       Fit view
                     </button>
@@ -563,10 +654,27 @@ export function ModelBuilder() {
                         setPicked(null);
                       }}
                       onClose={() => setPicked(null)}
+                      onDuplicate={() => duplicate(pickedEl, pickedRef)}
+                      onDetach={() => detach(pickedEl, pickedRef)}
+                      onHide={() => {
+                        setHiddenIds((h) => new Set([...h, pickedEl.id]));
+                        setPicked(null);
+                      }}
                     />
                   ) : (
-                    ((spec.omit?.length ?? 0) > 0 || undoSpec || (spec.extraElements?.length ?? 0) > 0) && (
+                    ((spec.omit?.length ?? 0) > 0 || undoSpec || (spec.extraElements?.length ?? 0) > 0 || hiddenAll.size > 0) && (
                       <div className="builder-pick-bar">
+                        {hiddenAll.size > 0 && (
+                          <button
+                            className="btn btn-small"
+                            onClick={() => {
+                              setHiddenIds(new Set());
+                              setHiddenTypes(new Set());
+                            }}
+                          >
+                            Show all ({hiddenAll.size} hidden)
+                          </button>
+                        )}
                         {(spec.extraElements?.length ?? 0) > 0 && kind !== 'free' && (
                           <span className="pane-tag pane-tag-inline">{spec.extraElements!.length} added by hand — click one to change it</span>
                         )}
@@ -1469,6 +1577,9 @@ function BuilderElementPanel({
   onChange,
   onRemove,
   onClose,
+  onDuplicate,
+  onDetach,
+  onHide,
 }: {
   el: ElementRecord;
   elRef: ElementRef;
@@ -1480,6 +1591,10 @@ function BuilderElementPanel({
   onChange: (next: BuilderSpec) => void;
   onRemove: () => void;
   onClose: () => void;
+  onDuplicate: () => void;
+  /** Take this one element out of the template to change its own length / width / height. */
+  onDetach: () => void;
+  onHide: () => void;
 }) {
   const set = (patch: Partial<BuilderSpec>) => onChange({ ...spec, ...patch });
   const count = (f: (e: ElementRecord) => boolean) => elements.filter(f).length;
@@ -1716,11 +1831,16 @@ function BuilderElementPanel({
             <NS value={fe.z} onChange={(z) => upd({ z })} label="Bottom level" width={64} />
           </div>
           <div className="pick-row">
-            <span>L × W × H (mm)</span>
-            <span>
-              <N value={fe.l} onChange={(l) => upd({ l })} label="Length" width={56} /> × <N value={fe.w} onChange={(w) => upd({ w })} label="Width" width={56} /> ×{' '}
-              <N value={fe.h} onChange={(h) => upd({ h })} label="Height" width={56} />
-            </span>
+            <span>Length — left / right (mm)</span>
+            <Stepper value={fe.l} onChange={(l) => upd({ l })} label="Length" min={1} step={50} />
+          </div>
+          <div className="pick-row">
+            <span>{fe.type === 'wall' ? 'Thickness' : 'Width'} — front / back (mm)</span>
+            <Stepper value={fe.w} onChange={(w) => upd({ w })} label={fe.type === 'wall' ? 'Thickness' : 'Width'} min={1} step={50} />
+          </div>
+          <div className="pick-row">
+            <span>Height (mm)</span>
+            <Stepper value={fe.h} onChange={(h) => upd({ h })} label="Height" min={1} step={50} />
           </div>
           <div className="pick-actions">
             <button className="btn btn-small" title="Turn it a quarter: a wall along left-right then runs front-back" onClick={() => upd({ l: fe.w, w: fe.l })}>
@@ -1833,6 +1953,25 @@ function BuilderElementPanel({
         <MaterialTable planned={materialsFor(plannedOf(el), withNormDefaults(spec.materialNorms))} compact />
       </div>
       <div className="builder-pick-edit">{edit}</div>
+      <div className="pick-actions pick-tools">
+        <button className="btn btn-small" onClick={onDuplicate} title="A copy next to it, to the right">
+          ⧉ Duplicate
+        </button>
+        <button className="btn btn-small" onClick={onHide} title="Hide it in this preview only — it stays in the model">
+          🙈 Hide
+        </button>
+        {(elRef.kind === 'wall' || elRef.kind === 'beam' || elRef.kind === 'lintel' || elRef.kind === 'chhajja') && (
+          <button className="btn btn-small" onClick={onDetach} title="Set the length, width and height of only this one">
+            ✎ Own size for this one
+          </button>
+        )}
+      </div>
+      {(elRef.kind === 'wall' || elRef.kind === 'beam') && (
+        <p className="hint">
+          Its length and height come from the grid and levels. "Own size for this one" lets you set length, width and height for only this {elRef.kind}
+          {elRef.kind === 'wall' ? ' (its doors / windows come along as separate pieces)' : ''}.
+        </p>
+      )}
       <div className="builder-pick-foot">
         <button className="btn btn-danger btn-small" onClick={onRemove}>
           {removeLabel}

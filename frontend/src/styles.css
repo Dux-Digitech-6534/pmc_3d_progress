@@ -2106,3 +2106,12 @@ details.advanced[open] > summary {
   position: static;
   pointer-events: auto;
 }
+
+.pick-tools {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 8px;
+}
+.builder-pick .stepper input {
+  width: 76px !important;
+}
