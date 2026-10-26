@@ -334,6 +334,81 @@
     ]
    }
   },
+  "rooms": {
+   "type": "array",
+   "description": "For structureKind \"building\": every room / space as a rectangle covering the whole plan. Empty otherwise.",
+   "items": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "xMm": {
+      "type": "number",
+      "description": "Front-left corner from the building's front-left corner, along X, mm."
+     },
+     "yMm": {
+      "type": "number",
+      "description": "Front-left corner from the building's front-left corner, along Y (front to back), mm."
+     },
+     "widthMm": {
+      "type": "number",
+      "description": "Along X, mm."
+     },
+     "depthMm": {
+      "type": "number",
+      "description": "Along Y, mm."
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "name",
+     "xMm",
+     "yMm",
+     "widthMm",
+     "depthMm"
+    ]
+   }
+  },
+  "roomOpenings": {
+   "type": "array",
+   "description": "For structureKind \"building\": every door and window, centred on the wall line it is in. Empty otherwise.",
+   "items": {
+    "type": "object",
+    "properties": {
+     "type": {
+      "type": "string",
+      "description": "{enum: [\"door\",\"window\"]}"
+     },
+     "xMm": {
+      "type": "number",
+      "description": "Centre on the plan, same origin as the rooms, mm."
+     },
+     "yMm": {
+      "type": "number"
+     },
+     "widthMm": {
+      "type": "number"
+     },
+     "heightMm": {
+      "type": "number"
+     },
+     "sillMm": {
+      "type": "number",
+      "description": "0 for doors."
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "type",
+     "xMm",
+     "yMm",
+     "widthMm",
+     "heightMm",
+     "sillMm"
+    ]
+   }
+  },
   "assumptions": {
    "type": "array",
    "description": "Every value NOT written on the drawing that you assumed, and why. Empty if none.",
@@ -367,6 +442,8 @@
   "lintel",
   "chhajja",
   "elements",
+  "rooms",
+  "roomOpenings",
   "assumptions",
   "confidence"
  ],

@@ -61,6 +61,29 @@ export const DrawingReadingSchema = z.object({
       }),
     )
     .describe('Only when structureKind is "other": every element as a box. Empty otherwise.'),
+  rooms: z
+    .array(
+      z.object({
+        name: z.string(),
+        xMm: z.number().describe("Front-left corner from the building's front-left corner, along X, mm."),
+        yMm: z.number().describe("Front-left corner from the building's front-left corner, along Y (front to back), mm."),
+        widthMm: z.number().describe('Along X, mm.'),
+        depthMm: z.number().describe('Along Y, mm.'),
+      }),
+    )
+    .describe('For structureKind "building": every room / space as a rectangle covering the whole plan. Empty otherwise.'),
+  roomOpenings: z
+    .array(
+      z.object({
+        type: z.enum(['door', 'window']),
+        xMm: z.number().describe('Centre on the plan, same origin as the rooms, mm.'),
+        yMm: z.number(),
+        widthMm: z.number(),
+        heightMm: z.number(),
+        sillMm: z.number().describe('0 for doors.'),
+      }),
+    )
+    .describe('For structureKind "building": every door and window, centred on the wall line it is in. Empty otherwise.'),
   assumptions: z.array(z.string()).describe('Every value NOT written on the drawing that you assumed, and why. Empty if none.'),
   confidence: z.enum(['high', 'medium', 'low']),
 });
@@ -80,12 +103,14 @@ export const parseGrid = (g: string) => {
  */
 /** An answer from an older server (before structure types) is a building with no free elements. */
 export function withReadingDefaults(raw: unknown): unknown {
-  return raw && typeof raw === 'object' ? { structureKind: 'building', elements: [], ...(raw as object) } : raw;
+  return raw && typeof raw === 'object' ? { structureKind: 'building', elements: [], rooms: [], roomOpenings: [], ...(raw as object) } : raw;
 }
 
 export function readingToSpec(r: DrawingReading, base: BuilderSpec): { spec: BuilderSpec; notes: string[] } {
   const notes: string[] = [];
-  const kind: StructureKind = r.structureKind === 'boundary-wall' ? 'boundary' : r.structureKind === 'other' ? 'free' : 'building';
+  // a building read as rooms is built from the rooms (walls exactly on the room edges)
+  const kind: StructureKind =
+    r.structureKind === 'boundary-wall' ? 'boundary' : r.structureKind === 'other' ? 'free' : r.rooms.length ? 'rooms' : 'building';
   const d = defaultSpec();
   const pos = (n: number) => Number.isFinite(n) && n > 0;
   const xSpans = r.xSpansMm.filter(pos);
@@ -155,6 +180,21 @@ export function readingToSpec(r: DrawingReading, base: BuilderSpec): { spec: Bui
     ...base,
     kind,
     ...(kind === 'free' ? { freeElements } : {}),
+    ...(kind === 'rooms'
+      ? {
+          rooms: r.rooms.map((rm) => ({ name: rm.name.trim(), x: Math.round(rm.xMm), y: Math.round(rm.yMm), w: Math.round(rm.widthMm), d: Math.round(rm.depthMm) })),
+          roomOpenings: r.roomOpenings.map((o) => ({
+            type: o.type,
+            x: Math.round(o.xMm),
+            y: Math.round(o.yMm),
+            width: Math.round(o.widthMm),
+            height: Math.round(o.heightMm),
+            sill: o.type === 'door' ? 0 : Math.max(Math.round(o.sillMm), 0),
+          })),
+          extraElements: [],
+          omit: [],
+        }
+      : {}),
     projectName: r.projectName.trim() || base.projectName,
     buildingName: r.buildingName.trim() || r.projectName.trim() || base.buildingName,
     xSpans,
@@ -167,7 +207,7 @@ export function readingToSpec(r: DrawingReading, base: BuilderSpec): { spec: Bui
     plinthBeam: { enabled: r.plinthBeam.present, w: r.plinthBeam.widthMm || d.plinthBeam.w, h: r.plinthBeam.depthMm || d.plinthBeam.h },
     roofBeam: { enabled: r.roofBeam.present, w: r.roofBeam.widthMm || d.roofBeam.w, h: r.roofBeam.depthMm || d.roofBeam.h },
     slab: { enabled: r.slab.present && kind !== 'boundary', t: r.slab.thicknessMm || d.slab.t, overhang: Math.max(r.slab.overhangMm, 0) },
-    walls: { enabled: r.walls.present, t: r.walls.thicknessMm || d.walls.t, internal: r.walls.alsoOnInternalGridLines },
+    walls: { enabled: r.walls.present || kind === 'rooms', t: r.walls.thicknessMm || d.walls.t, internal: r.walls.alsoOnInternalGridLines },
     openingTypes: r.openingTypes.map((o) => ({ mark: o.mark.trim(), kind: o.kind, w: o.widthMm, h: o.heightMm, sill: o.kind === 'door' ? 0 : Math.max(o.sillMm, 0) })),
     openings,
     lintel: { ...base.lintel, enabled: r.lintel.present, h: r.lintel.depthMm || d.lintel.h },

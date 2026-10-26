@@ -36,6 +36,8 @@ import {
   type BuilderSpec,
   type ElementRef,
   type FreeElement,
+  type Room,
+  type RoomOpening,
   type ColumnType,
   type FootingType,
   type OpeningKind,
@@ -801,6 +803,8 @@ export function ModelBuilder() {
             <FreeElementsCard spec={spec} setSpec={setSpec} />
           ) : (
           <>
+          {kind === 'rooms' && <RoomsCard spec={spec} setSpec={setSpec} />}
+          {kind !== 'rooms' && (
           <section className="card">
             <h2 className="card-title">{kind === 'boundary' ? '2 · Pier line (from the plan)' : '2 · Grid (from the plan)'}</h2>
             <p className="muted small">
@@ -876,9 +880,11 @@ export function ModelBuilder() {
               ))}
             </div>
           </section>
+          )}
 
           <section className="card">
             <h2 className="card-title">3 · Column and footing schedules</h2>
+            {kind === 'rooms' && <p className="hint">Every column and footing uses the first row of each schedule (the building is made from its rooms).</p>}
             <div className="sched-wrap">
               <table className="table compact sched">
                 <thead>
@@ -1052,7 +1058,7 @@ export function ModelBuilder() {
             </div>
           </section>
 
-          {kind !== 'free' && (
+          {kind !== 'free' && kind !== 'rooms' && (
           <section className="card">
             <h2 className="card-title">{kind === 'boundary' ? '5 · Wall panels and gates (from the plan and elevation)' : '5 · Walls, doors and windows (from the plan and elevation)'}</h2>
             <div className="steel-row">
@@ -1500,6 +1506,7 @@ const KIND_LABEL: Record<ElementRef['kind'], string> = {
   slab: 'Roof slab',
   free: 'Element',
   extra: 'Element added by hand',
+  gen: 'Element',
 };
 
 /**
@@ -1796,6 +1803,15 @@ function BuilderElementPanel({
       removeHint = 'Only this element is removed.';
       break;
     }
+    case 'gen':
+      edit = (
+        <p className="hint">
+          Made from the rooms: change a room's size or position in section 2 and this follows. "Own size for this one" sets this {el.type} on its own;
+          Remove leaves it out.
+        </p>
+      );
+      removeHint = 'Only this element is left out. Restore it with "Restore removed elements".';
+      break;
     case 'slab':
       edit = (
         <>
@@ -1898,7 +1914,7 @@ function BuilderElementPanel({
         <button className="btn btn-small" onClick={onHide} title="Hide it in this preview only — it stays in the model">
           🙈 Hide
         </button>
-        {(elRef.kind === 'wall' || elRef.kind === 'beam' || elRef.kind === 'lintel' || elRef.kind === 'chhajja') && (
+        {(elRef.kind === 'wall' || elRef.kind === 'beam' || elRef.kind === 'lintel' || elRef.kind === 'chhajja' || (elRef.kind === 'gen' && el.type !== 'slab')) && (
           <button className="btn btn-small" onClick={onDetach} title="Set the length, width and height of only this one">
             ✎ Own size for this one
           </button>
@@ -1927,6 +1943,146 @@ function copyNext(fe: FreeElement, list: FreeElement[], dir: 'x' | 'y'): FreeEle
   let n = 2;
   while (codes.has(`${base}-${n}`)) n++;
   return { ...fe, code: `${base}-${n}`, ...(dir === 'x' ? { x: fe.x + fe.l } : { y: fe.y + fe.w }) };
+}
+
+/** Building from rooms: the rooms and doors / windows (mm, from the building's front-left corner). */
+function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Partial<BuilderSpec>) => void }) {
+  const rooms = spec.rooms ?? [];
+  const ops = spec.roomOpenings ?? [];
+  const updRoom = (i: number, patch: Partial<Room>) => setSpec({ rooms: rooms.map((x, k) => (k === i ? { ...x, ...patch } : x)) });
+  const updOp = (i: number, patch: Partial<RoomOpening>) => setSpec({ roomOpenings: ops.map((x, k) => (k === i ? { ...x, ...patch } : x)) });
+  const right = rooms.length ? Math.max(...rooms.map((r) => r.x + r.w)) : 0;
+  const back = rooms.length ? Math.max(...rooms.map((r) => r.y + r.d)) : 0;
+  const ft = (mm: number) => (mm / 304.8).toFixed(1);
+  return (
+    <section className="card">
+      <h2 className="card-title">2 · Rooms (from the plan)</h2>
+      <p className="muted small">
+        Each room as a rectangle in mm: <b>X / Y</b> = its front-left corner from the building's front-left corner (X to the right, Y to the back),{' '}
+        <b>width</b> along X, <b>depth</b> along Y. Walls are built on the room edges (a shared wall once), columns at every corner and junction.
+        {rooms.length > 0 && (
+          <>
+            {' '}
+            Overall: <b>{right} × {back} mm</b> ({ft(right)} × {ft(back)} ft).
+          </>
+        )}
+      </p>
+      <div className="free-table-wrap">
+        <table className="table compact sched free-table">
+          <thead>
+            <tr>
+              <th>Room</th>
+              <th>X</th>
+              <th>Y</th>
+              <th>Width</th>
+              <th>Depth</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rooms.map((rm, i) => (
+              <tr key={i}>
+                <td>
+                  <input value={rm.name} onChange={(e) => updRoom(i, { name: e.target.value })} aria-label={`Room ${i + 1} name`} style={{ width: 150 }} />
+                </td>
+                <td>
+                  <NS value={rm.x} onChange={(x) => updRoom(i, { x })} label={`Room ${i + 1} X`} width={74} />
+                </td>
+                <td>
+                  <NS value={rm.y} onChange={(y) => updRoom(i, { y })} label={`Room ${i + 1} Y`} width={74} />
+                </td>
+                <td>
+                  <N value={rm.w} onChange={(w) => updRoom(i, { w })} label={`Room ${i + 1} width`} width={74} />
+                </td>
+                <td>
+                  <N value={rm.d} onChange={(d) => updRoom(i, { d })} label={`Room ${i + 1} depth`} width={74} />
+                </td>
+                <td>
+                  <button className="btn-icon" aria-label={`Remove room ${rm.name || i + 1}`} onClick={() => setSpec({ rooms: rooms.filter((_, k) => k !== i) })}>
+                    ×
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <button className="link" onClick={() => setSpec({ rooms: [...rooms, { name: `Room ${rooms.length + 1}`, x: right, y: 0, w: 3000, d: 3000 }] })}>
+        + Add room
+      </button>
+
+      <h3 className="section-title" style={{ marginTop: 14 }}>Doors and windows</h3>
+      <p className="muted small">Centre of each opening on the plan (same X / Y as the rooms) — it goes into the wall it is on.</p>
+      <div className="free-table-wrap">
+        <table className="table compact sched free-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>X</th>
+              <th>Y</th>
+              <th>Width</th>
+              <th>Height</th>
+              <th>Sill</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {ops.map((o, i) => (
+              <tr key={i}>
+                <td>
+                  <select value={o.type} onChange={(e) => updOp(i, { type: e.target.value as RoomOpening['type'] })} aria-label={`Opening ${i + 1} type`}>
+                    <option value="door">Door</option>
+                    <option value="window">Window</option>
+                  </select>
+                </td>
+                <td>
+                  <NS value={o.x} onChange={(x) => updOp(i, { x })} label={`Opening ${i + 1} X`} width={74} />
+                </td>
+                <td>
+                  <NS value={o.y} onChange={(y) => updOp(i, { y })} label={`Opening ${i + 1} Y`} width={74} />
+                </td>
+                <td>
+                  <N value={o.width} onChange={(width) => updOp(i, { width })} label={`Opening ${i + 1} width`} width={64} />
+                </td>
+                <td>
+                  <N value={o.height} onChange={(height) => updOp(i, { height })} label={`Opening ${i + 1} height`} width={64} />
+                </td>
+                <td>{o.type === 'door' ? <span className="muted small">0</span> : <N value={o.sill} onChange={(sill) => updOp(i, { sill })} label={`Opening ${i + 1} sill`} width={64} />}</td>
+                <td>
+                  <button className="btn-icon" aria-label={`Remove opening ${i + 1}`} onClick={() => setSpec({ roomOpenings: ops.filter((_, k) => k !== i) })}>
+                    ×
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="pick-actions">
+        <button className="link" onClick={() => setSpec({ roomOpenings: [...ops, { type: 'door', x: 1000, y: 0, width: 900, height: 2100, sill: 0 }] })}>
+          + Add door
+        </button>
+        <button className="link" onClick={() => setSpec({ roomOpenings: [...ops, { type: 'window', x: 1000, y: 0, width: 1200, height: 1200, sill: 900 }] })}>
+          + Add window
+        </button>
+      </div>
+
+      <div className="form-grid" style={{ marginTop: 12 }}>
+        <label>
+          Wall thickness (mm)
+          <N value={spec.walls.t} onChange={(t) => setSpec({ walls: { ...spec.walls, t } })} width={100} />
+        </label>
+        <label>
+          Longest wall between two columns (mm)
+          <N value={spec.maxColumnSpan ?? 4500} onChange={(maxColumnSpan) => setSpec({ maxColumnSpan })} width={100} />
+        </label>
+        <label className="inline">
+          <input type="checkbox" checked={spec.lintel.enabled} onChange={(e) => setSpec({ lintel: { ...spec.lintel, enabled: e.target.checked } })} /> RCC lintel over
+          openings, {spec.lintel.h} mm deep
+        </label>
+      </div>
+    </section>
+  );
 }
 
 /** Free model: the element list, one row per element (mm). */

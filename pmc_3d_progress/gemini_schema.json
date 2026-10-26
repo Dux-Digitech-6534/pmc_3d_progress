@@ -365,6 +365,84 @@
     "additionalProperties": false
    }
   },
+  "rooms": {
+   "description": "For structureKind \"building\": every room / space as a rectangle covering the whole plan. Empty otherwise.",
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "xMm": {
+      "description": "Front-left corner from the building's front-left corner, along X, mm.",
+      "type": "number"
+     },
+     "yMm": {
+      "description": "Front-left corner from the building's front-left corner, along Y (front to back), mm.",
+      "type": "number"
+     },
+     "widthMm": {
+      "description": "Along X, mm.",
+      "type": "number"
+     },
+     "depthMm": {
+      "description": "Along Y, mm.",
+      "type": "number"
+     }
+    },
+    "required": [
+     "name",
+     "xMm",
+     "yMm",
+     "widthMm",
+     "depthMm"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "roomOpenings": {
+   "description": "For structureKind \"building\": every door and window, centred on the wall line it is in. Empty otherwise.",
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "type": {
+      "type": "string",
+      "enum": [
+       "door",
+       "window"
+      ]
+     },
+     "xMm": {
+      "description": "Centre on the plan, same origin as the rooms, mm.",
+      "type": "number"
+     },
+     "yMm": {
+      "type": "number"
+     },
+     "widthMm": {
+      "type": "number"
+     },
+     "heightMm": {
+      "type": "number"
+     },
+     "sillMm": {
+      "description": "0 for doors.",
+      "type": "number"
+     }
+    },
+    "required": [
+     "type",
+     "xMm",
+     "yMm",
+     "widthMm",
+     "heightMm",
+     "sillMm"
+    ],
+    "additionalProperties": false
+   }
+  },
   "assumptions": {
    "description": "Every value NOT written on the drawing that you assumed, and why. Empty if none.",
    "type": "array",
@@ -401,6 +479,8 @@
   "lintel",
   "chhajja",
   "elements",
+  "rooms",
+  "roomOpenings",
   "assumptions",
   "confidence"
  ],

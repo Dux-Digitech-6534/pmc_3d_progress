@@ -7,6 +7,8 @@ import { validateModelDocument } from '../src/domain/modelValidation';
 const cabin = (): DrawingReading => ({
   structureKind: 'building',
   elements: [],
+  rooms: [],
+  roomOpenings: [],
   projectName: 'Security Cabin',
   buildingName: 'Security Cabin',
   xSpansMm: [3230],

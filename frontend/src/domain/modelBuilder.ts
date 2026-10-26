@@ -60,7 +60,26 @@ export interface OpeningPlacement {
 }
 
 /** What the Model Builder makes: a column-grid building, a boundary wall, or free elements. */
-export type StructureKind = 'building' | 'boundary' | 'free';
+export type StructureKind = 'building' | 'boundary' | 'free' | 'rooms';
+
+/** A room on the plan (mm): front-left corner from the building's front-left corner, width along X, depth along Y. */
+export interface Room {
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  d: number;
+}
+
+/** A door or window on the plan (mm): its centre (same origin as the rooms), size and sill. */
+export interface RoomOpening {
+  type: 'door' | 'window';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  sill: number;
+}
 
 /**
  * One element of a free model (mm): centre on the plan (x from the left, y from the front /
@@ -88,6 +107,11 @@ export interface BuilderSpec {
   kind?: StructureKind;
   /** The elements of a free model. */
   freeElements?: FreeElement[];
+  /** kind 'rooms': the rooms and doors / windows read off the plan; walls, columns and beams follow from them. */
+  rooms?: Room[];
+  roomOpenings?: RoomOpening[];
+  /** kind 'rooms': longest wall between two columns before one more column is put in (mm). */
+  maxColumnSpan?: number;
   /**
    * Elements added by hand on top of a building / boundary wall template (a wall, a footing …).
    * Same box format as a free model, with x / y measured from the model centre (mm).
@@ -151,7 +175,8 @@ export type ElementRef =
   | { kind: 'lintel' | 'chhajja'; code: string; row: number }
   | { kind: 'slab' }
   | { kind: 'free'; index: number }
-  | { kind: 'extra'; index: number };
+  | { kind: 'extra'; index: number }
+  | { kind: 'gen'; code: string };
 
 export interface BuildSummary {
   footings: number;
@@ -276,6 +301,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
 
   errors.push(...headerErrors(spec));
   if (kindOf(spec) === 'free') return buildFree(spec, errors, warnings);
+  if (kindOf(spec) === 'rooms') return buildRooms(spec, errors, warnings);
   const boundary = kindOf(spec) === 'boundary';
 
   // ---- grid ----
@@ -901,11 +927,21 @@ function cutOpenings(boxes: FreeElement[], elements: ModelDocument['elements'], 
       holes.push({ center: r(mm(alongX ? along : -along), 4), bottom: r(mm(ob.z - wb.z), 4), width: r(mm(width), 4), height: r(mm(ob.h), 4) });
       area += mm(width) * mm(ob.h);
     });
-    if (!holes.length) return;
+    // lintels over those openings sit in the wall too: their concrete is not brickwork
+    let lintelVol = 0;
+    boxes.forEach((lb) => {
+      if (lb.type !== 'lintel') return;
+      const along = alongX ? lb.x - wb.x : lb.y - wb.y;
+      const across = alongX ? lb.y - wb.y : lb.x - wb.x;
+      const length = alongX ? lb.l : lb.w;
+      if (Math.abs(across) <= thick / 2 + 50 && Math.abs(along) + length / 2 <= len / 2 + 1 && lb.z >= wb.z - 1 && lb.z + lb.h <= wb.z + wb.h + 1)
+        lintelVol += mm(length) * mm(thick) * mm(lb.h);
+    });
+    if (!holes.length && !lintelVol) return;
     const e = elements[i];
-    if (e.geometry.shape === 'wall') e.geometry = { ...e.geometry, openings: holes };
+    if (e.geometry.shape === 'wall' && holes.length) e.geometry = { ...e.geometry, openings: holes };
     const t = mm(thick);
-    const brick = Math.max((e.plannedQuantities.BRICK?.quantity ?? 0) - area * t, 0);
+    const brick = Math.max((e.plannedQuantities.BRICK?.quantity ?? 0) - area * t - lintelVol, 0);
     const plaster = Math.max((e.plannedQuantities.PLAST?.quantity ?? 0) - 2 * area, 0);
     sum.brickwork -= (e.plannedQuantities.BRICK?.quantity ?? 0) - brick;
     sum.plaster -= (e.plannedQuantities.PLAST?.quantity ?? 0) - plaster;
@@ -997,6 +1033,191 @@ function buildFree(spec: BuilderSpec, errors: string[], warnings: string[]): Bui
   });
 }
 
+/**
+ * A building from its rooms. Walls run exactly on the room edges (a wall two rooms share is built
+ * once); columns stand at every corner and junction of the walls, and along walls longer than
+ * maxColumnSpan; footings under the columns; plinth and roof beams and the walls between column
+ * faces; doors / windows in the wall they sit on, with lintels; the roof slab over the outline.
+ * Sizes come from the first column / footing type and sections 4 and 5 of the form.
+ */
+function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): BuildResult {
+  const fail = (): BuildResult => ({ errors, warnings, document: null, summary: null, refs: {}, auto: {} });
+  const rooms = spec.rooms ?? [];
+  if (!rooms.length) errors.push('Add at least one room (section 2) — read the drawing with AI, or type the rooms in.');
+  rooms.forEach((rm, i) => {
+    const label = `Room ${i + 1}${rm.name?.trim() ? ` (${rm.name.trim()})` : ''}`;
+    if (![rm.x, rm.y].every((n) => typeof n === 'number' && Number.isFinite(n))) errors.push(`${label}: X and Y must be numbers (mm).`);
+    if (!pos(rm.w) || !pos(rm.d)) errors.push(`${label}: width and depth must be positive (mm).`);
+  });
+  const col = spec.columnTypes[0];
+  const foot = col ? (spec.footingTypes.find((x) => x.code.trim() === col.footing.trim()) ?? spec.footingTypes[0]) : spec.footingTypes[0];
+  if (!col || !pos(col.w) || !pos(col.d)) errors.push('Column size (section 3, first row) must be positive (mm).');
+  if (!foot || !pos(foot.w) || !pos(foot.d) || !pos(foot.t)) errors.push('Footing size (section 3) must be positive (mm).');
+  if (!pos(spec.foundationDepth)) errors.push('Foundation depth (footing bottom below ground) must be positive (mm).');
+  if (!pos(spec.roofLevel)) errors.push('Roof level must be positive (mm above ground).');
+  if (spec.plinthBeam.enabled && (!pos(spec.plinthBeam.w) || !pos(spec.plinthBeam.h))) errors.push('Plinth beam size must be positive (mm).');
+  if (spec.roofBeam.enabled && (!pos(spec.roofBeam.w) || !pos(spec.roofBeam.h))) errors.push('Roof beam size must be positive (mm).');
+  if (spec.slab.enabled && !pos(spec.slab.t)) errors.push('Slab thickness must be positive (mm).');
+  if (!pos(spec.walls.t)) errors.push('Wall thickness must be positive (mm).');
+  const maxSpan = spec.maxColumnSpan ?? 4500;
+  if (!(maxSpan >= 1000)) errors.push('Longest wall between columns must be at least 1000 mm.');
+  (['footing', 'column', 'beam', 'slab'] as const).forEach((k) => {
+    if (!(spec.steel[k] >= 0)) errors.push(`Steel rate for ${k} must be 0 or more (kg/m³).`);
+  });
+  if (errors.length) return fail();
+
+  // ---- wall lines from the room edges (10 mm tolerance), merged so a shared wall is built once ----
+  const R = (n: number) => Math.round(n / 10) * 10;
+  type Iv = [number, number];
+  const hRaw = new Map<number, Iv[]>();
+  const vRaw = new Map<number, Iv[]>();
+  const add = (m: Map<number, Iv[]>, k: number, a: number, b: number) => m.set(k, [...(m.get(k) ?? []), [Math.min(a, b), Math.max(a, b)]]);
+  for (const rm of rooms) {
+    const [x0, x1, y0, y1] = [R(rm.x), R(rm.x + rm.w), R(rm.y), R(rm.y + rm.d)];
+    add(hRaw, y0, x0, x1);
+    add(hRaw, y1, x0, x1);
+    add(vRaw, x0, y0, y1);
+    add(vRaw, x1, y0, y1);
+  }
+  const merge = (ivs: Iv[]) =>
+    [...ivs]
+      .sort((p, q) => p[0] - q[0])
+      .reduce<Iv[]>((out, iv) => {
+        const last = out[out.length - 1];
+        if (last && iv[0] <= last[1] + 1) last[1] = Math.max(last[1], iv[1]);
+        else out.push([iv[0], iv[1]]);
+        return out;
+      }, []);
+  type Line = { axis: 'x' | 'y'; at: number; a: number; b: number };
+  const lines: Line[] = [
+    ...[...hRaw].flatMap(([y, ivs]) => merge(ivs).map(([a, b]) => ({ axis: 'x' as const, at: y, a, b }))),
+    ...[...vRaw].flatMap(([x, ivs]) => merge(ivs).map(([a, b]) => ({ axis: 'y' as const, at: x, a, b }))),
+  ];
+
+  // ---- column points: ends and crossings of the wall lines, then more along long walls ----
+  const stops = lines.map((ln) => {
+    const at = new Set([ln.a, ln.b]);
+    for (const o of lines) {
+      if (o.axis === ln.axis) continue;
+      if (o.at >= ln.a - 1 && o.at <= ln.b + 1 && ln.at >= o.a - 1 && ln.at <= o.b + 1) at.add(o.at);
+    }
+    const sorted = [...at].sort((p, q) => p - q);
+    const out: number[] = [sorted[0]];
+    for (let i = 1; i < sorted.length; i++) {
+      const gap = sorted[i] - sorted[i - 1];
+      const n = Math.ceil(gap / maxSpan - 1e-9);
+      for (let k = 1; k < n; k++) out.push(Math.round(sorted[i - 1] + (gap * k) / n));
+      out.push(sorted[i]);
+    }
+    return out;
+  });
+  const points = new Map<string, { x: number; y: number }>();
+  lines.forEach((ln, i) => stops[i].forEach((t) => {
+    const p = ln.axis === 'x' ? { x: t, y: ln.at } : { x: ln.at, y: t };
+    points.set(`${p.x},${p.y}`, p);
+  }));
+  const pts = [...points.values()].sort((p, q) => p.y - q.y || p.x - q.x);
+
+  const prefix = spec.modelId.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 10) || 'MDL';
+  const bId = `BLD-${prefix}`;
+  const cx = (Math.min(...pts.map((p) => p.x)) + Math.max(...pts.map((p) => p.x))) / 2;
+  const cy = (Math.min(...pts.map((p) => p.y)) + Math.max(...pts.map((p) => p.y))) / 2;
+  const omit = new Set(spec.omit ?? []);
+  const boxes: FreeElement[] = [];
+  const colTop = spec.roofLevel;
+  const footTop = -spec.foundationDepth + foot!.t;
+  pts.forEach((p, i) => {
+    boxes.push({ code: `F${i + 1}`, type: 'footing', x: p.x, y: p.y, z: -spec.foundationDepth, l: foot!.w, w: foot!.d, h: foot!.t });
+    boxes.push({ code: `C${i + 1}`, type: 'column', x: p.x, y: p.y, z: footTop, l: col!.w, w: col!.d, h: colTop - footTop });
+  });
+
+  // ---- wall pieces between neighbouring columns on each line: beams, walls ----
+  type Piece = { axis: 'x' | 'y'; at: number; a: number; b: number; key: string };
+  const pieces: Piece[] = [];
+  lines.forEach((ln, i) => {
+    for (let k = 0; k + 1 < stops[i].length; k++) {
+      const half = (ln.axis === 'x' ? col!.w : col!.d) / 2;
+      const a = stops[i][k] + half;
+      const b = stops[i][k + 1] - half;
+      if (b - a > 10) pieces.push({ axis: ln.axis, at: ln.at, a, b, key: `${pieces.length + 1}` });
+    }
+  });
+  const along = (pc: Piece, len: number, thick: number, z: number, h: number, mid = (pc.a + pc.b) / 2) =>
+    pc.axis === 'x' ? { x: mid, y: pc.at, z, l: len, w: thick, h } : { x: pc.at, y: mid, z, l: thick, w: len, h };
+  const wallTop = spec.roofBeam.enabled ? spec.roofLevel - spec.roofBeam.h : spec.roofLevel;
+  pieces.forEach((pc, i) => {
+    const len = pc.b - pc.a;
+    if (spec.plinthBeam.enabled) boxes.push({ code: `PB${i + 1}`, type: 'beam', ...along(pc, len, spec.plinthBeam.w, -spec.plinthBeam.h, spec.plinthBeam.h) });
+    if (spec.roofBeam.enabled) boxes.push({ code: `RB${i + 1}`, type: 'beam', ...along(pc, len, spec.roofBeam.w, spec.roofLevel - spec.roofBeam.h, spec.roofBeam.h) });
+    if (spec.walls.enabled && wallTop > 0) boxes.push({ code: `W${i + 1}`, type: 'wall', ...along(pc, len, spec.walls.t, 0, wallTop) });
+  });
+
+  // ---- doors / windows in the wall piece they sit on, with lintels ----
+  let nd = 0, nw = 0;
+  (spec.roomOpenings ?? []).forEach((o, i) => {
+    if (!spec.walls.enabled) return;
+    const label = `${o.type === 'door' ? 'Door' : 'Window'} ${i + 1} at ${Math.round(o.x)} / ${Math.round(o.y)} mm`;
+    if (!pos(o.width) || !pos(o.height)) return errors.push(`${label}: width and height must be positive (mm).`);
+    const near = pieces
+      .map((pc) => {
+        const t = pc.axis === 'x' ? o.x : o.y;
+        const d = Math.abs((pc.axis === 'x' ? o.y : o.x) - pc.at);
+        return { pc, t, d };
+      })
+      .filter(({ pc, t, d }) => d <= 450 && t >= pc.a - 1 && t <= pc.b + 1)
+      .sort((p, q) => p.d - q.d)[0];
+    if (!near) return warnings.push(`${label} is not on a wall between two columns — add it by hand.`);
+    const { pc } = near;
+    const width = Math.min(o.width, pc.b - pc.a);
+    const t = Math.min(Math.max(near.t, pc.a + width / 2), pc.b - width / 2);
+    const sill = o.type === 'door' ? 0 : Math.max(o.sill, 0);
+    const height = Math.min(o.height, wallTop - sill);
+    if (height <= 0) return warnings.push(`${label} does not fit under the roof beam — check its sill and height.`);
+    const code = o.type === 'door' ? `D${++nd}` : `WN${++nw}`;
+    boxes.push({ code, type: o.type, ...along(pc, width, spec.walls.t + 20, sill, height, t) });
+    if (spec.lintel.enabled && sill + height + spec.lintel.h <= wallTop) {
+      const lo = Math.max(t - width / 2 - spec.lintel.bearing, pc.a);
+      const hi = Math.min(t + width / 2 + spec.lintel.bearing, pc.b);
+      boxes.push({ code: `L-${code}`, type: 'lintel', ...along(pc, hi - lo, spec.walls.t, sill + height, spec.lintel.h, (lo + hi) / 2) });
+    }
+  });
+  if (errors.length) return fail();
+
+  // ---- roof slab over the outline ----
+  if (spec.slab.enabled) {
+    const minX = Math.min(...pts.map((p) => p.x)) - col!.w / 2 - spec.slab.overhang;
+    const maxX = Math.max(...pts.map((p) => p.x)) + col!.w / 2 + spec.slab.overhang;
+    const minY = Math.min(...pts.map((p) => p.y)) - col!.d / 2 - spec.slab.overhang;
+    const maxY = Math.max(...pts.map((p) => p.y)) + col!.d / 2 + spec.slab.overhang;
+    boxes.push({ code: 'SL-RF', type: 'slab', x: (minX + maxX) / 2, y: (minY + maxY) / 2, z: spec.roofLevel, l: maxX - minX, w: maxY - minY, h: spec.slab.t });
+  }
+
+  const kept = boxes.filter((b) => !omit.has(b.code));
+  const sum = emptySummary();
+  const refs: Record<string, ElementRef> = {};
+  const elements = kept.map((b) => {
+    const id = `${prefix}-R-${b.code}`;
+    refs[id] = { kind: 'gen', code: b.code };
+    return boxElement(b, id, bId, cx, cy, spec.steel, sum);
+  });
+
+  // elements added by hand, measured from the model centre like on the other templates
+  const extras = spec.extraElements ?? [];
+  if (extras.length) {
+    errors.push(...freeErrors(extras, 'Added element', new Set(elements.map((e) => e.code))));
+    if (errors.length) return fail();
+    extras.forEach((x, i) => {
+      const id = `${prefix}-X-${x.code.trim().replace(/[^A-Za-z0-9_.-]+/g, '_')}`;
+      refs[id] = { kind: 'extra', index: i };
+      elements.push(boxElement(x, id, bId, 0, 0, spec.steel, sum));
+    });
+    warnings.push(`${extras.length} element${extras.length === 1 ? ' was' : 's were'} added by hand — check their position and size against the drawing.`);
+  }
+  // doors / windows cut their wall, whether made from the rooms or by hand (both in plan mm here)
+  cutOpenings([...kept, ...extras.map((x) => ({ ...x, x: x.x + cx, y: x.y + cy }))], elements, sum);
+  return finishModel(spec, { elements, sum, errors, warnings, refs, bId, foundation: -mm(spec.foundationDepth), roof: mm(spec.roofLevel), removed: omit.size });
+}
+
 /** A model's elements as a free model (to change anything the templates cannot). Walls lose their cut-outs. */
 export function toFreeElements(doc: ModelDocument): FreeElement[] {
   const n = (m: number) => Math.round(m * 1000) + 0;
@@ -1040,6 +1261,8 @@ export function removeElement(spec: BuilderSpec, ref: ElementRef): BuilderSpec {
       return { ...spec, freeElements: (spec.freeElements ?? []).filter((_, i) => i !== ref.index) };
     case 'extra':
       return { ...spec, extraElements: (spec.extraElements ?? []).filter((_, i) => i !== ref.index) };
+    case 'gen':
+      return omitWith(ref.code);
     default:
       return omitWith(ref.code);
   }

@@ -98,6 +98,8 @@ export function ModelViewer(props: ModelViewerProps) {
     scene.add(root);
 
     const controls = new OrbitControls(camera, renderer.domElement);
+    // stay above the ground: looking from below turned the model upside down for users
+    controls.maxPolarAngle = Math.PI / 2 - 0.03;
     controls.screenSpacePanning = true;
     controls.maxDistance = 120;
     controls.minDistance = 0.5;

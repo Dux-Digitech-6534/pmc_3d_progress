@@ -6,6 +6,8 @@ import { GeminiError, readDrawingsWithGemini } from '../src/ai/geminiReader';
 const cabin = (): DrawingReading => ({
   structureKind: 'building',
   elements: [],
+  rooms: [],
+  roomOpenings: [],
   projectName: 'Security Cabin',
   buildingName: 'Security Cabin',
   xSpansMm: [3230],
