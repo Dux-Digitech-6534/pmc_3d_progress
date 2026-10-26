@@ -472,3 +472,26 @@ describe('model builder — free model', () => {
     expect(res.summary!.concrete).toBeCloseTo(buildModel({ ...defaultSpec(), openings: [] }).summary!.concrete, 2);
   });
 });
+
+describe('model builder — elements added by hand on a template', () => {
+  const extra = { code: 'W-N1', type: 'wall' as const, x: 0, y: 3000, z: 0, l: 3000, w: 230, h: 2700 };
+
+  it('adds them to the template model with their own quantities, and removes them again', () => {
+    const base = buildModel({ ...defaultSpec(), openings: [] });
+    const res = buildModel({ ...defaultSpec(), openings: [], extraElements: [extra] });
+    expect(res.errors).toEqual([]);
+    expect(res.summary!.walls).toBe(base.summary!.walls + 1);
+    const wall = res.document!.elements.find((e) => e.code === 'W-N1')!;
+    expect(wall.plannedQuantities.BRICK.quantity).toBeCloseTo(3 * 0.23 * 2.7, 3);
+    expect(wall.geometry.position).toEqual([0, 1.35, -3]); // x / y from the model centre; plan Y is −Z in 3D
+    expect(res.refs[wall.id]).toEqual({ kind: 'extra', index: 0 });
+    expect(validateModelDocument(res.document).errors).toEqual([]);
+    const back = removeElement({ ...defaultSpec(), openings: [], extraElements: [extra] }, res.refs[wall.id]);
+    expect(back.extraElements).toEqual([]);
+  });
+
+  it('refuses a code the template already uses', () => {
+    const res = buildModel({ ...defaultSpec(), openings: [], extraElements: [{ ...extra, code: 'C1-X1Y1' }] });
+    expect(res.errors[0]).toMatch(/"C1-X1Y1" is used twice/);
+  });
+});

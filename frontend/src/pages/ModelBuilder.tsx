@@ -20,6 +20,7 @@ import {
   ACTIVITIES,
   blankSpec,
   buildModel,
+  NEW_ELEMENT,
   formatSpans,
   kindOf,
   toFreeElements,
@@ -208,10 +209,51 @@ export function ModelBuilder() {
   const previewIds = useMemo(() => new Set(preview.map((e) => e.id)), [preview]);
   // Click an element in the live preview to see its details and change or remove it.
   const [picked, setPicked] = useState<string | null>(null);
+  // an element just added by hand is selected once the preview has it
+  const [pickCode, setPickCode] = useState<string | null>(null);
   const [undoSpec, setUndoSpec] = useState<BuilderSpec | null>(null);
   const pickedEl = picked ? preview.find((e) => e.id === picked) : undefined;
   const pickedRef = picked ? built.refs[picked] : undefined;
   const selection = useMemo(() => new Set(pickedEl ? [pickedEl.id] : []), [pickedEl]);
+  useEffect(() => {
+    if (!pickCode) return;
+    const el = built.document?.elements.find((e) => e.code === pickCode);
+    if (el) {
+      setPicked(el.id);
+      setPickCode(null);
+    }
+  }, [built, pickCode]);
+
+  /**
+   * Add an element by hand: next to the selected one (to its right), else at the centre. In a free
+   * model it joins the element list; on a template it is kept as an extra element of the spec.
+   */
+  function addElement(type: ElementType) {
+    const base = NEW_ELEMENT[type];
+    const listKey = kind === 'free' ? 'freeElements' : 'extraElements';
+    const list = spec[listKey] ?? [];
+    let x = 0;
+    let y = 0;
+    if (kind === 'free' && pickedRef?.kind === 'free' && spec.freeElements?.[pickedRef.index]) {
+      const fe = spec.freeElements[pickedRef.index];
+      x = fe.x + fe.l / 2 + base.l / 2 + 200;
+      y = fe.y;
+    } else if (kind !== 'free' && pickedEl) {
+      const g = pickedEl.geometry;
+      x = Math.round(g.position[0] * 1000 + g.size[0] * 500 + base.l / 2 + 200);
+      y = Math.round(-g.position[2] * 1000);
+    } else if (kind === 'free' && list.length) {
+      x = Math.max(...list.map((e) => e.x + e.l / 2)) + base.l / 2 + 500;
+    }
+    const tag: Record<ElementType, string> = { footing: 'F', column: 'C', beam: 'B', slab: 'S', wall: 'W', lintel: 'L', chhajja: 'CH', door: 'D', window: 'WN' };
+    const taken = new Set([...(built.document?.elements.map((e) => e.code) ?? []), ...list.map((e) => e.code.trim())]);
+    let n = 1;
+    while (taken.has(`${tag[type]}-N${n}`)) n++;
+    const code = `${tag[type]}-N${n}`;
+    setSpec({ [listKey]: [...list, { code, type, x, y, ...base }] });
+    setPickCode(code);
+  }
+
   /** A removal from the element panel; the previous form can be restored with Undo until the next change. */
   const undoable = useRef(false);
   const editFromPanel = (next: BuilderSpec) => {
@@ -489,9 +531,25 @@ export function ModelBuilder() {
                     frameKey={previewFrameKey}
                   />
                   <span className="pane-tag">Live 3D preview — click an element to see, change or remove it</span>
-                  <button className="btn btn-small builder-preview-fit" onClick={() => setResetSignal((n) => n + 1)}>
-                    Fit view
-                  </button>
+                  <div className="builder-preview-tools">
+                    <select
+                      className="btn btn-small"
+                      value=""
+                      aria-label="Add an element"
+                      title={pickedEl ? `Adds it next to ${pickedEl.code}` : 'Click an element first to add the new one next to it'}
+                      onChange={(e) => e.target.value && addElement(e.target.value as ElementType)}
+                    >
+                      <option value="">+ Add element…</option>
+                      {ELEMENT_TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {t[0].toUpperCase() + t.slice(1)}
+                        </option>
+                      ))}
+                    </select>
+                    <button className="btn btn-small" onClick={() => setResetSignal((n) => n + 1)}>
+                      Fit view
+                    </button>
+                  </div>
                   {pickedEl && pickedRef ? (
                     <BuilderElementPanel
                       el={pickedEl}
@@ -507,8 +565,11 @@ export function ModelBuilder() {
                       onClose={() => setPicked(null)}
                     />
                   ) : (
-                    ((spec.omit?.length ?? 0) > 0 || undoSpec) && (
+                    ((spec.omit?.length ?? 0) > 0 || undoSpec || (spec.extraElements?.length ?? 0) > 0) && (
                       <div className="builder-pick-bar">
+                        {(spec.extraElements?.length ?? 0) > 0 && kind !== 'free' && (
+                          <span className="pane-tag pane-tag-inline">{spec.extraElements!.length} added by hand — click one to change it</span>
+                        )}
                         {undoSpec && (
                           <button
                             className="btn btn-small"
@@ -1392,6 +1453,7 @@ const KIND_LABEL: Record<ElementRef['kind'], string> = {
   chhajja: 'Chhajja',
   slab: 'Roof slab',
   free: 'Element',
+  extra: 'Element added by hand',
 };
 
 /**
@@ -1614,11 +1676,13 @@ function BuilderElementPanel({
       );
       removeHint = 'Only this chhajja is removed.';
       break;
-    case 'free': {
-      const list = spec.freeElements ?? [];
+    case 'free':
+    case 'extra': {
+      const listKey = elRef.kind === 'free' ? 'freeElements' : 'extraElements';
+      const list = spec[listKey] ?? [];
       const fe = list[elRef.index];
       if (!fe) break;
-      const upd = (patch: Partial<FreeElement>) => set({ freeElements: list.map((x, i) => (i === elRef.index ? { ...x, ...patch } : x)) });
+      const upd = (patch: Partial<FreeElement>) => set({ [listKey]: list.map((x, i) => (i === elRef.index ? { ...x, ...patch } : x)) });
       edit = (
         <>
           <label className="pick-row">
@@ -1636,7 +1700,7 @@ function BuilderElementPanel({
             <input value={fe.code} onChange={(e) => upd({ code: e.target.value })} style={{ width: 120 }} />
           </label>
           <div className="pick-row">
-            <span>Centre X / Y (mm)</span>
+            <span>Centre X / Y (mm{elRef.kind === 'extra' ? ', from the model centre' : ''})</span>
             <span>
               <N value={fe.x} onChange={(x) => upd({ x })} label="Centre X" width={64} /> / <N value={fe.y} onChange={(y) => upd({ y })} label="Centre Y" width={64} />
             </span>
@@ -1653,10 +1717,10 @@ function BuilderElementPanel({
             </span>
           </div>
           <div className="pick-actions">
-            <button className="btn btn-small" onClick={() => set({ freeElements: [...list.slice(0, elRef.index + 1), copyNext(fe, list, 'x'), ...list.slice(elRef.index + 1)] })}>
+            <button className="btn btn-small" onClick={() => set({ [listKey]: [...list.slice(0, elRef.index + 1), copyNext(fe, list, 'x'), ...list.slice(elRef.index + 1)] })}>
               + Copy to the right
             </button>
-            <button className="btn btn-small" onClick={() => set({ freeElements: [...list.slice(0, elRef.index + 1), copyNext(fe, list, 'y'), ...list.slice(elRef.index + 1)] })}>
+            <button className="btn btn-small" onClick={() => set({ [listKey]: [...list.slice(0, elRef.index + 1), copyNext(fe, list, 'y'), ...list.slice(elRef.index + 1)] })}>
               + Copy behind
             </button>
           </div>

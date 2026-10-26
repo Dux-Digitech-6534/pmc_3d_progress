@@ -88,6 +88,11 @@ export interface BuilderSpec {
   kind?: StructureKind;
   /** The elements of a free model. */
   freeElements?: FreeElement[];
+  /**
+   * Elements added by hand on top of a building / boundary wall template (a wall, a footing …).
+   * Same box format as a free model, with x / y measured from the model centre (mm).
+   */
+  extraElements?: FreeElement[];
   projectId: string;
   projectName: string;
   location?: string;
@@ -145,7 +150,8 @@ export type ElementRef =
   | { kind: 'opening'; row: number }
   | { kind: 'lintel' | 'chhajja'; code: string; row: number }
   | { kind: 'slab' }
-  | { kind: 'free'; index: number };
+  | { kind: 'free'; index: number }
+  | { kind: 'extra'; index: number };
 
 export interface BuildSummary {
   footings: number;
@@ -664,6 +670,20 @@ export function buildModel(spec: BuilderSpec): BuildResult {
     sum.slabs++;
   }
 
+  // ---- elements added by hand on top of the template ----
+  const extras = spec.extraElements ?? [];
+  if (extras.length) {
+    const taken = new Set(elements.map((e) => e.code));
+    errors.push(...freeErrors(extras, 'Added element', taken));
+    if (errors.length) return fail();
+    extras.forEach((f, i) => {
+      const id = `${prefix}-X-${f.code.trim().replace(/[^A-Za-z0-9_.-]+/g, '_')}`;
+      refs[id] = { kind: 'extra', index: i };
+      elements.push(boxElement(f, id, bId, 0, 0, spec.steel, sum));
+    });
+    warnings.push(`${extras.length} element${extras.length === 1 ? ' was' : 's were'} added by hand — check their position and size against the drawing.`);
+  }
+
   return finishModel(spec, { elements, sum, errors, warnings, refs, bId, foundation: -depth, roof, removed: omit.size });
 }
 
@@ -795,22 +815,84 @@ const COUNT_OF: Record<ElementType, keyof BuildSummary> = {
   chhajja: 'chhajjas',
 };
 
-/** A free model: every element as listed, quantities from its own box. */
-function buildFree(spec: BuilderSpec, errors: string[], warnings: string[]): BuildResult {
-  const fail = (): BuildResult => ({ errors, warnings, document: null, summary: null, refs: {}, auto: {} });
-  const list = spec.freeElements ?? [];
-  if (!list.length) errors.push('Add at least one element to the free model (section 2), or choose another structure type.');
+/** Problems of a list of box elements (free model or extras), in plain words. */
+function freeErrors(list: FreeElement[], what: string, taken: Set<string> = new Set()): string[] {
+  const errors: string[] = [];
   const seen = new Set<string>();
   list.forEach((f, i) => {
     const code = (f.code ?? '').trim();
-    const label = `Element row ${i + 1}${code ? ` (${code})` : ''}`;
+    const label = `${what} row ${i + 1}${code ? ` (${code})` : ''}`;
     if (!code) errors.push(`${label}: code is required, e.g. F1, C1, W-FRONT.`);
-    else if (seen.has(code)) errors.push(`Element code "${code}" is used twice — every element needs its own code.`);
+    else if (seen.has(code) || taken.has(code)) errors.push(`Element code "${code}" is used twice — every element needs its own code.`);
     seen.add(code);
     if (!ELEMENT_TYPES.includes(f.type)) errors.push(`${label}: choose its type.`);
     if (![f.x, f.y, f.z].every((n) => typeof n === 'number' && Number.isFinite(n))) errors.push(`${label}: position X, Y and bottom level must be numbers (mm).`);
     if (!pos(f.l) || !pos(f.w) || !pos(f.h)) errors.push(`${label}: length, width and height must be positive (mm).`);
   });
+  return errors;
+}
+
+/** One element from a box (mm), centred on (cx, cy), with quantities from the box itself. */
+function boxElement(f: FreeElement, id: string, bId: string, cx: number, cy: number, steel: SteelRates, sum: BuildSummary): ModelDocument['elements'][number] {
+  const L = mm(f.l), W = mm(f.w), H = mm(f.h);
+  const position: [number, number, number] = [r(mm(f.x - cx), 4), r(mm(f.z) + H / 2, 4), r(-mm(f.y - cy), 4) + 0];
+  const size: [number, number, number] = [r(L, 4), r(H, 4), r(W, 4)];
+  const q: Record<string, { quantity: number; unit: 'kg' | 'm2' | 'm3' | 'nos' }> = {};
+  const rate = STEEL_OF[f.type];
+  if (rate) {
+    const conc = L * W * H;
+    const long = Math.max(L, W), short = Math.min(L, W);
+    const shut =
+      f.type === 'footing' || f.type === 'column' ? 2 * (L + W) * H : f.type === 'beam' || f.type === 'lintel' ? (2 * H + short) * long : L * W + 2 * (L + W) * H;
+    q.SHUT = { quantity: r(shut, 2), unit: 'm2' };
+    q.CONC = { quantity: r(conc, 3), unit: 'm3' };
+    sum.concrete += conc;
+    sum.shuttering += shut;
+    if (steel[rate] > 0) {
+      q.REINF = { quantity: r(conc * steel[rate], 1), unit: 'kg' };
+      sum.steel += conc * steel[rate];
+    }
+  } else if (f.type === 'wall') {
+    const brick = L * W * H, plaster = 2 * Math.max(L, W) * H;
+    q.BRICK = { quantity: r(brick, 3), unit: 'm3' };
+    q.PLAST = { quantity: r(plaster, 2), unit: 'm2' };
+    sum.brickwork += brick;
+    sum.plaster += plaster;
+  } else {
+    q.FIX = { quantity: 1, unit: 'nos' };
+  }
+  sum[COUNT_OF[f.type]]++;
+  return {
+    id,
+    code: f.code.trim(),
+    type: f.type,
+    buildingId: bId,
+    levelId: f.type === 'footing' ? 'FDN' : f.type === 'slab' ? 'RF' : 'GF',
+    geometry: { shape: f.type === 'wall' ? 'wall' : 'box', position, size },
+    plannedQuantities: q,
+    notes: `${f.type[0].toUpperCase()}${f.type.slice(1)} ${f.l} × ${f.w} × ${f.h} mm, bottom at ${f.z} mm`,
+  };
+}
+
+/** A starting size (mm) for an element added by hand, by type: what a small RCC building usually has. */
+export const NEW_ELEMENT: Record<ElementType, Omit<FreeElement, 'code' | 'type' | 'x' | 'y'>> = {
+  footing: { z: -1000, l: 1200, w: 1200, h: 300 },
+  column: { z: -700, l: 300, w: 300, h: 3700 },
+  beam: { z: 2700, l: 3000, w: 230, h: 300 },
+  slab: { z: 3000, l: 3000, w: 3000, h: 125 },
+  wall: { z: 0, l: 3000, w: 230, h: 2700 },
+  lintel: { z: 2100, l: 1500, w: 230, h: 150 },
+  chhajja: { z: 2250, l: 1500, w: 450, h: 75 },
+  door: { z: 0, l: 900, w: 40, h: 2100 },
+  window: { z: 900, l: 1200, w: 40, h: 1200 },
+};
+
+/** A free model: every element as listed, quantities from its own box. */
+function buildFree(spec: BuilderSpec, errors: string[], warnings: string[]): BuildResult {
+  const fail = (): BuildResult => ({ errors, warnings, document: null, summary: null, refs: {}, auto: {} });
+  const list = spec.freeElements ?? [];
+  if (!list.length) errors.push('Add at least one element to the free model (section 2), or choose another structure type.');
+  errors.push(...freeErrors(list, 'Element'));
   (['footing', 'column', 'beam', 'slab'] as const).forEach((k) => {
     if (!(spec.steel[k] >= 0)) errors.push(`Steel rate for ${k} must be 0 or more (kg/m³).`);
   });
@@ -830,44 +912,7 @@ function buildFree(spec: BuilderSpec, errors: string[], warnings: string[]): Bui
     if (ids.has(id)) id = `${id}-${i + 1}`;
     ids.add(id);
     refs[id] = { kind: 'free', index: i };
-    const L = mm(f.l), W = mm(f.w), H = mm(f.h);
-    const position: [number, number, number] = [r(mm(f.x - cx), 4), r(mm(f.z) + H / 2, 4), r(-mm(f.y - cy), 4) + 0];
-    const size: [number, number, number] = [r(L, 4), r(H, 4), r(W, 4)];
-    const q: Record<string, { quantity: number; unit: 'kg' | 'm2' | 'm3' | 'nos' }> = {};
-    const rate = STEEL_OF[f.type];
-    if (rate) {
-      const conc = L * W * H;
-      const long = Math.max(L, W), short = Math.min(L, W);
-      const shut =
-        f.type === 'footing' || f.type === 'column' ? 2 * (L + W) * H : f.type === 'beam' || f.type === 'lintel' ? (2 * H + short) * long : L * W + 2 * (L + W) * H;
-      q.SHUT = { quantity: r(shut, 2), unit: 'm2' };
-      q.CONC = { quantity: r(conc, 3), unit: 'm3' };
-      sum.concrete += conc;
-      sum.shuttering += shut;
-      if (spec.steel[rate] > 0) {
-        q.REINF = { quantity: r(conc * spec.steel[rate], 1), unit: 'kg' };
-        sum.steel += conc * spec.steel[rate];
-      }
-    } else if (f.type === 'wall') {
-      const brick = L * W * H, plaster = 2 * Math.max(L, W) * H;
-      q.BRICK = { quantity: r(brick, 3), unit: 'm3' };
-      q.PLAST = { quantity: r(plaster, 2), unit: 'm2' };
-      sum.brickwork += brick;
-      sum.plaster += plaster;
-    } else {
-      q.FIX = { quantity: 1, unit: 'nos' };
-    }
-    sum[COUNT_OF[f.type]]++;
-    return {
-      id,
-      code,
-      type: f.type,
-      buildingId: bId,
-      levelId: f.type === 'footing' ? 'FDN' : f.type === 'slab' ? 'RF' : 'GF',
-      geometry: { shape: f.type === 'wall' ? 'wall' : 'box', position, size },
-      plannedQuantities: q,
-      notes: `${f.type[0].toUpperCase()}${f.type.slice(1)} ${f.l} × ${f.w} × ${f.h} mm, bottom at ${f.z} mm`,
-    };
+    return boxElement(f, id, bId, cx, cy, spec.steel, sum);
   });
   warnings.push('Free model: every element is as listed — check positions and sizes against the drawing.');
   const bottoms = list.map((f) => mm(f.z));
@@ -926,6 +971,8 @@ export function removeElement(spec: BuilderSpec, ref: ElementRef): BuilderSpec {
       return { ...spec, slab: { ...spec.slab, enabled: false } };
     case 'free':
       return { ...spec, freeElements: (spec.freeElements ?? []).filter((_, i) => i !== ref.index) };
+    case 'extra':
+      return { ...spec, extraElements: (spec.extraElements ?? []).filter((_, i) => i !== ref.index) };
     default:
       return omitWith(ref.code);
   }

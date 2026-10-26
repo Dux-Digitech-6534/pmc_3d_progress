@@ -2089,3 +2089,20 @@ details.advanced[open] > summary {
 .pick-mat .table {
   font-size: 12px;
 }
+
+/* "+ Add element" and Fit view, top right of the live 3D preview */
+.builder-preview-tools {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+}
+.builder-preview-tools select.btn {
+  padding-right: 22px;
+}
+.pane-tag-inline {
+  position: static;
+  pointer-events: auto;
+}
