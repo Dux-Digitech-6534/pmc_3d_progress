@@ -1699,11 +1699,17 @@ function BuilderElementPanel({
             <span>Code</span>
             <input value={fe.code} onChange={(e) => upd({ code: e.target.value })} style={{ width: 120 }} />
           </label>
+          <p className="hint">
+            Move it with ◀ ▶ (left / right) and ▼ ▲ (front / back), 100 mm a click, or type the centre in mm
+            {elRef.kind === 'extra' ? ' from the model centre — click a column or wall to see its position and line it up' : ''}.
+          </p>
           <div className="pick-row">
-            <span>Centre X / Y (mm{elRef.kind === 'extra' ? ', from the model centre' : ''})</span>
-            <span>
-              <N value={fe.x} onChange={(x) => upd({ x })} label="Centre X" width={64} /> / <N value={fe.y} onChange={(y) => upd({ y })} label="Centre Y" width={64} />
-            </span>
+            <span>Centre X (left / right)</span>
+            <Stepper value={fe.x} onChange={(x) => upd({ x })} label="Centre X" min={-1e7} step={100} down="◀" up="▶" />
+          </div>
+          <div className="pick-row">
+            <span>Centre Y (front / back)</span>
+            <Stepper value={fe.y} onChange={(y) => upd({ y })} label="Centre Y" min={-1e7} step={100} down="▼" up="▲" />
           </div>
           <div className="pick-row">
             <span>Bottom level (mm)</span>
@@ -1717,6 +1723,9 @@ function BuilderElementPanel({
             </span>
           </div>
           <div className="pick-actions">
+            <button className="btn btn-small" title="Turn it a quarter: a wall along left-right then runs front-back" onClick={() => upd({ l: fe.w, w: fe.l })}>
+              ↻ Rotate 90°
+            </button>
             <button className="btn btn-small" onClick={() => set({ [listKey]: [...list.slice(0, elRef.index + 1), copyNext(fe, list, 'x'), ...list.slice(elRef.index + 1)] })}>
               + Copy to the right
             </button>
@@ -1761,6 +1770,14 @@ function BuilderElementPanel({
         <span>Size X × Y × Z (mm)</span>
         <span>{size}</span>
       </div>
+      {elRef.kind !== 'free' && (
+        <div className="pick-row" title="Centre of the element in mm from the model centre (X right, Y back), and the level of its underside">
+          <span>Centre X / Y · bottom (mm)</span>
+          <span>
+            {Math.round(el.geometry.position[0] * 1000)} / {Math.round(-el.geometry.position[2] * 1000) + 0} · {Math.round((el.geometry.position[1] - el.geometry.size[1] / 2) * 1000)}
+          </span>
+        </div>
+      )}
       <div className="pick-row">
         <span>Level</span>
         <span>{el.levelId}</span>
