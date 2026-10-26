@@ -73,6 +73,8 @@ export function AiReaderCard({
   const p = PROVIDERS[provider];
   const [key, setKey] = useState(() => (IS_FRAPPE ? '' : PROVIDERS[storedProvider()].getKey()));
   const [keyInput, setKeyInput] = useState('');
+  // what the engineer wants modelled, when a drawing shows several things (e.g. boundary wall + cabin)
+  const [hint, setHint] = useState('');
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
@@ -102,6 +104,7 @@ export function AiReaderCard({
         res = await readDrawingsOnServer(
           drawings.map((d) => d.id),
           abort.current.signal,
+          hint,
         );
       } else {
         const files = [];
@@ -110,7 +113,7 @@ export function AiReaderCard({
           if (!blob) throw new Error(`${d.name} is no longer in browser storage. Upload it again.`);
           files.push({ name: d.name, kind: d.kind, blob });
         }
-        res = await p.read(files, key, abort.current.signal);
+        res = await p.read(files, key, abort.current.signal, hint);
       }
       const { spec: next, notes } = readingToSpec(res.reading, spec);
       setPrevious(spec);
@@ -226,6 +229,16 @@ export function AiReaderCard({
           is replaced; you can undo.
         </p>
       )}
+      <label className="ai-hint">
+        <span className="small">What should be modelled? (optional)</span>
+        <input
+          value={hint}
+          onChange={(e) => setHint(e.target.value)}
+          maxLength={300}
+          placeholder="e.g. boundary wall only, 40 panels of 3 m · or: security cabin"
+          disabled={busy}
+        />
+      </label>
       <div className="card-actions">
         <button className="btn btn-primary" disabled={busy || drawings.length === 0} onClick={() => void read()}>
           {busy ? `Reading… ${elapsed}s` : 'Read drawing with AI'}

@@ -23,3 +23,12 @@ describe('AI reading schemas shared with the Frappe server', () => {
     });
   }
 });
+
+describe('AI prompt shared with the Frappe server', () => {
+  it('pmc_3d_progress/ai.py asks with the same instructions as the page', async () => {
+    const { SYSTEM } = await import('../src/ai/drawingReader');
+    const py = readFileSync('../pmc_3d_progress/ai.py', 'utf8');
+    const m = /SYSTEM = """([\s\S]*?)"""/.exec(py);
+    expect(m?.[1]).toBe(SYSTEM);
+  });
+});

@@ -25,23 +25,31 @@ DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 GEMINI = "Google Gemini"
 MAX_REQUEST_BYTES = 30 * 1024 * 1024  # API request limit is 32 MB; keep headroom
 MAX_GEMINI_REQUEST_BYTES = 19 * 1024 * 1024  # Gemini inline data limit is 20 MB per request
+RETRY_SECONDS = (10, 30)
 MAX_IMAGE_EDGE = 2400  # px — enough to read dimension text; bigger images are scaled down
 MAX_IMAGE_BYTES = int(3.5 * 1024 * 1024)
 RESULT_TTL = 3600
 SCHEMA = json.loads(pathlib.Path(__file__).with_name("ai_schema.json").read_text(encoding="utf-8"))
 GEMINI_SCHEMA = json.loads(pathlib.Path(__file__).with_name("gemini_schema.json").read_text(encoding="utf-8"))
 
-SYSTEM = """You read construction drawings (plans, sections, elevations, schedules) and extract the data needed to build a simple 3D structural model of the building, including its walls, doors and windows.
+SYSTEM = """You read construction drawings (plans, sections, elevations, schedules, structural details) and extract the data needed to build a simple 3D structural model with planned quantities.
+
+First decide structureKind — what the drawing is for:
+- "building": rooms such as a cabin, house or block — columns on a grid with a roof slab. Fill the grid, schedules, levels, walls and openings.
+- "boundary-wall": a compound / boundary wall — piers (pillars) at regular spacing on a line or around a plot, with footings, a plinth beam, wall panels and a top / coping beam, and no roof. xSpansMm are the pier spacings along the wall; ySpansMm is [] for a straight wall, or the pier spacings along the other side when the wall goes around a plot. columns may be empty (every pier position is then filled with the first column type). roofLevelMm is the top of the wall (top of the coping beam) above ground and roofBeam is the coping / top beam; slab.present is false. When only a typical panel is drawn and the total length is not shown, repeat the typical spacing 10 times and say so in assumptions. Gates go in openings.
+- "other": anything else (water tank, culvert, staircase, retaining wall, multi-storey frame …). Then list every element in "elements" as a box; the grid fields may be minimal.
+If the drawing shows several structures (e.g. a boundary wall and a security cabin), model the one the engineer asked for; if they did not say, the main one in the title, and name the others in assumptions.
 
 Coordinate and naming conventions you must follow, whatever labels the drawing uses:
 - Grid lines: X1, X2, … are the vertical column lines on the plan from LEFT to RIGHT. Y1, Y2, … are the horizontal column lines from the BOTTOM edge of the plan (the front / entrance side) to the TOP. If the drawing has its own grid labels (A, B, C / 1, 2, 3), map them to this convention and say so in assumptions.
 - Spacings are centre-to-centre of columns, in millimetres. If the drawing only gives clear inside dimensions (e.g. "3000 x 3000" with 230 mm walls), add the wall / column thickness to get centre-to-centre, and record that in assumptions.
-- A grid point is written like "X1Y1". List every column position.
+- A grid point is written like "X1Y1". List every column position (a boundary wall may leave the list empty).
 - Levels are measured from ground / plinth level (0). foundationDepthMm is how far the footing bottom is below it; roofLevelMm is the top of the roof beams (bottom of the roof slab) above it.
 - Walls run along grid lines between columns. Each door / window / ventilator sits in one wall: give the two grid points at the ends of that wall and the distance from the first one to the opening centre (null when centred).
 - Use the drawing's own marks for openings (D, D1, W, V …) and the sizes from its door / window schedule. Doors have sill 0.
+- elements (only for "other"; empty otherwise): one box per footing, column, beam, slab, wall, lintel, chhajja, door or window, all in mm — xMm / yMm = centre on the plan from the left / front edge, bottomMm = level of its underside (0 = ground, negative below ground), lengthMm along X, widthMm along Y, heightMm. Use the drawing's marks as codes (F1, C1, B1 …), each code once (C1-1, C1-2 … for repeats).
 
-Only use values you can read or reasonably derive from the drawing. When something is not shown (for example footing depth, beam depth or roof level), use a typical value for a small single-storey RCC building and list it in assumptions, so an engineer can check it. Set confidence to "low" if the drawing is unclear or not a building drawing."""
+Only use values you can read or reasonably derive from the drawing. When something is not shown (for example footing size, beam depth or roof level), use a typical value for a small RCC structure and list it in assumptions, so an engineer can check it. Set confidence to "low" if the drawing is unclear or not a construction drawing."""
 
 USER_TEXT = (
 	"Read the attached drawing(s) and return the structured data for the 3D model. "
@@ -76,8 +84,8 @@ def is_configured():
 
 
 @frappe.whitelist(methods=["POST"])
-def start_reading(drawing_ids):
-	"""Queue a reading of these PMC Drawing records; returns {readingId}."""
+def start_reading(drawing_ids, hint=None):
+	"""Queue a reading of these PMC Drawing records; returns {readingId}. hint: what the engineer wants modelled."""
 	_require_modeller()
 	ids = _parse(drawing_ids) or []
 	if not ids:
@@ -100,6 +108,7 @@ def start_reading(drawing_ids):
 		reading_id=reading_id,
 		drawing_ids=ids,
 		user=frappe.session.user,
+		hint=(hint or "").strip()[:300] or None,
 	)
 	return {"readingId": reading_id}
 
@@ -113,7 +122,11 @@ def get_reading(reading_id):
 	return {k: v for k, v in state.items() if k != "user"}
 
 
-def _content_blocks(drawing_ids):
+def _user_text(hint):
+	return f"{USER_TEXT}\nThe engineer wants this modelled: {hint}" if hint else USER_TEXT
+
+
+def _content_blocks(drawing_ids, hint=None):
 	from PIL import Image  # Pillow ships with Frappe
 
 	blocks = []
@@ -147,7 +160,7 @@ def _content_blocks(drawing_ids):
 			f"The drawings are too large to send together ({total / 1024 / 1024:.1f} MB after encoding, limit about 30 MB). "
 			"Remove some drawings or upload smaller files."
 		)
-	blocks.append({"type": "text", "text": USER_TEXT})
+	blocks.append({"type": "text", "text": _user_text(hint)})
 	return blocks
 
 
@@ -192,25 +205,32 @@ def _read_with_gemini(key, model, blocks):
 	"""Returns (reading, model, input_tokens, output_tokens)."""
 	import requests
 
-	try:
-		res = requests.post(
-			f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-			headers={"Content-Type": "application/json", "x-goog-api-key": key},
-			json={
-				"system_instruction": {"parts": [{"text": SYSTEM}]},
-				"contents": [{"role": "user", "parts": _gemini_parts(blocks)}],
-				"generationConfig": {
-					"responseMimeType": "application/json",
-					"responseJsonSchema": GEMINI_SCHEMA,
-					"maxOutputTokens": 32000,
-				},
-			},
-			timeout=600,
-		)
-	except requests.Timeout:
-		raise GeminiError("The AI took too long to answer. Try again, or upload a smaller / clearer drawing.")
-	except requests.RequestException:
-		raise GeminiError("The server could not reach generativelanguage.googleapis.com. Check the server's internet access.")
+	payload = {
+		"system_instruction": {"parts": [{"text": SYSTEM}]},
+		"contents": [{"role": "user", "parts": _gemini_parts(blocks)}],
+		"generationConfig": {
+			"responseMimeType": "application/json",
+			"responseJsonSchema": GEMINI_SCHEMA,
+			"maxOutputTokens": 32000,
+		},
+	}
+	# Busy / rate-limited answers (429, 500, 503) are usually over in seconds: try up to 3 times.
+	for attempt in range(3):
+		if attempt:
+			time.sleep(RETRY_SECONDS[attempt - 1])
+		try:
+			res = requests.post(
+				f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+				headers={"Content-Type": "application/json", "x-goog-api-key": key},
+				json=payload,
+				timeout=600,
+			)
+		except requests.Timeout:
+			raise GeminiError("The AI took too long to answer. Try again, or upload a smaller / clearer drawing.")
+		except requests.RequestException:
+			raise GeminiError("The server could not reach generativelanguage.googleapis.com. Check the server's internet access.")
+		if res.status_code not in (429, 500, 503):
+			break
 	try:
 		body = res.json()
 	except ValueError:
@@ -264,14 +284,14 @@ def _error_message(e):
 	return str(e)
 
 
-def run_reading(reading_id, drawing_ids, user):
+def run_reading(reading_id, drawing_ids, user, hint=None):
 	"""Background job: read the drawings and store the result for get_reading()."""
 	started = time.time()
 	cache = _cache()
 	cache.set_value(_key(reading_id), {"status": "running", "user": user}, expires_in_sec=RESULT_TTL)
 	try:
 		provider, key, model, effort = _settings()
-		content = _content_blocks(drawing_ids)
+		content = _content_blocks(drawing_ids, hint)
 		if provider == GEMINI:
 			reading, used_model, tokens_in, tokens_out = _read_with_gemini(key, model, content)
 			state = {

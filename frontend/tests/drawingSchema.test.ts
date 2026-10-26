@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { DrawingReadingSchema, parseGrid, readingToSpec, type DrawingReading } from '../src/ai/drawingSchema';
+import { DrawingReadingSchema, parseGrid, readingToSpec, withReadingDefaults, type DrawingReading } from '../src/ai/drawingSchema';
 import { buildModel, defaultSpec } from '../src/domain/modelBuilder';
 import { validateModelDocument } from '../src/domain/modelValidation';
 
 /** What a good reading of the "Typical Drawing of Security Cabin" looks like. */
 const cabin = (): DrawingReading => ({
+  structureKind: 'building',
+  elements: [],
   projectName: 'Security Cabin',
   buildingName: 'Security Cabin',
   xSpansMm: [3230],
@@ -84,5 +86,34 @@ describe('AI drawing reading → builder spec', () => {
     expect(notes.join(' ')).toMatch(/X9Y9.*outside/);
     expect(notes.join(' ')).toMatch(/not on one grid line/);
     expect(spec.openings).toEqual([]);
+  });
+});
+
+describe('AI reading → structure type', () => {
+  it('a boundary wall reading without pier positions fills every point of the line, no slab', () => {
+    const r: DrawingReading = { ...cabin(), structureKind: 'boundary-wall', xSpansMm: [3000, 3000, 3000], ySpansMm: [], columns: [], openings: [], slab: { present: true, thicknessMm: 120, overhangMm: 0 } };
+    const { spec } = readingToSpec(r, defaultSpec());
+    expect(spec.kind).toBe('boundary');
+    expect(spec.layout).toEqual([['C1', 'C1', 'C1', 'C1']]);
+    expect(spec.slab.enabled).toBe(false);
+    expect(buildModel(spec).errors).toEqual([]);
+  });
+
+  it('"other" becomes a free model from the listed elements', () => {
+    const r: DrawingReading = {
+      ...cabin(),
+      structureKind: 'other',
+      elements: [{ code: 'T1', type: 'slab', xMm: 0, yMm: 0, bottomMm: 0, lengthMm: 2000, widthMm: 2000, heightMm: 200 }],
+    };
+    const { spec } = readingToSpec(r, defaultSpec());
+    expect(spec.kind).toBe('free');
+    expect(spec.freeElements).toEqual([{ code: 'T1', type: 'slab', x: 0, y: 0, z: 0, l: 2000, w: 2000, h: 200 }]);
+  });
+
+  it('an answer from an older server (no structure type) is read as a building', () => {
+    const { structureKind: _k, elements: _e, ...old } = cabin();
+    const parsed = DrawingReadingSchema.safeParse(withReadingDefaults(old));
+    expect(parsed.success).toBe(true);
+    expect(readingToSpec(parsed.data!, defaultSpec()).spec.kind).toBe('building');
   });
 });

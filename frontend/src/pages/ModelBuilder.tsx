@@ -18,6 +18,9 @@ import {
   ACTIVITIES,
   blankSpec,
   buildModel,
+  formatSpans,
+  kindOf,
+  toFreeElements,
   headerErrors,
   defaultSpec,
   gridLabel,
@@ -30,13 +33,15 @@ import {
   withDefaults,
   type BuilderSpec,
   type ElementRef,
+  type FreeElement,
+  type StructureKind,
   type ColumnType,
   type FootingType,
   type OpeningKind,
   type OpeningPlacement,
   type OpeningType,
 } from '../domain/modelBuilder';
-import type { ElementRecord, ModelRecord } from '../domain/types';
+import { ELEMENT_TYPES, type ElementRecord, type ElementType, type ModelRecord } from '../domain/types';
 import { TYPE_COLORS } from '../lib/colors';
 import { downloadText } from '../lib/download';
 import { useApp } from '../state/AppContext';
@@ -80,8 +85,8 @@ const nextRevision = (rev: string) => {
 export function ModelBuilder() {
   const { repo, projects, projectId, setProjectId, refresh, notify, go } = useApp();
   const [spec, setSpecState] = useState<BuilderSpec>(() => readDraft() ?? defaultSpec());
-  const [xText, setXText] = useState(() => spec.xSpans.join(', '));
-  const [yText, setYText] = useState(() => spec.ySpans.join(', '));
+  const [xText, setXText] = useState(() => formatSpans(spec.xSpans));
+  const [yText, setYText] = useState(() => formatSpans(spec.ySpans));
   const [models, setModels] = useState<ModelRecord[]>([]);
   const [drawings, setDrawings] = useState<DrawingMeta[]>([]);
   const [current, setCurrent] = useState<string | null>(null);
@@ -156,6 +161,7 @@ export function ModelBuilder() {
 
   const nx = spec.xSpans.length + 1;
   const ny = spec.ySpans.length + 1;
+  const kind = kindOf(spec);
   const columnCodes = spec.columnTypes.map((c) => c.code.trim()).filter(Boolean);
   const footingCodes = spec.footingTypes.map((f) => f.code.trim()).filter(Boolean);
 
@@ -206,7 +212,7 @@ export function ModelBuilder() {
   const latestOfModel = models.filter((m) => m.projectId === spec.projectId.trim() && m.modelId === spec.modelId.trim() && m.status !== 'Failed').at(-1);
 
   function applySpans(axis: 'x' | 'y', text: string) {
-    const spans = parseSpans(text);
+    const spans = parseSpans(text, axis === 'y' && kind === 'boundary');
     if (!spans) return;
     const xs = axis === 'x' ? spans : spec.xSpans;
     const ys = axis === 'y' ? spans : spec.ySpans;
@@ -230,8 +236,8 @@ export function ModelBuilder() {
   function startFrom(pid: string) {
     if (pid === '__new__') {
       const fresh = blankSpec();
-      setXText(fresh.xSpans.join(', '));
-      setYText(fresh.ySpans.join(', '));
+      setXText(formatSpans(fresh.xSpans));
+      setYText(formatSpans(fresh.ySpans));
       prevProjectId.current = fresh.projectId;
       setSpecState(fresh);
       setSpec({});
@@ -244,8 +250,8 @@ export function ModelBuilder() {
     const saved = savedRaw ? withDefaults(savedRaw) : undefined;
     if (saved) {
       // edit a model that was built here before: same IDs, next revision
-      setXText(saved.xSpans.join(', '));
-      setYText(saved.ySpans.join(', '));
+      setXText(formatSpans(saved.xSpans));
+      setYText(formatSpans(saved.ySpans));
       prevProjectId.current = saved.projectId;
       setSpec({ ...saved, revision: nextRevision(saved.revision) });
       notify(`Loaded ${active!.name} ${active!.revision}. Revision set to ${nextRevision(saved.revision)} — a changed model is always a new revision.`, 'info');
@@ -285,9 +291,43 @@ export function ModelBuilder() {
 
   // Spacing text that is invalid or not yet applied (applied on blur) must not build from stale values.
   const xParsed = parseSpans(xText);
-  const yParsed = parseSpans(yText);
+  const yParsed = parseSpans(yText, kind === 'boundary');
+  // a free model has no grid, so its spacings never hold up the preview
   const spansPending =
-    !xParsed || !yParsed || xParsed.join(',') !== spec.xSpans.join(',') || yParsed.join(',') !== spec.ySpans.join(',');
+    kind !== 'free' && (!xParsed || !yParsed || xParsed.join(',') !== spec.xSpans.join(',') || yParsed.join(',') !== spec.ySpans.join(','));
+
+  /** Switch the structure type, with sensible starting values for it. */
+  function setKind(next: StructureKind) {
+    if (next === kind) return;
+    if (next === 'free') {
+      const copied = spec.freeElements?.length ? null : built.document ? toFreeElements(built.document) : [];
+      setSpec({ kind: 'free', ...(copied ? { freeElements: copied } : {}) });
+      if (copied?.length) notify(`The ${copied.length} elements of the current model were copied into the free model — change, add or remove them one by one.`, 'info');
+      return;
+    }
+    if (next === 'boundary') {
+      const xs = spec.xSpans.length > 1 ? spec.xSpans : Array<number>(10).fill(3000);
+      setXText(formatSpans(xs));
+      setYText('');
+      setSpec({
+        kind: 'boundary',
+        xSpans: xs,
+        ySpans: [],
+        layout: makeLayout(xs.length + 1, 1, columnCodes[0] ?? ''),
+        roofLevel: 2100,
+        roofBeam: { ...spec.roofBeam, enabled: true, h: 150 },
+        slab: { ...spec.slab, enabled: false },
+        walls: { ...spec.walls, enabled: true, internal: false },
+        lintel: { ...spec.lintel, enabled: false },
+        chhajja: { ...spec.chhajja, enabled: false },
+        openings: [],
+      });
+      return;
+    }
+    const ys = spec.ySpans.length ? spec.ySpans : [3230];
+    setYText(formatSpans(ys));
+    setSpec({ kind: 'building', ySpans: ys, layout: resizeLayout(spec.layout, spec.xSpans.length + 1, ys.length + 1, columnCodes[0] ?? ''), slab: { ...spec.slab, enabled: true } });
+  }
 
   async function create() {
     if (!result.document || inFlight.current || spansPending) return;
@@ -517,8 +557,8 @@ export function ModelBuilder() {
             drawings={drawings}
             spec={spec}
             onApply={(next) => {
-              setXText(next.xSpans.join(', '));
-              setYText(next.ySpans.join(', '));
+              setXText(formatSpans(next.xSpans));
+              setYText(formatSpans(next.ySpans));
               setSpec(next);
             }}
           />
@@ -591,8 +631,37 @@ export function ModelBuilder() {
           </section>
 
           <section className="card">
-            <h2 className="card-title">2 · Grid (from the plan)</h2>
-            <p className="muted small">Centre-to-centre distances between grid lines in mm, as written on the drawing. Separate with commas.</p>
+            <h2 className="card-title">Structure type</h2>
+            <div className="kind-tabs" role="radiogroup" aria-label="Structure type">
+              {(
+                [
+                  ['building', 'Building', 'Columns on a grid, beams, roof slab, walls — room, cabin, house'],
+                  ['boundary', 'Boundary wall', 'Piers on a line or around a plot, plinth + top beam, wall panels, no slab'],
+                  ['free', 'Free model', 'Every footing, column, beam, wall … one by one — for anything else'],
+                ] as const
+              ).map(([k, label, hint]) => (
+                <button key={k} role="radio" aria-checked={kind === k} className={`kind-tab ${kind === k ? 'on' : ''}`} onClick={() => setKind(k)}>
+                  <b>{label}</b>
+                  <span>{hint}</span>
+                </button>
+              ))}
+            </div>
+            {kind === 'free' && (
+              <p className="hint">Switching to Free model copies the current model's elements, so you can start from a template and then change anything.</p>
+            )}
+          </section>
+
+          {kind === 'free' ? (
+            <FreeElementsCard spec={spec} setSpec={setSpec} />
+          ) : (
+          <>
+          <section className="card">
+            <h2 className="card-title">{kind === 'boundary' ? '2 · Pier line (from the plan)' : '2 · Grid (from the plan)'}</h2>
+            <p className="muted small">
+              {kind === 'boundary'
+                ? 'Centre-to-centre distance between piers (pillars) in mm. A long wall: "3000*40" = 40 panels of 3000. Leave Y empty for a straight wall; with Y spacings, use "Outer edge only" for a wall around a plot.'
+                : 'Centre-to-centre distances between grid lines in mm, as written on the drawing. Separate with commas; "3000*4" = four spacings of 3000.'}
+            </p>
             <div className="form-grid">
               <label>
                 X spacings X1→X2→… (mm)
@@ -600,7 +669,7 @@ export function ModelBuilder() {
               </label>
               <label>
                 Y spacings Y1→Y2→… (mm)
-                <input value={yText} onChange={(e) => setYText(e.target.value)} onBlur={() => applySpans('y', yText)} aria-invalid={!parseSpans(yText)} placeholder="3230" />
+                <input value={yText} onChange={(e) => setYText(e.target.value)} onBlur={() => applySpans('y', yText)} aria-invalid={!yParsed} placeholder={kind === 'boundary' ? 'empty = straight wall' : '3230'} />
               </label>
             </div>
             {(!xParsed || !yParsed) && <p className="field-error">Enter positive numbers only, e.g. 3230, 2115. The model is not generated until the spacings are valid.</p>}
@@ -614,6 +683,18 @@ export function ModelBuilder() {
                 <button className="link" onClick={() => setSpec({ layout: makeLayout(nx, ny, '') })}>
                   Clear
                 </button>
+                {kind === 'boundary' && ny > 2 && (
+                  <>
+                    {' '}
+                    ·{' '}
+                    <button
+                      className="link"
+                      onClick={() => setSpec({ layout: makeLayout(nx, ny, '').map((row, y) => row.map((_, x) => (y === 0 || y === ny - 1 || x === 0 || x === nx - 1 ? (columnCodes[0] ?? '') : ''))) })}
+                    >
+                      Outer edge only
+                    </button>
+                  </>
+                )}
               </span>
             </div>
             <div className="grid-matrix" style={{ gridTemplateColumns: `40px repeat(${nx}, minmax(64px, 1fr))` }}>
@@ -741,15 +822,22 @@ export function ModelBuilder() {
             </div>
           </section>
 
+          </>
+          )}
+
           <section className="card">
-            <h2 className="card-title">4 · Levels, beams and slab (from the section)</h2>
+            <h2 className="card-title">
+              {kind === 'free' ? '3 · Steel estimate' : kind === 'boundary' ? '4 · Levels and beams (from the wall section)' : '4 · Levels, beams and slab (from the section)'}
+            </h2>
+            {kind !== 'free' && (
+            <>
             <div className="form-grid">
               <label>
                 Footing bottom below ground (mm)
                 <N value={spec.foundationDepth} onChange={(foundationDepth) => setSpec({ foundationDepth })} width={120} />
               </label>
               <label>
-                Roof level — slab bottom above ground (mm)
+                {kind === 'boundary' ? 'Top of wall — top of the coping beam above ground (mm)' : 'Roof level — slab bottom above ground (mm)'}
                 <N value={spec.roofLevel} onChange={(roofLevel) => setSpec({ roofLevel })} width={120} />
               </label>
             </div>
@@ -776,7 +864,7 @@ export function ModelBuilder() {
                   </td>
                 </tr>
                 <tr>
-                  <td>Roof beam (top at roof level)</td>
+                  <td>{kind === 'boundary' ? 'Top / coping beam (top at wall top)' : 'Roof beam (top at roof level)'}</td>
                   <td>
                     <input type="checkbox" checked={spec.roofBeam.enabled} onChange={(e) => setSpec({ roofBeam: { ...spec.roofBeam, enabled: e.target.checked } })} />
                   </td>
@@ -787,6 +875,7 @@ export function ModelBuilder() {
                     <N value={spec.roofBeam.h} onChange={(h) => setSpec({ roofBeam: { ...spec.roofBeam, h } })} label="Roof beam depth" />
                   </td>
                 </tr>
+                {kind !== 'boundary' && (
                 <tr>
                   <td>Roof slab</td>
                   <td>
@@ -799,8 +888,11 @@ export function ModelBuilder() {
                     <span className="muted small">thick</span> <N value={spec.slab.t} onChange={(t) => setSpec({ slab: { ...spec.slab, t } })} label="Slab thickness" width={70} />
                   </td>
                 </tr>
+                )}
               </tbody>
             </table>
+            </>
+            )}
             <div className="field-label" style={{ marginTop: 12 }}>
               Reinforcement estimate (kg per m³ of concrete) — replace with BBS quantities when available, 0 = not configured
             </div>
@@ -814,8 +906,9 @@ export function ModelBuilder() {
             </div>
           </section>
 
+          {kind !== 'free' && (
           <section className="card">
-            <h2 className="card-title">5 · Walls, doors and windows (from the plan and elevation)</h2>
+            <h2 className="card-title">{kind === 'boundary' ? '5 · Wall panels and gates (from the plan and elevation)' : '5 · Walls, doors and windows (from the plan and elevation)'}</h2>
             <div className="steel-row">
               <label className="inline check">
                 <input type="checkbox" checked={spec.walls.enabled} onChange={(e) => setSpec({ walls: { ...spec.walls, enabled: e.target.checked } })} /> Brick walls
@@ -1067,9 +1160,10 @@ export function ModelBuilder() {
               </>
             )}
           </section>
+          )}
 
           <section className="card builder-result">
-            <h2 className="card-title">6 · Check and create</h2>
+            <h2 className="card-title">{kind === 'free' ? '4' : '6'} · Check and create</h2>
             {result.errors.length > 0 ? (
               <ErrorList title="Fix these to generate the model" errors={result.errors} />
             ) : (
@@ -1250,6 +1344,7 @@ const KIND_LABEL: Record<ElementRef['kind'], string> = {
   lintel: 'Lintel',
   chhajja: 'Chhajja',
   slab: 'Roof slab',
+  free: 'Element',
 };
 
 /**
@@ -1472,6 +1567,57 @@ function BuilderElementPanel({
       );
       removeHint = 'Only this chhajja is removed.';
       break;
+    case 'free': {
+      const list = spec.freeElements ?? [];
+      const fe = list[elRef.index];
+      if (!fe) break;
+      const upd = (patch: Partial<FreeElement>) => set({ freeElements: list.map((x, i) => (i === elRef.index ? { ...x, ...patch } : x)) });
+      edit = (
+        <>
+          <label className="pick-row">
+            <span>Type</span>
+            <select value={fe.type} onChange={(e) => upd({ type: e.target.value as ElementType })}>
+              {ELEMENT_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="pick-row">
+            <span>Code</span>
+            <input value={fe.code} onChange={(e) => upd({ code: e.target.value })} style={{ width: 120 }} />
+          </label>
+          <div className="pick-row">
+            <span>Centre X / Y (mm)</span>
+            <span>
+              <N value={fe.x} onChange={(x) => upd({ x })} label="Centre X" width={64} /> / <N value={fe.y} onChange={(y) => upd({ y })} label="Centre Y" width={64} />
+            </span>
+          </div>
+          <div className="pick-row">
+            <span>Bottom level (mm)</span>
+            <NS value={fe.z} onChange={(z) => upd({ z })} label="Bottom level" width={64} />
+          </div>
+          <div className="pick-row">
+            <span>L × W × H (mm)</span>
+            <span>
+              <N value={fe.l} onChange={(l) => upd({ l })} label="Length" width={56} /> × <N value={fe.w} onChange={(w) => upd({ w })} label="Width" width={56} /> ×{' '}
+              <N value={fe.h} onChange={(h) => upd({ h })} label="Height" width={56} />
+            </span>
+          </div>
+          <div className="pick-actions">
+            <button className="btn btn-small" onClick={() => set({ freeElements: [...list.slice(0, elRef.index + 1), copyNext(fe, list, 'x'), ...list.slice(elRef.index + 1)] })}>
+              + Copy to the right
+            </button>
+            <button className="btn btn-small" onClick={() => set({ freeElements: [...list.slice(0, elRef.index + 1), copyNext(fe, list, 'y'), ...list.slice(elRef.index + 1)] })}>
+              + Copy behind
+            </button>
+          </div>
+        </>
+      );
+      removeHint = 'Only this element is removed.';
+      break;
+    }
     case 'slab':
       edit = (
         <>
@@ -1562,6 +1708,106 @@ function BuilderElementPanel({
         {removeHint && <p className="hint">{removeHint}</p>}
       </div>
     </aside>
+  );
+}
+
+/** A copy of a free element next to it (to the right along X, or behind along Y), with a new code. */
+function copyNext(fe: FreeElement, list: FreeElement[], dir: 'x' | 'y'): FreeElement {
+  const codes = new Set(list.map((x) => x.code.trim()));
+  const base = fe.code.trim().replace(/-\d+$/, '') || fe.type.toUpperCase();
+  let n = 2;
+  while (codes.has(`${base}-${n}`)) n++;
+  return { ...fe, code: `${base}-${n}`, ...(dir === 'x' ? { x: fe.x + fe.l } : { y: fe.y + fe.w }) };
+}
+
+/** Free model: the element list, one row per element (mm). */
+function FreeElementsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Partial<BuilderSpec>) => void }) {
+  const list = spec.freeElements ?? [];
+  const upd = (i: number, patch: Partial<FreeElement>) => setSpec({ freeElements: list.map((x, k) => (k === i ? { ...x, ...patch } : x)) });
+  return (
+    <section className="card">
+      <h2 className="card-title">2 · Elements ({list.length})</h2>
+      <p className="muted small">
+        Every element as a box, in mm: <b>X</b> = centre from the left of the plan, <b>Y</b> = centre from the front (bottom edge of the plan), <b>Bottom</b> =
+        level of its underside (0 = ground, negative below ground), then length (along X), width (along Y) and height. Click an element in the 3D preview to
+        change it there too.
+      </p>
+      <div className="free-table-wrap">
+        <table className="table compact sched free-table">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Type</th>
+              <th>X</th>
+              <th>Y</th>
+              <th>Bottom</th>
+              <th>L</th>
+              <th>W</th>
+              <th>H</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((fe, i) => (
+              <tr key={i}>
+                <td>
+                  <input value={fe.code} onChange={(e) => upd(i, { code: e.target.value })} aria-label={`Element ${i + 1} code`} style={{ width: 110 }} />
+                </td>
+                <td>
+                  <select value={fe.type} onChange={(e) => upd(i, { type: e.target.value as ElementType })} aria-label={`Element ${i + 1} type`}>
+                    {ELEMENT_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <NS value={fe.x} onChange={(x) => upd(i, { x })} label={`Element ${i + 1} X`} width={70} />
+                </td>
+                <td>
+                  <NS value={fe.y} onChange={(y) => upd(i, { y })} label={`Element ${i + 1} Y`} width={70} />
+                </td>
+                <td>
+                  <NS value={fe.z} onChange={(z) => upd(i, { z })} label={`Element ${i + 1} bottom`} width={70} />
+                </td>
+                <td>
+                  <N value={fe.l} onChange={(l) => upd(i, { l })} label={`Element ${i + 1} length`} width={64} />
+                </td>
+                <td>
+                  <N value={fe.w} onChange={(w) => upd(i, { w })} label={`Element ${i + 1} width`} width={64} />
+                </td>
+                <td>
+                  <N value={fe.h} onChange={(h) => upd(i, { h })} label={`Element ${i + 1} height`} width={64} />
+                </td>
+                <td>
+                  <button className="btn-icon" aria-label={`Remove element ${fe.code || i + 1}`} onClick={() => setSpec({ freeElements: list.filter((_, k) => k !== i) })}>
+                    ×
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="pick-actions" style={{ marginTop: 8 }}>
+        <button className="link" onClick={() => setSpec({ freeElements: [...list, { code: `E${list.length + 1}`, type: 'column', x: 0, y: 0, z: 0, l: 230, w: 230, h: 3000 }] })}>
+          + Add element
+        </button>
+        {list.length > 0 && (
+          <button className="link" onClick={() => setSpec({ freeElements: [...list, copyNext(list[list.length - 1], list, 'x')] })}>
+            + Copy last element to its right
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Number input in mm that may be negative (positions, levels). */
+function NS({ value, onChange, label, width = 90 }: { value: number; onChange: (n: number) => void; label?: string; width?: number }) {
+  return (
+    <input type="number" step="any" value={Number.isFinite(value) ? value : ''} onChange={(e) => onChange(e.target.value === '' ? NaN : Number(e.target.value))} aria-label={label} style={{ width }} />
   );
 }
 

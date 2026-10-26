@@ -8,7 +8,7 @@
 // the kg-per-m3 rate entered for each element type until a bar bending schedule (BBS) is available.
 // Brickwork (m3) and plaster (m2) are net of openings (and lintels for brickwork).
 
-import type { ElementType, ModelDocument, WallOpening } from './types';
+import { ELEMENT_TYPES, type ElementType, type ModelDocument, type WallOpening } from './types';
 
 export interface ColumnType {
   code: string; // C1
@@ -58,7 +58,35 @@ export interface OpeningPlacement {
   offset: number | null;
 }
 
+/** What the Model Builder makes: a column-grid building, a boundary wall, or free elements. */
+export type StructureKind = 'building' | 'boundary' | 'free';
+
+/**
+ * One element of a free model (mm): centre on the plan (x from the left, y from the front /
+ * bottom edge of the plan), bottom level z above ground (negative below), and its size: l along
+ * plan X, w along plan Y, h height.
+ */
+export interface FreeElement {
+  code: string;
+  type: ElementType;
+  x: number;
+  y: number;
+  z: number;
+  l: number;
+  w: number;
+  h: number;
+}
+
 export interface BuilderSpec {
+  /**
+   * building (default): columns on an X × Y grid, beams, roof slab, walls between columns.
+   * boundary: piers on a line (no Y spacing) or around a plot (outer grid points only), plinth
+   * and top beams between neighbouring piers, wall panels, no slab.
+   * free: the elements are listed one by one (freeElements) — for anything the templates do not fit.
+   */
+  kind?: StructureKind;
+  /** The elements of a free model. */
+  freeElements?: FreeElement[];
   projectId: string;
   projectName: string;
   location?: string;
@@ -113,7 +141,8 @@ export type ElementRef =
   | { kind: 'wall'; code: string; wall: string }
   | { kind: 'opening'; row: number }
   | { kind: 'lintel' | 'chhajja'; code: string; row: number }
-  | { kind: 'slab' };
+  | { kind: 'slab' }
+  | { kind: 'free'; index: number };
 
 export interface BuildSummary {
   footings: number;
@@ -180,15 +209,41 @@ export function resizeLayout(layout: string[][], nx: number, ny: number, fill: s
   return Array.from({ length: ny }, (_, y) => Array.from({ length: nx }, (_, x) => layout[y]?.[x] ?? fill));
 }
 
-/** Parse "3230, 2115" or "3230 2115" into numbers (mm). Returns null if any part is not a positive number. */
-export function parseSpans(text: string): number[] | null {
-  const parts = text
-    .split(/[,;\s]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const nums = parts.map(Number);
-  return nums.length && nums.every(pos) ? nums : null;
+/**
+ * Parse "3230, 2115" or "3230 2115" into numbers (mm); "3000*40" (or 3000x40) is 40 spacings of
+ * 3000. Returns null if any part is not a positive number; an empty text gives [] when allowEmpty
+ * (a boundary wall on one line has no Y spacing).
+ */
+export function parseSpans(text: string, allowEmpty = false): number[] | null {
+  const nums: number[] = [];
+  for (const part of text.split(/[,;\s]+/).map((p) => p.trim()).filter(Boolean)) {
+    const m = /^(\d+(?:\.\d+)?)[*x×](\d+)$/i.exec(part);
+    if (!m) {
+      nums.push(Number(part));
+      continue;
+    }
+    const times = Number(m[2]);
+    if (!(times >= 1 && times <= 400)) return null;
+    for (let i = 0; i < times; i++) nums.push(Number(m[1]));
+  }
+  if (!nums.length) return allowEmpty ? [] : null;
+  return nums.every(pos) ? nums : null;
 }
+
+/** Spacings as text, repeated values written as "3000*40". */
+export function formatSpans(spans: number[]): string {
+  const out: string[] = [];
+  for (let i = 0; i < spans.length; ) {
+    let j = i;
+    while (j < spans.length && spans[j] === spans[i]) j++;
+    const n = j - i;
+    out.push(n >= 3 ? `${spans[i]}*${n}` : Array(n).fill(String(spans[i])).join(', '));
+    i = j;
+  }
+  return out.join(', ');
+}
+
+export const kindOf = (spec: Pick<BuilderSpec, 'kind'>): StructureKind => spec.kind ?? 'building';
 
 /** Problems with the project / model names (section 1). */
 export function headerErrors(spec: BuilderSpec): string[] {
@@ -209,6 +264,8 @@ export function buildModel(spec: BuilderSpec): BuildResult {
   const fail = (): BuildResult => ({ errors, warnings, document: null, summary: null, refs: {}, auto: {} });
 
   errors.push(...headerErrors(spec));
+  if (kindOf(spec) === 'free') return buildFree(spec, errors, warnings);
+  const boundary = kindOf(spec) === 'boundary';
 
   // ---- grid ----
   if (!spec.xSpans.every(pos)) errors.push('X spacings must be positive numbers (mm).');
@@ -358,11 +415,12 @@ export function buildModel(spec: BuilderSpec): BuildResult {
   const spans: Span[] = [];
   for (let yi = 0; yi < ny; yi++) {
     const row = pts.filter((p) => p.yi === yi).sort((a, b) => a.xi - b.xi);
-    row.slice(0, -1).forEach((a, i) => spans.push({ a, b: row[i + 1], axis: 'x' }));
+    // a boundary wall only joins neighbouring piers (around a plot, never across it)
+    row.slice(0, -1).forEach((a, i) => (!boundary || row[i + 1].xi - a.xi === 1) && spans.push({ a, b: row[i + 1], axis: 'x' }));
   }
   for (let xi = 0; xi < nx; xi++) {
     const line = pts.filter((p) => p.xi === xi).sort((a, b) => a.yi - b.yi);
-    line.slice(0, -1).forEach((a, i) => spans.push({ a, b: line[i + 1], axis: 'z' }));
+    line.slice(0, -1).forEach((a, i) => (!boundary || line[i + 1].yi - a.yi === 1) && spans.push({ a, b: line[i + 1], axis: 'z' }));
   }
   /** Clear span between the two column faces and its mid-point along the span axis (metres). */
   const clearSpan = (s: Span) => {
@@ -410,7 +468,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
     });
   };
   addBeams('PB', 'GF', 0, spec.plinthBeam, 'Plinth beam');
-  addBeams('RB', 'RF', roof, spec.roofBeam, 'Roof beam');
+  addBeams('RB', 'RF', roof, spec.roofBeam, boundary ? 'Top (coping) beam' : 'Roof beam');
   if (!spans.length && (spec.plinthBeam.enabled || spec.roofBeam.enabled)) warnings.push('Only one column on a grid line: no beams were generated.');
 
   // ---- walls with door / window openings, lintels and chhajjas ----
@@ -427,7 +485,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
       byWall.set(p.wall, [...(byWall.get(p.wall) ?? []), { p, ot, row }]);
     });
 
-    const wallSpans = spans.filter((s) => (spec.walls.internal || isOuter(s)) && !omit.has(`W-${spanKey(s)}`));
+    const wallSpans = spans.filter((s) => ((spec.walls.internal && !boundary) || isOuter(s)) && !omit.has(`W-${spanKey(s)}`));
     const wallKeys = new Set(wallSpans.map(spanKey));
     spec.openings.forEach((p, row) => {
       if (!wallKeys.has(p.wall)) errors.push(`Opening row ${row + 1}: wall "${p.wall}" does not exist for this grid / column layout.`);
@@ -527,7 +585,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
 
           // chhajja outside, over windows (and doors if chosen), on outer walls only
           const chhajjaCode = `CH-${ot.mark}-${key}`;
-          if (spec.chhajja.enabled && isOuter(s) && outSign !== 0 && (!isDoor || spec.chhajja.overDoors) && !omit.has(chhajjaCode)) {
+          if (spec.chhajja.enabled && !boundary && isOuter(s) && outSign !== 0 && (!isDoor || spec.chhajja.overDoors) && !omit.has(chhajjaCode)) {
             const pr = mm(spec.chhajja.projection), ct = mm(spec.chhajja.t);
             const cl = Math.min(w + 2 * bearing, L);
             const cc = Math.max(Math.min(c, L / 2 - cl / 2), -L / 2 + cl / 2);
@@ -578,7 +636,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
   if (errors.length) return fail();
 
   // ---- slab over the outline of all columns ----
-  if (spec.slab.enabled) {
+  if (spec.slab.enabled && !boundary) {
     const t = mm(spec.slab.t), ov = mm(spec.slab.overhang);
     const minX = Math.min(...pts.map((p) => xs[p.xi] - mm(p.col.w) / 2)) - ov;
     const maxX = Math.max(...pts.map((p) => xs[p.xi] + mm(p.col.w) / 2)) + ov;
@@ -601,6 +659,27 @@ export function buildModel(spec: BuilderSpec): BuildResult {
     sum.slabs++;
   }
 
+  return finishModel(spec, { elements, sum, errors, warnings, refs, bId, foundation: -depth, roof, removed: omit.size });
+}
+
+interface Built {
+  elements: ModelDocument['elements'];
+  sum: BuildSummary;
+  errors: string[];
+  warnings: string[];
+  refs: Record<string, ElementRef>;
+  bId: string;
+  /** Lowest and highest level (m): footing bottom (negative) and roof. */
+  foundation: number;
+  roof: number;
+  /** Elements removed by hand (spec.omit). */
+  removed: number;
+}
+
+/** Steel notes, typed-in quantities, totals and the model document — the same for every kind. */
+function finishModel(spec: BuilderSpec, b: Built): BuildResult {
+  const { elements, sum, errors, warnings, refs, bId } = b;
+  const fail = (): BuildResult => ({ errors, warnings, document: null, summary: null, refs: {}, auto: {} });
   if (Object.values(spec.steel).some((v) => v > 0)) warnings.push('Reinforcement (kg) is estimated from kg/m³ rates — replace with the bar bending schedule (BBS) quantities when available.');
   if (Object.values(spec.steel).some((v) => v === 0)) warnings.push('Element types with steel rate 0 have no reinforcement quantity (shown as "Not configured").');
 
@@ -618,6 +697,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
         type: 'model-builder',
         builderSpec: spec,
         drawings: spec.drawingRefs,
+        kind: kindOf(spec),
         grid: { xSpansMm: spec.xSpans, ySpansMm: spec.ySpans },
         columnSchedule: spec.columnTypes,
         footingSchedule: spec.footingTypes,
@@ -628,9 +708,9 @@ export function buildModel(spec: BuilderSpec): BuildResult {
     },
     buildings: [{ id: bId, name: spec.buildingName.trim() }],
     levels: [
-      { id: 'FDN', name: 'Foundation', buildingId: bId, elevation: r(-depth, 3) },
+      { id: 'FDN', name: 'Foundation', buildingId: bId, elevation: r(b.foundation, 3) },
       { id: 'GF', name: 'Ground / Plinth', buildingId: bId, elevation: 0 },
-      { id: 'RF', name: 'Roof', buildingId: bId, elevation: r(roof, 3) },
+      { id: 'RF', name: kindOf(spec) === 'boundary' ? 'Top of wall' : 'Roof', buildingId: bId, elevation: r(b.roof, 3) },
     ],
     activities: ACTIVITIES.map((a) => ({ ...a, appliesTo: [...a.appliesTo] })),
     elements,
@@ -665,9 +745,152 @@ export function buildModel(spec: BuilderSpec): BuildResult {
   sum.steel = r(sum.steel, 1);
   sum.brickwork = r(sum.brickwork, 3);
   sum.plaster = r(sum.plaster, 2);
-  if (omit.size) warnings.push(`${omit.size} element${omit.size === 1 ? ' was' : 's were'} removed by hand in the 3D preview (beams / walls / lintels / chhajjas) — check against the drawing.`);
+  if (b.removed) warnings.push(`${b.removed} element${b.removed === 1 ? ' was' : 's were'} removed by hand in the 3D preview (beams / walls / lintels / chhajjas) — check against the drawing.`);
   return { errors, warnings, document, summary: sum, refs, auto };
 }
+
+const emptySummary = (): BuildSummary => ({
+  footings: 0,
+  columns: 0,
+  beams: 0,
+  slabs: 0,
+  walls: 0,
+  doors: 0,
+  windows: 0,
+  lintels: 0,
+  chhajjas: 0,
+  concrete: 0,
+  shuttering: 0,
+  steel: 0,
+  brickwork: 0,
+  plaster: 0,
+});
+
+const STEEL_OF: Partial<Record<ElementType, keyof SteelRates>> = {
+  footing: 'footing',
+  column: 'column',
+  beam: 'beam',
+  lintel: 'beam',
+  slab: 'slab',
+  chhajja: 'slab',
+};
+const COUNT_OF: Record<ElementType, keyof BuildSummary> = {
+  footing: 'footings',
+  column: 'columns',
+  beam: 'beams',
+  slab: 'slabs',
+  wall: 'walls',
+  door: 'doors',
+  window: 'windows',
+  lintel: 'lintels',
+  chhajja: 'chhajjas',
+};
+
+/** A free model: every element as listed, quantities from its own box. */
+function buildFree(spec: BuilderSpec, errors: string[], warnings: string[]): BuildResult {
+  const fail = (): BuildResult => ({ errors, warnings, document: null, summary: null, refs: {}, auto: {} });
+  const list = spec.freeElements ?? [];
+  if (!list.length) errors.push('Add at least one element to the free model (section 2), or choose another structure type.');
+  const seen = new Set<string>();
+  list.forEach((f, i) => {
+    const code = (f.code ?? '').trim();
+    const label = `Element row ${i + 1}${code ? ` (${code})` : ''}`;
+    if (!code) errors.push(`${label}: code is required, e.g. F1, C1, W-FRONT.`);
+    else if (seen.has(code)) errors.push(`Element code "${code}" is used twice — every element needs its own code.`);
+    seen.add(code);
+    if (!ELEMENT_TYPES.includes(f.type)) errors.push(`${label}: choose its type.`);
+    if (![f.x, f.y, f.z].every((n) => typeof n === 'number' && Number.isFinite(n))) errors.push(`${label}: position X, Y and bottom level must be numbers (mm).`);
+    if (!pos(f.l) || !pos(f.w) || !pos(f.h)) errors.push(`${label}: length, width and height must be positive (mm).`);
+  });
+  (['footing', 'column', 'beam', 'slab'] as const).forEach((k) => {
+    if (!(spec.steel[k] >= 0)) errors.push(`Steel rate for ${k} must be 0 or more (kg/m³).`);
+  });
+  if (errors.length) return fail();
+
+  const prefix = spec.modelId.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 10) || 'MDL';
+  const bId = `BLD-${prefix}`;
+  // centre the plan on 0, like the grid templates
+  const cx = (Math.min(...list.map((f) => f.x - f.l / 2)) + Math.max(...list.map((f) => f.x + f.l / 2))) / 2;
+  const cy = (Math.min(...list.map((f) => f.y - f.w / 2)) + Math.max(...list.map((f) => f.y + f.w / 2))) / 2;
+  const sum = emptySummary();
+  const refs: Record<string, ElementRef> = {};
+  const ids = new Set<string>();
+  const elements: ModelDocument['elements'] = list.map((f, i) => {
+    const code = f.code.trim();
+    let id = `${prefix}-E-${code.replace(/[^A-Za-z0-9_.-]+/g, '_')}`;
+    if (ids.has(id)) id = `${id}-${i + 1}`;
+    ids.add(id);
+    refs[id] = { kind: 'free', index: i };
+    const L = mm(f.l), W = mm(f.w), H = mm(f.h);
+    const position: [number, number, number] = [r(mm(f.x - cx), 4), r(mm(f.z) + H / 2, 4), r(-mm(f.y - cy), 4) + 0];
+    const size: [number, number, number] = [r(L, 4), r(H, 4), r(W, 4)];
+    const q: Record<string, { quantity: number; unit: 'kg' | 'm2' | 'm3' | 'nos' }> = {};
+    const rate = STEEL_OF[f.type];
+    if (rate) {
+      const conc = L * W * H;
+      const long = Math.max(L, W), short = Math.min(L, W);
+      const shut =
+        f.type === 'footing' || f.type === 'column' ? 2 * (L + W) * H : f.type === 'beam' || f.type === 'lintel' ? (2 * H + short) * long : L * W + 2 * (L + W) * H;
+      q.SHUT = { quantity: r(shut, 2), unit: 'm2' };
+      q.CONC = { quantity: r(conc, 3), unit: 'm3' };
+      sum.concrete += conc;
+      sum.shuttering += shut;
+      if (spec.steel[rate] > 0) {
+        q.REINF = { quantity: r(conc * spec.steel[rate], 1), unit: 'kg' };
+        sum.steel += conc * spec.steel[rate];
+      }
+    } else if (f.type === 'wall') {
+      const brick = L * W * H, plaster = 2 * Math.max(L, W) * H;
+      q.BRICK = { quantity: r(brick, 3), unit: 'm3' };
+      q.PLAST = { quantity: r(plaster, 2), unit: 'm2' };
+      sum.brickwork += brick;
+      sum.plaster += plaster;
+    } else {
+      q.FIX = { quantity: 1, unit: 'nos' };
+    }
+    sum[COUNT_OF[f.type]]++;
+    return {
+      id,
+      code,
+      type: f.type,
+      buildingId: bId,
+      levelId: f.type === 'footing' ? 'FDN' : f.type === 'slab' ? 'RF' : 'GF',
+      geometry: { shape: f.type === 'wall' ? 'wall' : 'box', position, size },
+      plannedQuantities: q,
+      notes: `${f.type[0].toUpperCase()}${f.type.slice(1)} ${f.l} × ${f.w} × ${f.h} mm, bottom at ${f.z} mm`,
+    };
+  });
+  warnings.push('Free model: every element is as listed — check positions and sizes against the drawing.');
+  const bottoms = list.map((f) => mm(f.z));
+  const tops = list.map((f) => mm(f.z + f.h));
+  return finishModel(spec, {
+    elements,
+    sum,
+    errors,
+    warnings,
+    refs,
+    bId,
+    foundation: Math.min(-0.001, ...bottoms),
+    roof: Math.max(0.001, ...tops),
+    removed: 0,
+  });
+}
+
+/** A model's elements as a free model (to change anything the templates cannot). Walls lose their cut-outs. */
+export function toFreeElements(doc: ModelDocument): FreeElement[] {
+  const n = (m: number) => Math.round(m * 1000) + 0;
+  return doc.elements.map((e) => ({
+    code: e.code,
+    type: e.type,
+    x: n(e.geometry.position[0]),
+    y: n(-e.geometry.position[2]),
+    z: n(e.geometry.position[1] - e.geometry.size[1] / 2),
+    l: n(e.geometry.size[0]),
+    w: n(e.geometry.size[2]),
+    h: n(e.geometry.size[1]),
+  }));
+}
+
 
 /**
  * The spec without the clicked element. Columns go with their footing (the grid point is
@@ -692,6 +915,8 @@ export function removeElement(spec: BuilderSpec, ref: ElementRef): BuilderSpec {
       return { ...omitWith(ref.code), openings: spec.openings.filter((o) => o.wall !== ref.wall) };
     case 'slab':
       return { ...spec, slab: { ...spec.slab, enabled: false } };
+    case 'free':
+      return { ...spec, freeElements: (spec.freeElements ?? []).filter((_, i) => i !== ref.index) };
     default:
       return omitWith(ref.code);
   }
@@ -777,19 +1002,23 @@ export function wallOptions(spec: BuilderSpec): { key: string; label: string }[]
   const ny = spec.ySpans.length + 1;
   const has = (xi: number, yi: number) => !!(spec.layout[yi]?.[xi] ?? '').trim();
   const omitted = new Set(spec.omit ?? []);
+  const boundary = kindOf(spec) === 'boundary';
+  const internal = spec.walls.internal && !boundary;
   const out: { key: string; label: string }[] = [];
   for (let yi = 0; yi < ny; yi++) {
-    if (!spec.walls.internal && yi !== 0 && yi !== ny - 1) continue;
+    if (!internal && yi !== 0 && yi !== ny - 1) continue;
     const row = Array.from({ length: nx }, (_, xi) => xi).filter((xi) => has(xi, yi));
     row.slice(0, -1).forEach((xi, i) => {
+      if (boundary && row[i + 1] - xi !== 1) return;
       const key = `${gridLabel('X', xi)}${gridLabel('Y', yi)}-${gridLabel('X', row[i + 1])}${gridLabel('Y', yi)}`;
       out.push({ key, label: `${key} · along X on line ${gridLabel('Y', yi)}` });
     });
   }
   for (let xi = 0; xi < nx; xi++) {
-    if (!spec.walls.internal && xi !== 0 && xi !== nx - 1) continue;
+    if (!internal && xi !== 0 && xi !== nx - 1) continue;
     const line = Array.from({ length: ny }, (_, yi) => yi).filter((yi) => has(xi, yi));
     line.slice(0, -1).forEach((yi, i) => {
+      if (boundary && line[i + 1] - yi !== 1) return;
       const key = `${gridLabel('X', xi)}${gridLabel('Y', yi)}-${gridLabel('X', xi)}${gridLabel('Y', line[i + 1])}`;
       out.push({ key, label: `${key} · along Y on line ${gridLabel('X', xi)}` });
     });

@@ -1,6 +1,15 @@
 {
  "type": "object",
  "properties": {
+  "structureKind": {
+   "description": "building = rooms on a column grid with a roof slab; boundary-wall = compound / boundary wall (piers on a line or around a plot, no roof); other = anything else, listed in \"elements\".",
+   "type": "string",
+   "enum": [
+    "building",
+    "boundary-wall",
+    "other"
+   ]
+  },
   "projectName": {
    "description": "Project / building name as written on the drawing title block, e.g. \"Security Cabin\".",
    "type": "string"
@@ -296,6 +305,66 @@
    ],
    "additionalProperties": false
   },
+  "elements": {
+   "description": "Only when structureKind is \"other\": every element as a box. Empty otherwise.",
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string",
+      "enum": [
+       "footing",
+       "column",
+       "beam",
+       "slab",
+       "wall",
+       "lintel",
+       "chhajja",
+       "door",
+       "window"
+      ]
+     },
+     "xMm": {
+      "description": "Centre on the plan, from the left edge, mm.",
+      "type": "number"
+     },
+     "yMm": {
+      "description": "Centre on the plan, from the front (bottom) edge, mm.",
+      "type": "number"
+     },
+     "bottomMm": {
+      "description": "Level of the underside; 0 = ground, negative below ground, mm.",
+      "type": "number"
+     },
+     "lengthMm": {
+      "description": "Size along X, mm.",
+      "type": "number"
+     },
+     "widthMm": {
+      "description": "Size along Y, mm.",
+      "type": "number"
+     },
+     "heightMm": {
+      "type": "number"
+     }
+    },
+    "required": [
+     "code",
+     "type",
+     "xMm",
+     "yMm",
+     "bottomMm",
+     "lengthMm",
+     "widthMm",
+     "heightMm"
+    ],
+    "additionalProperties": false
+   }
+  },
   "assumptions": {
    "description": "Every value NOT written on the drawing that you assumed, and why. Empty if none.",
    "type": "array",
@@ -313,6 +382,7 @@
   }
  },
  "required": [
+  "structureKind",
   "projectName",
   "buildingName",
   "xSpansMm",
@@ -330,6 +400,7 @@
   "openings",
   "lintel",
   "chhajja",
+  "elements",
   "assumptions",
   "confidence"
  ],

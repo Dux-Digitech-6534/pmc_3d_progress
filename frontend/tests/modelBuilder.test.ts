@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LocalRepository, MemoryStorage } from '../src/data/localRepository';
-import { blankSpec, buildModel, defaultSpec, headerErrors, makeLayout, parseSpans, removeElement, resizeLayout, wallOptions, withDefaults, type BuilderSpec } from '../src/domain/modelBuilder';
+import { blankSpec, buildModel, defaultSpec, formatSpans, headerErrors, makeLayout, parseSpans, removeElement, resizeLayout, toFreeElements, wallOptions, withDefaults, type BuilderSpec } from '../src/domain/modelBuilder';
 import { validateModelDocument } from '../src/domain/modelValidation';
 import { computeActivityProgress } from '../src/domain/progress';
 import { checkQuantity } from '../src/domain/workflow';
@@ -383,5 +383,92 @@ describe('model builder — blank form for a new project', () => {
     expect([b.projectId, b.projectName, b.modelId, b.buildingName]).toEqual(['', '', '', '']);
     expect(headerErrors(b)).toHaveLength(4);
     expect(headerErrors(defaultSpec())).toEqual([]);
+  });
+});
+
+describe('model builder — spacings written short', () => {
+  it('reads "3000*40" as 40 spacings and writes runs back the same way', () => {
+    expect(parseSpans('3000*3, 2000')).toEqual([3000, 3000, 3000, 2000]);
+    expect(parseSpans('2500x2')).toEqual([2500, 2500]);
+    expect(parseSpans('3000*0')).toBeNull();
+    expect(parseSpans('')).toBeNull();
+    expect(parseSpans('', true)).toEqual([]);
+    expect(formatSpans([3000, 3000, 3000, 2000, 2000])).toBe('3000*3, 2000, 2000');
+  });
+});
+
+describe('model builder — boundary wall', () => {
+  const wall = (over: Partial<BuilderSpec> = {}): BuilderSpec => ({
+    ...defaultSpec(),
+    kind: 'boundary',
+    xSpans: Array(5).fill(3000),
+    ySpans: [],
+    layout: makeLayout(6, 1, 'C1'),
+    roofLevel: 2100,
+    roofBeam: { enabled: true, w: 230, h: 150 },
+    walls: { enabled: true, t: 230, internal: false },
+    openings: [],
+    ...over,
+  });
+
+  it('a straight wall: a pier + footing at every point, beams and a panel between neighbours, no slab', () => {
+    const res = buildModel(wall());
+    expect(res.errors).toEqual([]);
+    expect(res.summary).toMatchObject({ footings: 6, columns: 6, beams: 10, walls: 5, slabs: 0, chhajjas: 0 });
+    const panel = res.document!.elements.find((e) => e.type === 'wall')!;
+    expect(panel.geometry.size[1]).toBeCloseTo(1.95); // 2100 top of wall − 150 coping beam
+    expect(validateModelDocument(res.document).errors).toEqual([]);
+  });
+
+  it('around a plot: only the outer edge, never a beam or wall across the plot', () => {
+    const ring = makeLayout(4, 3, '').map((row, y) => row.map((_, x) => (y === 0 || y === 2 || x === 0 || x === 3 ? 'C1' : '')));
+    const res = buildModel(wall({ xSpans: [3000, 3000, 3000], ySpans: [3000, 3000], layout: ring }));
+    expect(res.errors).toEqual([]);
+    // perimeter of a 3 × 2 bay plot = 10 bays
+    expect(res.summary).toMatchObject({ columns: 10, walls: 10, beams: 20, slabs: 0 });
+    expect(wallOptions(wall({ xSpans: [3000, 3000, 3000], ySpans: [3000, 3000], layout: ring }))).toHaveLength(10);
+  });
+});
+
+describe('model builder — free model', () => {
+  const free = (): BuilderSpec => ({
+    ...defaultSpec(),
+    kind: 'free',
+    freeElements: [
+      { code: 'F1', type: 'footing', x: 0, y: 0, z: -1000, l: 1200, w: 1200, h: 300 },
+      { code: 'C1', type: 'column', x: 0, y: 0, z: -700, l: 300, w: 300, h: 3700 },
+      { code: 'W1', type: 'wall', x: 1650, y: 0, z: 0, l: 3000, w: 230, h: 2700 },
+    ],
+  });
+
+  it('builds every listed element with quantities from its own box', () => {
+    const res = buildModel(free());
+    expect(res.errors).toEqual([]);
+    const [f, c, w] = res.document!.elements;
+    expect(f.plannedQuantities.CONC.quantity).toBeCloseTo(0.432); // 1.2 × 1.2 × 0.3
+    expect(f.plannedQuantities.SHUT.quantity).toBeCloseTo(1.44); // 2 × (1.2 + 1.2) × 0.3
+    expect(f.plannedQuantities.REINF.quantity).toBeCloseTo(0.432 * 80, 1);
+    expect(c.geometry.position[1]).toBeCloseTo(-0.7 + 3.7 / 2);
+    expect(w.plannedQuantities.BRICK.quantity).toBeCloseTo(3 * 0.23 * 2.7, 3);
+    expect(w.geometry.shape).toBe('wall');
+    expect(res.refs[c.id]).toEqual({ kind: 'free', index: 1 });
+    expect(validateModelDocument(res.document).errors).toEqual([]);
+  });
+
+  it('explains bad rows and removes a clicked element', () => {
+    const bad = { ...free(), freeElements: [...free().freeElements!, { code: 'C1', type: 'column' as const, x: 0, y: 0, z: 0, l: 0, w: 300, h: 3000 }] };
+    const errs = buildModel(bad).errors;
+    expect(errs.some((e) => e.includes('"C1" is used twice'))).toBe(true);
+    expect(errs.some((e) => e.includes('must be positive'))).toBe(true);
+    const res = buildModel(free());
+    const c = res.document!.elements[1];
+    expect(removeElement(free(), res.refs[c.id]).freeElements!.map((e) => e.code)).toEqual(['F1', 'W1']);
+  });
+
+  it('a template model becomes the same free model', () => {
+    const doc = buildModel({ ...defaultSpec(), openings: [] }).document!;
+    const res = buildModel({ ...defaultSpec(), kind: 'free', freeElements: toFreeElements(doc) });
+    expect(res.errors).toEqual([]);
+    expect(res.summary!.concrete).toBeCloseTo(buildModel({ ...defaultSpec(), openings: [] }).summary!.concrete, 2);
   });
 });

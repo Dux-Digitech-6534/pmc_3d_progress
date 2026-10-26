@@ -8,14 +8,25 @@
 // improve its products — do not send confidential client drawings with a free-tier key.
 
 import * as z from 'zod/v4';
-import { DrawingReadingSchema } from './drawingSchema';
-import { blobToBase64, prepareImage, SYSTEM, USER_TEXT, type DrawingInput, type DrawingReadResult } from './drawingReader';
+import { DrawingReadingSchema, withReadingDefaults } from './drawingSchema';
+import { blobToBase64, prepareImage, SYSTEM, userText, type DrawingInput, type DrawingReadResult } from './drawingReader';
 
 export const GEMINI_MODEL = 'gemini-3.8-flash';
 
 const KEY_STORAGE = 'pmc3d.geminiApiKey';
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const MAX_REQUEST_BYTES = 19 * 1024 * 1024; // inline data limit is 20 MB per request
+const RETRY_MS = [5000, 15000];
+
+const pause = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) return reject(new GeminiError('Cancelled.'));
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(t);
+      reject(new GeminiError('Cancelled.'));
+    });
+  });
 
 export function getGeminiKey(): string {
   try {
@@ -53,7 +64,7 @@ function httpMessage(status: number, apiMessage: string): string {
   return `Gemini request failed (${status}): ${apiMessage}`;
 }
 
-export async function readDrawingsWithGemini(files: DrawingInput[], apiKey: string, signal?: AbortSignal): Promise<DrawingReadResult> {
+export async function readDrawingsWithGemini(files: DrawingInput[], apiKey: string, signal?: AbortSignal, hint?: string): Promise<DrawingReadResult> {
   if (!files.length) throw new GeminiError('Upload at least one drawing first.');
   if (!apiKey.trim()) throw new GeminiError('Enter your Gemini API key first.');
 
@@ -75,36 +86,42 @@ export async function readDrawingsWithGemini(files: DrawingInput[], apiKey: stri
       `The drawings are too large to send together (${(bytes / 1024 / 1024).toFixed(1)} MB after encoding, Gemini limit about 20 MB). Remove some drawings or upload smaller files.`,
     );
   }
-  parts.push({ text: USER_TEXT });
+  parts.push({ text: userText(hint) });
 
-  let res: Response;
-  try {
-    res = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey.trim() },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM }] },
-        contents: [{ role: 'user', parts }],
-        generationConfig: { responseMimeType: 'application/json', responseJsonSchema: geminiResponseSchema(), maxOutputTokens: 32000 },
-      }),
-      signal,
-    });
-  } catch (e) {
-    if (e instanceof DOMException && e.name === 'AbortError') throw new GeminiError('Cancelled.');
-    throw new GeminiError('Could not reach generativelanguage.googleapis.com. Check the internet connection (the AI reader needs internet).');
+  const body = JSON.stringify({
+    system_instruction: { parts: [{ text: SYSTEM }] },
+    contents: [{ role: 'user', parts }],
+    generationConfig: { responseMimeType: 'application/json', responseJsonSchema: geminiResponseSchema(), maxOutputTokens: 32000 },
+  });
+  let res!: Response;
+  // Busy / rate-limited answers (429, 500, 503) are usually over in seconds: try up to 3 times.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await pause(RETRY_MS[attempt - 1], signal);
+    try {
+      res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey.trim() },
+        body,
+        signal,
+      });
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') throw new GeminiError('Cancelled.');
+      throw new GeminiError('Could not reach generativelanguage.googleapis.com. Check the internet connection (the AI reader needs internet).');
+    }
+    if (![429, 500, 503].includes(res.status)) break;
   }
 
-  const body = (await res.json().catch(() => ({}))) as {
+  const answer = (await res.json().catch(() => ({}))) as {
     error?: { message?: string };
     candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] }; finishReason?: string }[];
     promptFeedback?: { blockReason?: string };
     usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number };
     modelVersion?: string;
   };
-  if (!res.ok) throw new GeminiError(httpMessage(res.status, body.error?.message ?? res.statusText));
-  if (body.promptFeedback?.blockReason) throw new GeminiError(`Gemini declined to read this drawing (${body.promptFeedback.blockReason}).`);
+  if (!res.ok) throw new GeminiError(httpMessage(res.status, answer.error?.message ?? res.statusText));
+  if (answer.promptFeedback?.blockReason) throw new GeminiError(`Gemini declined to read this drawing (${answer.promptFeedback.blockReason}).`);
 
-  const cand = body.candidates?.[0];
+  const cand = answer.candidates?.[0];
   if (cand?.finishReason === 'MAX_TOKENS') throw new GeminiError('The drawing has more detail than one reading can return. Try uploading one sheet at a time.');
   if (cand?.finishReason && cand.finishReason !== 'STOP') throw new GeminiError(`Gemini stopped without an answer (${cand.finishReason}). Try again.`);
   const text = (cand?.content?.parts ?? [])
@@ -114,16 +131,16 @@ export async function readDrawingsWithGemini(files: DrawingInput[], apiKey: stri
 
   let parsed;
   try {
-    parsed = DrawingReadingSchema.safeParse(JSON.parse(text));
+    parsed = DrawingReadingSchema.safeParse(withReadingDefaults(JSON.parse(text)));
   } catch {
     throw new GeminiError('The Gemini answer could not be read as model data. Try again.');
   }
   if (!parsed.success) throw new GeminiError('The Gemini answer did not have all the model data. Try again.');
 
-  const u = body.usageMetadata ?? {};
+  const u = answer.usageMetadata ?? {};
   return {
     reading: parsed.data,
-    model: body.modelVersion ?? GEMINI_MODEL,
+    model: answer.modelVersion ?? GEMINI_MODEL,
     inputTokens: u.promptTokenCount ?? 0,
     outputTokens: (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0),
   };

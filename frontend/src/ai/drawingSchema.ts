@@ -2,11 +2,15 @@
 // Kept free of browser / SDK code so it can be unit-tested.
 
 import * as z from 'zod/v4';
-import { defaultSpec, gridLabel, makeLayout, type BuilderSpec, type OpeningPlacement } from '../domain/modelBuilder';
+import { defaultSpec, gridLabel, makeLayout, type BuilderSpec, type OpeningPlacement, type StructureKind } from '../domain/modelBuilder';
+import { ELEMENT_TYPES } from '../domain/types';
 
 const presentSize = z.object({ present: z.boolean(), widthMm: z.number(), depthMm: z.number() });
 
 export const DrawingReadingSchema = z.object({
+  structureKind: z
+    .enum(['building', 'boundary-wall', 'other'])
+    .describe('building = rooms on a column grid with a roof slab; boundary-wall = compound / boundary wall (piers on a line or around a plot, no roof); other = anything else, listed in "elements".'),
   projectName: z.string().describe('Project / building name as written on the drawing title block, e.g. "Security Cabin".'),
   buildingName: z.string(),
   xSpansMm: z.array(z.number()).describe('Centre-to-centre spacing between consecutive vertical grid lines, left to right, in mm.'),
@@ -43,6 +47,20 @@ export const DrawingReadingSchema = z.object({
     .describe('Every door / window / ventilator placed in a wall.'),
   lintel: z.object({ present: z.boolean(), depthMm: z.number() }),
   chhajja: z.object({ present: z.boolean(), projectionMm: z.number(), thicknessMm: z.number() }),
+  elements: z
+    .array(
+      z.object({
+        code: z.string(),
+        type: z.enum(ELEMENT_TYPES),
+        xMm: z.number().describe('Centre on the plan, from the left edge, mm.'),
+        yMm: z.number().describe('Centre on the plan, from the front (bottom) edge, mm.'),
+        bottomMm: z.number().describe('Level of the underside; 0 = ground, negative below ground, mm.'),
+        lengthMm: z.number().describe('Size along X, mm.'),
+        widthMm: z.number().describe('Size along Y, mm.'),
+        heightMm: z.number(),
+      }),
+    )
+    .describe('Only when structureKind is "other": every element as a box. Empty otherwise.'),
   assumptions: z.array(z.string()).describe('Every value NOT written on the drawing that you assumed, and why. Empty if none.'),
   confidence: z.enum(['high', 'medium', 'low']),
 });
@@ -60,8 +78,14 @@ export const parseGrid = (g: string) => {
  * and steel rates come from the current form, not from the AI. Returns notes for anything that
  * had to be adjusted, so the user can see it next to the AI's own assumptions.
  */
+/** An answer from an older server (before structure types) is a building with no free elements. */
+export function withReadingDefaults(raw: unknown): unknown {
+  return raw && typeof raw === 'object' ? { structureKind: 'building', elements: [], ...(raw as object) } : raw;
+}
+
 export function readingToSpec(r: DrawingReading, base: BuilderSpec): { spec: BuilderSpec; notes: string[] } {
   const notes: string[] = [];
+  const kind: StructureKind = r.structureKind === 'boundary-wall' ? 'boundary' : r.structureKind === 'other' ? 'free' : 'building';
   const d = defaultSpec();
   const pos = (n: number) => Number.isFinite(n) && n > 0;
   const xSpans = r.xSpansMm.filter(pos);
@@ -119,8 +143,18 @@ export function readingToSpec(r: DrawingReading, base: BuilderSpec): { spec: Bui
     openings.push({ mark: o.mark.trim(), wall: key, offset: isCentred ? null : Math.round(centreAbs - coord(s)) });
   }
 
+  // a boundary wall may come without pier positions: piers on every point of the line, or round the plot edge
+  if (kind === 'boundary' && !r.columns.length) {
+    const code = r.columnTypes[0]?.code.trim() ?? '';
+    layout.forEach((row, y) => row.forEach((_, x) => (row[x] = ny === 1 || y === 0 || y === ny - 1 || x === 0 || x === nx - 1 ? code : '')));
+  }
+  const freeElements = r.elements.map((e) => ({ code: e.code.trim(), type: e.type, x: e.xMm, y: e.yMm, z: e.bottomMm, l: e.lengthMm, w: e.widthMm, h: e.heightMm }));
+  if (kind === 'free' && !freeElements.length) notes.push('The AI did not list any elements — add them in section 2, or choose Building / Boundary wall.');
+
   const spec: BuilderSpec = {
     ...base,
+    kind,
+    ...(kind === 'free' ? { freeElements } : {}),
     projectName: r.projectName.trim() || base.projectName,
     buildingName: r.buildingName.trim() || r.projectName.trim() || base.buildingName,
     xSpans,
@@ -132,7 +166,7 @@ export function readingToSpec(r: DrawingReading, base: BuilderSpec): { spec: Bui
     roofLevel: r.roofLevelMm,
     plinthBeam: { enabled: r.plinthBeam.present, w: r.plinthBeam.widthMm || d.plinthBeam.w, h: r.plinthBeam.depthMm || d.plinthBeam.h },
     roofBeam: { enabled: r.roofBeam.present, w: r.roofBeam.widthMm || d.roofBeam.w, h: r.roofBeam.depthMm || d.roofBeam.h },
-    slab: { enabled: r.slab.present, t: r.slab.thicknessMm || d.slab.t, overhang: Math.max(r.slab.overhangMm, 0) },
+    slab: { enabled: r.slab.present && kind !== 'boundary', t: r.slab.thicknessMm || d.slab.t, overhang: Math.max(r.slab.overhangMm, 0) },
     walls: { enabled: r.walls.present, t: r.walls.thicknessMm || d.walls.t, internal: r.walls.alsoOnInternalGridLines },
     openingTypes: r.openingTypes.map((o) => ({ mark: o.mark.trim(), kind: o.kind, w: o.widthMm, h: o.heightMm, sill: o.kind === 'door' ? 0 : Math.max(o.sillMm, 0) })),
     openings,

@@ -4,6 +4,8 @@ import { GeminiError, readDrawingsWithGemini } from '../src/ai/geminiReader';
 
 /** What a good reading of the "Typical Drawing of Security Cabin" looks like. */
 const cabin = (): DrawingReading => ({
+  structureKind: 'building',
+  elements: [],
   projectName: 'Security Cabin',
   buildingName: 'Security Cabin',
   xSpansMm: [3230],
@@ -68,9 +70,38 @@ describe('Gemini drawing reader', () => {
     expect(sent.contents[0].parts.some((p: { inline_data?: { mime_type: string } }) => p.inline_data?.mime_type === 'application/pdf')).toBe(true);
   });
 
-  it('explains a used-up free limit in plain words', async () => {
-    mockFetch(429, { error: { message: 'Resource exhausted' } });
-    await expect(readDrawingsWithGemini([pdf], 'k')).rejects.toThrow(/free Gemini limit/);
+  it('tries 3 times when Gemini is busy, then explains a used-up free limit in plain words', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = mockFetch(429, { error: { message: 'Resource exhausted' } });
+      const done = expect(readDrawingsWithGemini([pdf], 'k')).rejects.toThrow(/free Gemini limit/);
+      await vi.advanceTimersByTimeAsync(25_000);
+      await done;
+      expect(fetch).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('succeeds when Gemini answers on a retry, and passes the engineer\'s note along', async () => {
+    vi.useFakeTimers();
+    try {
+      const ok = { candidates: [{ content: { parts: [{ text: JSON.stringify(cabin()) }] }, finishReason: 'STOP' }] };
+      const fn = vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: 'high demand' } }), { status: 503 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify(ok), { status: 200 }));
+      vi.stubGlobal('fetch', fn);
+      const run = readDrawingsWithGemini([pdf], 'k', undefined, 'boundary wall only');
+      await vi.advanceTimersByTimeAsync(6_000);
+      const res = await run;
+      expect(res.reading.xSpansMm).toEqual([3230]);
+      expect(fn).toHaveBeenCalledTimes(2);
+      const sent = JSON.parse((fn.mock.calls[1] as unknown as [string, RequestInit])[1].body as string);
+      expect(sent.contents[0].parts.at(-1).text).toContain('The engineer wants this modelled: boundary wall only');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('rejects an answer that is not model data', async () => {
