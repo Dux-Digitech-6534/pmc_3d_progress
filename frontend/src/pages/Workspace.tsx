@@ -28,8 +28,13 @@ export function Workspace() {
   const [showLabels, setShowLabels] = useState(true);
   const [resetSignal, setResetSignal] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
+  // hidden in the 3D view only (to look inside the building) — nothing changes in the model or progress
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
+  const [hiddenTypes, setHiddenTypes] = useState<Set<ElementType>>(() => new Set());
 
   const elements = useMemo(() => data?.elements ?? [], [data?.elements]);
+  const hiddenAll = useMemo(() => new Set([...hiddenIds, ...elements.filter((e) => hiddenTypes.has(e.type)).map((e) => e.id)]), [hiddenIds, hiddenTypes, elements]);
+  const typesPresent = useMemo(() => ELEMENT_TYPES.filter((t) => elements.some((e) => e.type === t)), [elements]);
   const activities = useMemo(() => data?.model?.document?.activities ?? [], [data?.model]);
   const entries = useMemo(() => data?.entries ?? [], [data?.entries]);
   const viewActivity = activities.find((a) => a.code === view) ?? null;
@@ -229,6 +234,58 @@ export function Workspace() {
           <label className="inline check">
             <input type="checkbox" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} /> Labels
           </label>
+          <select
+            className="btn btn-small"
+            value=""
+            aria-label="Show or hide element types"
+            title="Hide the roof, beams … to look inside — only in this view"
+            onChange={(e) => {
+              const v = e.target.value;
+              if (!v) return;
+              if (v === '__all__') {
+                setHiddenIds(new Set());
+                setHiddenTypes(new Set());
+                return;
+              }
+              const t = v as ElementType;
+              setHiddenTypes((h) => {
+                const n = new Set(h);
+                if (n.has(t)) n.delete(t);
+                else n.add(t);
+                return n;
+              });
+            }}
+          >
+            <option value="">👁 Show / hide…</option>
+            {typesPresent.map((t) => (
+              <option key={t} value={t}>
+                {hiddenTypes.has(t) ? 'Show' : 'Hide'} {TYPE_LABELS[t].toLowerCase()}s
+              </option>
+            ))}
+            {hiddenAll.size > 0 && <option value="__all__">Show all</option>}
+          </select>
+          <button
+            className="btn btn-small"
+            disabled={!selection.size}
+            title="Hide the selected elements in this view"
+            onClick={() => {
+              setHiddenIds((h) => new Set([...h, ...selection]));
+              setSelection(new Set());
+            }}
+          >
+            Hide selected
+          </button>
+          {hiddenAll.size > 0 && (
+            <button
+              className="btn btn-small"
+              onClick={() => {
+                setHiddenIds(new Set());
+                setHiddenTypes(new Set());
+              }}
+            >
+              Show all ({hiddenAll.size} hidden)
+            </button>
+          )}
           <span className="spacer" />
           <span className="sel-count" data-testid="selected-count">
             {selection.size} selected
@@ -245,6 +302,7 @@ export function Workspace() {
             colors={colors}
             visibleIds={visibleIds}
             selectedIds={selection}
+            hiddenIds={hiddenAll}
             showLabels={showLabels}
             onPick={onPick}
             resetSignal={resetSignal}
