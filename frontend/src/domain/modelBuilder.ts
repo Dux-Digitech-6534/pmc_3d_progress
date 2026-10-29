@@ -81,6 +81,15 @@ export interface RoomOpening {
   sill: number;
 }
 
+/** A floor above the ground floor (kind 'rooms'): its own rooms and doors / windows, same origin as the ground floor. */
+export interface UpperFloor {
+  name: string;
+  /** Floor-to-floor height (mm): from the roof level of the floor below to this floor's roof level. */
+  height: number;
+  rooms: Room[];
+  roomOpenings: RoomOpening[];
+}
+
 /**
  * One element of a free model (mm): centre on the plan (x from the left, y from the front /
  * bottom edge of the plan), bottom level z above ground (negative below), and its size: l along
@@ -112,6 +121,10 @@ export interface BuilderSpec {
   roomOpenings?: RoomOpening[];
   /** kind 'rooms': longest wall between two columns before one more column is put in (mm). */
   maxColumnSpan?: number;
+  /** kind 'rooms': floors above the ground floor (G+1, G+2 …), bottom to top. */
+  upperFloors?: UpperFloor[];
+  /** kind 'rooms': parapet wall on the open edges of every roof (mm). */
+  parapet?: { enabled: boolean; h: number; t: number };
   /**
    * Elements added by hand on top of a building / boundary wall template (a wall, a footing …).
    * Same box format as a free model, with x / y measured from the model centre (mm).
@@ -727,6 +740,8 @@ interface Built {
   roof: number;
   /** Elements removed by hand (spec.omit). */
   removed: number;
+  /** Levels between ground and roof (upper floors), elevation in m. */
+  floorLevels?: { id: string; name: string; elevation: number }[];
 }
 
 /** Steel notes, typed-in quantities, totals and the model document — the same for every kind. */
@@ -764,6 +779,7 @@ function finishModel(spec: BuilderSpec, b: Built): BuildResult {
     levels: [
       { id: 'FDN', name: 'Foundation', buildingId: bId, elevation: r(b.foundation, 3) },
       { id: 'GF', name: 'Ground / Plinth', buildingId: bId, elevation: 0 },
+      ...(b.floorLevels ?? []).map((l) => ({ ...l, buildingId: bId, elevation: r(l.elevation, 3) })),
       { id: 'RF', name: kindOf(spec) === 'boundary' ? 'Top of wall' : 'Roof', buildingId: bId, elevation: r(b.roof, 3) },
     ],
     activities: ACTIVITIES.map((a) => ({ ...a, appliesTo: [...a.appliesTo] })),
@@ -899,6 +915,51 @@ function boxElement(f: FreeElement, id: string, bId: string, cx: number, cy: num
     geometry: { shape: f.type === 'wall' ? 'wall' : 'box', position, size },
     plannedQuantities: q,
     notes: `${f.type[0].toUpperCase()}${f.type.slice(1)} ${f.l} × ${f.w} × ${f.h} mm, bottom at ${f.z} mm`,
+  };
+}
+
+const STAIR_WAIST = 150;
+
+/** A stair flight (plan box in mm, climbing towards `up` on the plan): waist slab + steps, as an RCC slab element. */
+function stairElement(
+  f: FreeElement & { level: string; steps: number; up: '+x' | '-x' | '+y' | '-y' },
+  id: string,
+  bId: string,
+  cx: number,
+  cy: number,
+  steel: SteelRates,
+  sum: BuildSummary,
+): ModelDocument['elements'][number] {
+  const L = mm(f.l), W = mm(f.w), H = mm(f.h);
+  const alongX = f.up === '+x' || f.up === '-x';
+  const run = alongX ? L : W;
+  const width = alongX ? W : L;
+  const slope = Math.hypot(run, H);
+  const waist = mm(STAIR_WAIST);
+  const conc = slope * width * waist + ((run * H) / (2 * f.steps)) * width;
+  const shut = (slope + H) * width;
+  const q: Record<string, { quantity: number; unit: 'kg' | 'm2' | 'm3' | 'nos' }> = {
+    SHUT: { quantity: r(shut, 2), unit: 'm2' },
+    CONC: { quantity: r(conc, 3), unit: 'm3' },
+  };
+  sum.concrete += conc;
+  sum.shuttering += shut;
+  if (steel.slab > 0) {
+    q.REINF = { quantity: r(conc * steel.slab, 1), unit: 'kg' };
+    sum.steel += conc * steel.slab;
+  }
+  sum.slabs++;
+  // plan Y runs along −Z in 3D
+  const up = f.up === '+y' ? '-z' : f.up === '-y' ? '+z' : f.up;
+  return {
+    id,
+    code: f.code,
+    type: 'slab',
+    buildingId: bId,
+    levelId: f.level,
+    geometry: { shape: 'stair', position: [r(mm(f.x - cx), 4), r(mm(f.z) + H / 2, 4), r(-mm(f.y - cy), 4) + 0], size: [r(L, 4), r(H, 4), r(W, 4)], steps: f.steps, up, waist },
+    plannedQuantities: q,
+    notes: `Stair flight, ${f.steps} risers of ${Math.round(f.h / f.steps)} mm, going ${Math.round((alongX ? f.l : f.w) / f.steps)} mm, ${Math.round(alongX ? f.w : f.l)} mm wide, waist ${STAIR_WAIST} mm`,
   };
 }
 
@@ -1066,19 +1127,31 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
   });
   if (errors.length) return fail();
 
+  const upper = spec.upperFloors ?? [];
+  const slabT = spec.slab.enabled ? spec.slab.t : 0;
+  type Floor = { tag: string; name: string; level: string; rooms: Room[]; openings: RoomOpening[]; base: number; top: number };
+  const floors: Floor[] = [{ tag: '', name: 'Ground floor', level: 'GF', rooms, openings: spec.roomOpenings ?? [], base: 0, top: spec.roofLevel }];
+  upper.forEach((fl, k) => {
+    const name = fl.name?.trim() || `Floor ${k + 1}`;
+    if (!(fl.rooms ?? []).length) errors.push(`${name}: add at least one room (section 2).`);
+    (fl.rooms ?? []).forEach((rm, i) => {
+      const label = `${name}, room ${i + 1}${rm.name?.trim() ? ` (${rm.name.trim()})` : ''}`;
+      if (![rm.x, rm.y].every((n) => typeof n === 'number' && Number.isFinite(n))) errors.push(`${label}: X and Y must be numbers (mm).`);
+      if (!pos(rm.w) || !pos(rm.d)) errors.push(`${label}: width and depth must be positive (mm).`);
+    });
+    if (!(fl.height >= slabT + 2000)) errors.push(`${name}: floor-to-floor height must be at least ${slabT + 2000} mm.`);
+    const below = floors[floors.length - 1];
+    floors.push({ tag: `${k + 1}F-`, name, level: `${k + 1}F`, rooms: fl.rooms ?? [], openings: fl.roomOpenings ?? [], base: below.top + slabT, top: below.top + fl.height });
+  });
+  const pp = spec.parapet;
+  if (pp?.enabled && (!pos(pp.h) || !pos(pp.t))) errors.push('Parapet height and thickness must be positive (mm).');
+  if (errors.length) return fail();
+
   // ---- wall lines from the room edges (10 mm tolerance), merged so a shared wall is built once ----
   const R = (n: number) => Math.round(n / 10) * 10;
   type Iv = [number, number];
-  const hRaw = new Map<number, Iv[]>();
-  const vRaw = new Map<number, Iv[]>();
-  const add = (m: Map<number, Iv[]>, k: number, a: number, b: number) => m.set(k, [...(m.get(k) ?? []), [Math.min(a, b), Math.max(a, b)]]);
-  for (const rm of rooms) {
-    const [x0, x1, y0, y1] = [R(rm.x), R(rm.x + rm.w), R(rm.y), R(rm.y + rm.d)];
-    add(hRaw, y0, x0, x1);
-    add(hRaw, y1, x0, x1);
-    add(vRaw, x0, y0, y1);
-    add(vRaw, x1, y0, y1);
-  }
+  type Line = { axis: 'x' | 'y'; at: number; a: number; b: number };
+  type Piece = { axis: 'x' | 'y'; at: number; a: number; b: number };
   const merge = (ivs: Iv[]) =>
     [...ivs]
       .sort((p, q) => p[0] - q[0])
@@ -1088,118 +1161,203 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
         else out.push([iv[0], iv[1]]);
         return out;
       }, []);
-  type Line = { axis: 'x' | 'y'; at: number; a: number; b: number };
-  const lines: Line[] = [
-    ...[...hRaw].flatMap(([y, ivs]) => merge(ivs).map(([a, b]) => ({ axis: 'x' as const, at: y, a, b }))),
-    ...[...vRaw].flatMap(([x, ivs]) => merge(ivs).map(([a, b]) => ({ axis: 'y' as const, at: x, a, b }))),
-  ];
-
-  // ---- column points: ends and crossings of the wall lines, then more along long walls ----
-  const stops = lines.map((ln) => {
-    const at = new Set([ln.a, ln.b]);
-    for (const o of lines) {
-      if (o.axis === ln.axis) continue;
-      if (o.at >= ln.a - 1 && o.at <= ln.b + 1 && ln.at >= o.a - 1 && ln.at <= o.b + 1) at.add(o.at);
+  /** One floor's column points (ends and crossings of the wall lines, more along long walls) and wall pieces between columns. */
+  const planOf = (list: Room[]) => {
+    const hRaw = new Map<number, Iv[]>();
+    const vRaw = new Map<number, Iv[]>();
+    const add = (m: Map<number, Iv[]>, k: number, a: number, b: number) => m.set(k, [...(m.get(k) ?? []), [Math.min(a, b), Math.max(a, b)]]);
+    for (const rm of list) {
+      const [x0, x1, y0, y1] = [R(rm.x), R(rm.x + rm.w), R(rm.y), R(rm.y + rm.d)];
+      add(hRaw, y0, x0, x1);
+      add(hRaw, y1, x0, x1);
+      add(vRaw, x0, y0, y1);
+      add(vRaw, x1, y0, y1);
     }
-    const sorted = [...at].sort((p, q) => p - q);
-    const out: number[] = [sorted[0]];
-    for (let i = 1; i < sorted.length; i++) {
-      const gap = sorted[i] - sorted[i - 1];
-      const n = Math.ceil(gap / maxSpan - 1e-9);
-      for (let k = 1; k < n; k++) out.push(Math.round(sorted[i - 1] + (gap * k) / n));
-      out.push(sorted[i]);
-    }
-    return out;
-  });
-  const points = new Map<string, { x: number; y: number }>();
-  lines.forEach((ln, i) => stops[i].forEach((t) => {
-    const p = ln.axis === 'x' ? { x: t, y: ln.at } : { x: ln.at, y: t };
-    points.set(`${p.x},${p.y}`, p);
-  }));
-  const pts = [...points.values()].sort((p, q) => p.y - q.y || p.x - q.x);
+    const lines: Line[] = [
+      ...[...hRaw].flatMap(([y, ivs]) => merge(ivs).map(([a, b]) => ({ axis: 'x' as const, at: y, a, b }))),
+      ...[...vRaw].flatMap(([x, ivs]) => merge(ivs).map(([a, b]) => ({ axis: 'y' as const, at: x, a, b }))),
+    ];
+    const stops = lines.map((ln) => {
+      const at = new Set([ln.a, ln.b]);
+      for (const o of lines) {
+        if (o.axis === ln.axis) continue;
+        if (o.at >= ln.a - 1 && o.at <= ln.b + 1 && ln.at >= o.a - 1 && ln.at <= o.b + 1) at.add(o.at);
+      }
+      const sorted = [...at].sort((p, q) => p - q);
+      const out: number[] = [sorted[0]];
+      for (let i = 1; i < sorted.length; i++) {
+        const gap = sorted[i] - sorted[i - 1];
+        const n = Math.ceil(gap / maxSpan - 1e-9);
+        for (let k = 1; k < n; k++) out.push(Math.round(sorted[i - 1] + (gap * k) / n));
+        out.push(sorted[i]);
+      }
+      return out;
+    });
+    const points = new Map<string, { x: number; y: number }>();
+    lines.forEach((ln, i) => stops[i].forEach((t) => {
+      const p = ln.axis === 'x' ? { x: t, y: ln.at } : { x: ln.at, y: t };
+      points.set(`${p.x},${p.y}`, p);
+    }));
+    const pts = [...points.values()].sort((p, q) => p.y - q.y || p.x - q.x);
+    const pieces: Piece[] = [];
+    lines.forEach((ln, i) => {
+      for (let k = 0; k + 1 < stops[i].length; k++) {
+        const half = (ln.axis === 'x' ? col!.w : col!.d) / 2;
+        const a = stops[i][k] + half;
+        const b = stops[i][k + 1] - half;
+        if (b - a > 10) pieces.push({ axis: ln.axis, at: ln.at, a, b });
+      }
+    });
+    return { pts, pieces };
+  };
+  const plans = floors.map((fl) => planOf(fl.rooms));
+  const allPts = plans.flatMap((p) => p.pts);
 
   const prefix = spec.modelId.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 10) || 'MDL';
   const bId = `BLD-${prefix}`;
-  const cx = (Math.min(...pts.map((p) => p.x)) + Math.max(...pts.map((p) => p.x))) / 2;
-  const cy = (Math.min(...pts.map((p) => p.y)) + Math.max(...pts.map((p) => p.y))) / 2;
+  const cx = (Math.min(...allPts.map((p) => p.x)) + Math.max(...allPts.map((p) => p.x))) / 2;
+  const cy = (Math.min(...allPts.map((p) => p.y)) + Math.max(...allPts.map((p) => p.y))) / 2;
   const omit = new Set(spec.omit ?? []);
-  const boxes: FreeElement[] = [];
-  const colTop = spec.roofLevel;
+  const boxes: (FreeElement & { level: string })[] = [];
   const footTop = -spec.foundationDepth + foot!.t;
-  pts.forEach((p, i) => {
-    boxes.push({ code: `F${i + 1}`, type: 'footing', x: p.x, y: p.y, z: -spec.foundationDepth, l: foot!.w, w: foot!.d, h: foot!.t });
-    boxes.push({ code: `C${i + 1}`, type: 'column', x: p.x, y: p.y, z: footTop, l: col!.w, w: col!.d, h: colTop - footTop });
-  });
-
-  // ---- wall pieces between neighbouring columns on each line: beams, walls ----
-  type Piece = { axis: 'x' | 'y'; at: number; a: number; b: number; key: string };
-  const pieces: Piece[] = [];
-  lines.forEach((ln, i) => {
-    for (let k = 0; k + 1 < stops[i].length; k++) {
-      const half = (ln.axis === 'x' ? col!.w : col!.d) / 2;
-      const a = stops[i][k] + half;
-      const b = stops[i][k + 1] - half;
-      if (b - a > 10) pieces.push({ axis: ln.axis, at: ln.at, a, b, key: `${pieces.length + 1}` });
-    }
-  });
   const along = (pc: Piece, len: number, thick: number, z: number, h: number, mid = (pc.a + pc.b) / 2) =>
     pc.axis === 'x' ? { x: mid, y: pc.at, z, l: len, w: thick, h } : { x: pc.at, y: mid, z, l: thick, w: len, h };
-  const wallTop = spec.roofBeam.enabled ? spec.roofLevel - spec.roofBeam.h : spec.roofLevel;
-  pieces.forEach((pc, i) => {
-    const len = pc.b - pc.a;
-    if (spec.plinthBeam.enabled) boxes.push({ code: `PB${i + 1}`, type: 'beam', ...along(pc, len, spec.plinthBeam.w, -spec.plinthBeam.h, spec.plinthBeam.h) });
-    if (spec.roofBeam.enabled) boxes.push({ code: `RB${i + 1}`, type: 'beam', ...along(pc, len, spec.roofBeam.w, spec.roofLevel - spec.roofBeam.h, spec.roofBeam.h) });
-    if (spec.walls.enabled && wallTop > 0) boxes.push({ code: `W${i + 1}`, type: 'wall', ...along(pc, len, spec.walls.t, 0, wallTop) });
+  /** The outline of a floor's columns (outer faces), grown by `grow` mm. */
+  const outline = (pts: { x: number; y: number }[], grow: number) => ({
+    minX: Math.min(...pts.map((p) => p.x)) - col!.w / 2 - grow,
+    maxX: Math.max(...pts.map((p) => p.x)) + col!.w / 2 + grow,
+    minY: Math.min(...pts.map((p) => p.y)) - col!.d / 2 - grow,
+    maxY: Math.max(...pts.map((p) => p.y)) + col!.d / 2 + grow,
   });
+  type Flight = FreeElement & { level: string; steps: number; up: '+x' | '-x' | '+y' | '-y' };
+  const flights: Flight[] = [];
+  /** The level a roof slab belongs to: the floor above it, or the roof. */
+  const roofLevelOf = (k: number) => (k === floors.length - 1 ? 'RF' : floors[k + 1].level);
 
-  // ---- doors / windows in the wall piece they sit on, with lintels ----
-  let nd = 0, nw = 0;
-  (spec.roomOpenings ?? []).forEach((o, i) => {
-    if (!spec.walls.enabled) return;
-    const label = `${o.type === 'door' ? 'Door' : 'Window'} ${i + 1} at ${Math.round(o.x)} / ${Math.round(o.y)} mm`;
-    if (!pos(o.width) || !pos(o.height)) return errors.push(`${label}: width and height must be positive (mm).`);
-    const near = pieces
-      .map((pc) => {
-        const t = pc.axis === 'x' ? o.x : o.y;
-        const d = Math.abs((pc.axis === 'x' ? o.y : o.x) - pc.at);
-        return { pc, t, d };
-      })
-      .filter(({ pc, t, d }) => d <= 450 && t >= pc.a - 1 && t <= pc.b + 1)
-      .sort((p, q) => p.d - q.d)[0];
-    if (!near) return warnings.push(`${label} is not on a wall between two columns — add it by hand.`);
-    const { pc } = near;
-    const width = Math.min(o.width, pc.b - pc.a);
-    const t = Math.min(Math.max(near.t, pc.a + width / 2), pc.b - width / 2);
-    const sill = o.type === 'door' ? 0 : Math.max(o.sill, 0);
-    const height = Math.min(o.height, wallTop - sill);
-    if (height <= 0) return warnings.push(`${label} does not fit under the roof beam — check its sill and height.`);
-    const code = o.type === 'door' ? `D${++nd}` : `WN${++nw}`;
-    boxes.push({ code, type: o.type, ...along(pc, width, spec.walls.t + 20, sill, height, t) });
-    if (spec.lintel.enabled && sill + height + spec.lintel.h <= wallTop) {
-      const lo = Math.max(t - width / 2 - spec.lintel.bearing, pc.a);
-      const hi = Math.min(t + width / 2 + spec.lintel.bearing, pc.b);
-      boxes.push({ code: `L-${code}`, type: 'lintel', ...along(pc, hi - lo, spec.walls.t, sill + height, spec.lintel.h, (lo + hi) / 2) });
+  floors.forEach((fl, k) => {
+    const { pts, pieces } = plans[k];
+    const t = fl.tag;
+    // ---- columns (footings under the ground-floor ones); an upper column starts on the slab below ----
+    pts.forEach((p, i) => {
+      if (k === 0) boxes.push({ code: `F${i + 1}`, type: 'footing', x: p.x, y: p.y, z: -spec.foundationDepth, l: foot!.w, w: foot!.d, h: foot!.t, level: 'FDN' });
+      const z = k === 0 ? footTop : fl.base;
+      boxes.push({ code: `${t}C${i + 1}`, type: 'column', x: p.x, y: p.y, z, l: col!.w, w: col!.d, h: fl.top - z, level: fl.level });
+    });
+    if (k > 0) {
+      const below = new Set(plans[k - 1].pts.map((p) => `${p.x},${p.y}`));
+      const floating = pts.filter((p) => !below.has(`${p.x},${p.y}`)).length;
+      if (floating) warnings.push(`${fl.name}: ${floating} column${floating === 1 ? ' does' : 's do'} not stand on a column of the floor below (resting on a beam) — check with the structural drawing.`);
+    }
+
+    // ---- beams and walls between neighbouring columns ----
+    const wallTop = spec.roofBeam.enabled ? fl.top - spec.roofBeam.h : fl.top;
+    pieces.forEach((pc, i) => {
+      const len = pc.b - pc.a;
+      if (k === 0 && spec.plinthBeam.enabled) boxes.push({ code: `PB${i + 1}`, type: 'beam', ...along(pc, len, spec.plinthBeam.w, -spec.plinthBeam.h, spec.plinthBeam.h), level: 'GF' });
+      if (spec.roofBeam.enabled) boxes.push({ code: `${t}RB${i + 1}`, type: 'beam', ...along(pc, len, spec.roofBeam.w, fl.top - spec.roofBeam.h, spec.roofBeam.h), level: fl.level });
+      if (spec.walls.enabled && wallTop > fl.base) boxes.push({ code: `${t}W${i + 1}`, type: 'wall', ...along(pc, len, spec.walls.t, fl.base, wallTop - fl.base), level: fl.level });
+    });
+
+    // ---- doors / windows in the wall piece they sit on, with lintels ----
+    let nd = 0, nw = 0;
+    fl.openings.forEach((o, i) => {
+      if (!spec.walls.enabled) return;
+      const label = `${k ? `${fl.name}: ` : ''}${o.type === 'door' ? 'Door' : 'Window'} ${i + 1} at ${Math.round(o.x)} / ${Math.round(o.y)} mm`;
+      if (!pos(o.width) || !pos(o.height)) return errors.push(`${label}: width and height must be positive (mm).`);
+      const near = pieces
+        .map((pc) => {
+          const at = pc.axis === 'x' ? o.x : o.y;
+          const d = Math.abs((pc.axis === 'x' ? o.y : o.x) - pc.at);
+          return { pc, at, d };
+        })
+        .filter(({ pc, at, d }) => d <= 450 && at >= pc.a - 1 && at <= pc.b + 1)
+        .sort((p, q) => p.d - q.d)[0];
+      if (!near) return warnings.push(`${label} is not on a wall between two columns — add it by hand.`);
+      const { pc } = near;
+      const width = Math.min(o.width, pc.b - pc.a);
+      const mid = Math.min(Math.max(near.at, pc.a + width / 2), pc.b - width / 2);
+      const sill = o.type === 'door' ? 0 : Math.max(o.sill, 0);
+      const height = Math.min(o.height, wallTop - fl.base - sill);
+      if (height <= 0) return warnings.push(`${label} does not fit under the roof beam — check its sill and height.`);
+      const code = `${t}${o.type === 'door' ? `D${++nd}` : `WN${++nw}`}`;
+      boxes.push({ code, type: o.type, ...along(pc, width, spec.walls.t + 20, fl.base + sill, height, mid), level: fl.level });
+      if (spec.lintel.enabled && sill + height + spec.lintel.h <= wallTop - fl.base) {
+        const lo = Math.max(mid - width / 2 - spec.lintel.bearing, pc.a);
+        const hi = Math.min(mid + width / 2 + spec.lintel.bearing, pc.b);
+        boxes.push({ code: `L-${code}`, type: 'lintel', ...along(pc, hi - lo, spec.walls.t, fl.base + sill + height, spec.lintel.h, (lo + hi) / 2), level: fl.level });
+      }
+    });
+
+    // ---- the slab over this floor ----
+    if (spec.slab.enabled) {
+      const o = outline(pts, spec.slab.overhang);
+      boxes.push({ code: k === 0 ? 'SL-RF' : `${t}SL`, type: 'slab', x: (o.minX + o.maxX) / 2, y: (o.minY + o.maxY) / 2, z: fl.top, l: o.maxX - o.minX, w: o.maxY - o.minY, h: spec.slab.t, level: roofLevelOf(k) });
+    }
+
+    // ---- staircase: a dog-legged stair (two flights and a mid landing) in every stair room, up to the next floor / the roof ----
+    fl.rooms.forEach((rm, j) => {
+      if (!/stair/i.test(rm.name ?? '')) return;
+      const to = k + 1 < floors.length ? floors[k + 1].base : fl.top + slabT;
+      const rise = to - fl.base;
+      const ht = spec.walls.enabled ? spec.walls.t / 2 : 0;
+      const [x0, x1, y0, y1] = [rm.x + ht, rm.x + rm.w - ht, rm.y + ht, rm.y + rm.d - ht];
+      const alongY = y1 - y0 >= x1 - x0;
+      const long = alongY ? y1 - y0 : x1 - x0;
+      const half = (alongY ? x1 - x0 : y1 - y0) / 2;
+      const landing = Math.min(Math.max(half, 900), long * 0.4);
+      const run = long - landing;
+      const where = `${fl.name}, ${rm.name.trim() || `room ${j + 1}`}`;
+      if (run < 1200 || half < 600) return warnings.push(`${where}: the room is too small for a dog-legged stair — add the stair by hand.`);
+      const steps = Math.max(2, Math.round(rise / 2 / 165));
+      const code = `${t}ST${j + 1}`;
+      const box = (a0: number, a1: number, b0: number, b1: number) =>
+        alongY ? { x: (a0 + a1) / 2, y: (b0 + b1) / 2, l: a1 - a0, w: b1 - b0 } : { x: (b0 + b1) / 2, y: (a0 + a1) / 2, l: b1 - b0, w: a1 - a0 };
+      // a = across the run (the two flights side by side), b = along the run
+      const [a0, a1, b0] = alongY ? [x0, x1, y0] : [y0, y1, x0];
+      flights.push({ code: `${code}-1`, type: 'slab', ...box(a0, a0 + half, b0, b0 + run), z: fl.base, h: rise / 2, steps, up: alongY ? '+y' : '+x', level: fl.level });
+      boxes.push({ code: `${code}-LD`, type: 'slab', ...box(a0, a1, b0 + run, b0 + long), z: fl.base + rise / 2 - STAIR_WAIST, h: STAIR_WAIST, level: fl.level });
+      flights.push({ code: `${code}-2`, type: 'slab', ...box(a0 + half, a1, b0, b0 + run), z: fl.base + rise / 2, h: rise / 2, steps, up: alongY ? '-y' : '-x', level: fl.level });
+      warnings.push(`${where}: dog-legged stair, 2 × ${steps} risers of ${Math.round(rise / 2 / steps)} mm, tread ${Math.round(run / steps)} mm — check against the stair detail.`);
+    });
+
+    // ---- parapet on the open edges of this slab (the floor above covers the rest) ----
+    if (spec.slab.enabled && pp?.enabled) {
+      const o = outline(pts, spec.slab.overhang);
+      const up = plans[k + 1] ? outline(plans[k + 1].pts, 0) : null;
+      const near = spec.slab.overhang + col!.w + 300;
+      const half = pp.t / 2;
+      let n = 0;
+      const edge = (axis: 'x' | 'y', at: number, lo: number, hi: number, cover: Iv | null) => {
+        // a covered stretch that nearly reaches the slab end covers it to the end (no stub of parapet on the overhang)
+        const c = cover && ([cover[0] - lo <= near ? lo : cover[0], hi - cover[1] <= near ? hi : cover[1]] as Iv);
+        const parts: Iv[] = c ? [[lo, Math.min(hi, c[0])], [Math.max(lo, c[1]), hi]] : [[lo, hi]];
+        for (const [a, b] of parts) {
+          if (b - a < 300) continue;
+          const pc: Piece = { axis, at, a, b };
+          boxes.push({ code: `${t}PP${++n}`, type: 'wall', ...along(pc, b - a, pp.t, fl.top + spec.slab.t, pp.h), level: roofLevelOf(k) });
+        }
+      };
+      edge('x', o.minY + half, o.minX, o.maxX, up && up.minY - o.minY <= near ? [up.minX, up.maxX] : null);
+      edge('x', o.maxY - half, o.minX, o.maxX, up && o.maxY - up.maxY <= near ? [up.minX, up.maxX] : null);
+      edge('y', o.minX + half, o.minY + pp.t, o.maxY - pp.t, up && up.minX - o.minX <= near ? [up.minY, up.maxY] : null);
+      edge('y', o.maxX - half, o.minY + pp.t, o.maxY - pp.t, up && o.maxX - up.maxX <= near ? [up.minY, up.maxY] : null);
     }
   });
   if (errors.length) return fail();
 
-  // ---- roof slab over the outline ----
-  if (spec.slab.enabled) {
-    const minX = Math.min(...pts.map((p) => p.x)) - col!.w / 2 - spec.slab.overhang;
-    const maxX = Math.max(...pts.map((p) => p.x)) + col!.w / 2 + spec.slab.overhang;
-    const minY = Math.min(...pts.map((p) => p.y)) - col!.d / 2 - spec.slab.overhang;
-    const maxY = Math.max(...pts.map((p) => p.y)) + col!.d / 2 + spec.slab.overhang;
-    boxes.push({ code: 'SL-RF', type: 'slab', x: (minX + maxX) / 2, y: (minY + maxY) / 2, z: spec.roofLevel, l: maxX - minX, w: maxY - minY, h: spec.slab.t });
-  }
-
   const kept = boxes.filter((b) => !omit.has(b.code));
   const sum = emptySummary();
   const refs: Record<string, ElementRef> = {};
-  const elements = kept.map((b) => {
+  const elements = kept.map(({ level, ...b }) => {
     const id = `${prefix}-R-${b.code}`;
     refs[id] = { kind: 'gen', code: b.code };
-    return boxElement(b, id, bId, cx, cy, spec.steel, sum);
+    return { ...boxElement(b, id, bId, cx, cy, spec.steel, sum), levelId: level };
   });
+  for (const fl of flights.filter((x) => !omit.has(x.code))) {
+    const id = `${prefix}-R-${fl.code}`;
+    refs[id] = { kind: 'gen', code: fl.code };
+    elements.push(stairElement(fl, id, bId, cx, cy, spec.steel, sum));
+  }
 
   // elements added by hand, measured from the model centre like on the other templates
   const extras = spec.extraElements ?? [];
@@ -1215,7 +1373,8 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
   }
   // doors / windows cut their wall, whether made from the rooms or by hand (both in plan mm here)
   cutOpenings([...kept, ...extras.map((x) => ({ ...x, x: x.x + cx, y: x.y + cy }))], elements, sum);
-  return finishModel(spec, { elements, sum, errors, warnings, refs, bId, foundation: -mm(spec.foundationDepth), roof: mm(spec.roofLevel), removed: omit.size });
+  const floorLevels = floors.slice(1).map((fl) => ({ id: fl.level, name: fl.name, elevation: mm(fl.base) }));
+  return finishModel(spec, { elements, sum, errors, warnings, refs, bId, foundation: -mm(spec.foundationDepth), roof: mm(floors[floors.length - 1].top), removed: omit.size, floorLevels });
 }
 
 /** A model's elements as a free model (to change anything the templates cannot). Walls lose their cut-outs. */

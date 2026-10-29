@@ -145,7 +145,12 @@ export function validateModelDocument(input: unknown): ModelValidationResult {
       const g = e.geometry;
       if (!isObj(g)) err(`${label}: "geometry" is required.`);
       else {
-        if (g.shape !== 'box' && g.shape !== 'wall') err(`${label}: geometry.shape must be "box" or "wall" (found ${JSON.stringify(g.shape)}).`);
+        if (g.shape !== 'box' && g.shape !== 'wall' && g.shape !== 'stair') err(`${label}: geometry.shape must be "box", "wall" or "stair" (found ${JSON.stringify(g.shape)}).`);
+        if (g.shape === 'stair') {
+          if (!Number.isInteger(g.steps) || (g.steps as number) < 1 || (g.steps as number) > 100) err(`${label}: geometry.steps must be a whole number from 1 to 100.`);
+          if (!['+x', '-x', '+z', '-z'].includes(g.up as string)) err(`${label}: geometry.up must be "+x", "-x", "+z" or "-z".`);
+          if (!isNum(g.waist) || (g.waist as number) <= 0) err(`${label}: geometry.waist must be a positive number (m).`);
+        }
         if (!Array.isArray(g.position) || g.position.length !== 3 || !g.position.every(isNum)) {
           err(`${label}: geometry.position must be three finite numbers [x, y, z].`);
         }

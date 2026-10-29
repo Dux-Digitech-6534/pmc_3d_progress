@@ -19,6 +19,73 @@
     "widthMm",
     "depthMm"
    ]
+  },
+  "__schema1": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string"
+    },
+    "xMm": {
+     "type": "number",
+     "description": "Front-left corner from the building's front-left corner, along X, mm."
+    },
+    "yMm": {
+     "type": "number",
+     "description": "Front-left corner from the building's front-left corner, along Y (front to back), mm."
+    },
+    "widthMm": {
+     "type": "number",
+     "description": "Along X, mm."
+    },
+    "depthMm": {
+     "type": "number",
+     "description": "Along Y, mm."
+    }
+   },
+   "additionalProperties": false,
+   "required": [
+    "name",
+    "xMm",
+    "yMm",
+    "widthMm",
+    "depthMm"
+   ]
+  },
+  "__schema2": {
+   "type": "object",
+   "properties": {
+    "type": {
+     "type": "string",
+     "description": "{enum: [\"door\",\"window\"]}"
+    },
+    "xMm": {
+     "type": "number",
+     "description": "Centre on the plan, same origin as the rooms, mm."
+    },
+    "yMm": {
+     "type": "number"
+    },
+    "widthMm": {
+     "type": "number"
+    },
+    "heightMm": {
+     "type": "number"
+    },
+    "sillMm": {
+     "type": "number",
+     "description": "0 for doors."
+    }
+   },
+   "additionalProperties": false,
+   "required": [
+    "type",
+    "xMm",
+    "yMm",
+    "widthMm",
+    "heightMm",
+    "sillMm"
+   ]
   }
  },
  "type": "object",
@@ -338,76 +405,71 @@
    "type": "array",
    "description": "For structureKind \"building\": every room / space as a rectangle covering the whole plan. Empty otherwise.",
    "items": {
-    "type": "object",
-    "properties": {
-     "name": {
-      "type": "string"
-     },
-     "xMm": {
-      "type": "number",
-      "description": "Front-left corner from the building's front-left corner, along X, mm."
-     },
-     "yMm": {
-      "type": "number",
-      "description": "Front-left corner from the building's front-left corner, along Y (front to back), mm."
-     },
-     "widthMm": {
-      "type": "number",
-      "description": "Along X, mm."
-     },
-     "depthMm": {
-      "type": "number",
-      "description": "Along Y, mm."
-     }
-    },
-    "additionalProperties": false,
-    "required": [
-     "name",
-     "xMm",
-     "yMm",
-     "widthMm",
-     "depthMm"
-    ]
+    "$ref": "#/$defs/__schema1"
    }
   },
   "roomOpenings": {
    "type": "array",
    "description": "For structureKind \"building\": every door and window, centred on the wall line it is in. Empty otherwise.",
    "items": {
+    "$ref": "#/$defs/__schema2"
+   }
+  },
+  "upperFloors": {
+   "type": "array",
+   "description": "For structureKind \"building\": every floor above the ground floor, bottom to top, same origin as the ground-floor rooms. Empty for one storey.",
+   "items": {
     "type": "object",
     "properties": {
-     "type": {
+     "name": {
       "type": "string",
-      "description": "{enum: [\"door\",\"window\"]}"
+      "description": "e.g. \"First floor\"."
      },
-     "xMm": {
+     "floorToFloorMm": {
       "type": "number",
-      "description": "Centre on the plan, same origin as the rooms, mm."
+      "description": "From the roof level of the floor below to this floor's roof level, mm."
      },
-     "yMm": {
-      "type": "number"
+     "rooms": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/__schema1"
+      }
      },
-     "widthMm": {
-      "type": "number"
-     },
-     "heightMm": {
-      "type": "number"
-     },
-     "sillMm": {
-      "type": "number",
-      "description": "0 for doors."
+     "roomOpenings": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/__schema2"
+      }
      }
     },
     "additionalProperties": false,
     "required": [
-     "type",
-     "xMm",
-     "yMm",
-     "widthMm",
-     "heightMm",
-     "sillMm"
+     "name",
+     "floorToFloorMm",
+     "rooms",
+     "roomOpenings"
     ]
    }
+  },
+  "parapet": {
+   "type": "object",
+   "properties": {
+    "present": {
+     "type": "boolean"
+    },
+    "heightMm": {
+     "type": "number"
+    },
+    "thicknessMm": {
+     "type": "number"
+    }
+   },
+   "additionalProperties": false,
+   "required": [
+    "present",
+    "heightMm",
+    "thicknessMm"
+   ]
   },
   "assumptions": {
    "type": "array",
@@ -444,6 +506,8 @@
   "elements",
   "rooms",
   "roomOpenings",
+  "upperFloors",
+  "parapet",
   "assumptions",
   "confidence"
  ],

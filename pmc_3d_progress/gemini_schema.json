@@ -443,6 +443,126 @@
     "additionalProperties": false
    }
   },
+  "upperFloors": {
+   "description": "For structureKind \"building\": every floor above the ground floor, bottom to top, same origin as the ground-floor rooms. Empty for one storey.",
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "description": "e.g. \"First floor\".",
+      "type": "string"
+     },
+     "floorToFloorMm": {
+      "description": "From the roof level of the floor below to this floor's roof level, mm.",
+      "type": "number"
+     },
+     "rooms": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "name": {
+         "type": "string"
+        },
+        "xMm": {
+         "description": "Front-left corner from the building's front-left corner, along X, mm.",
+         "type": "number"
+        },
+        "yMm": {
+         "description": "Front-left corner from the building's front-left corner, along Y (front to back), mm.",
+         "type": "number"
+        },
+        "widthMm": {
+         "description": "Along X, mm.",
+         "type": "number"
+        },
+        "depthMm": {
+         "description": "Along Y, mm.",
+         "type": "number"
+        }
+       },
+       "required": [
+        "name",
+        "xMm",
+        "yMm",
+        "widthMm",
+        "depthMm"
+       ],
+       "additionalProperties": false
+      }
+     },
+     "roomOpenings": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "type": {
+         "type": "string",
+         "enum": [
+          "door",
+          "window"
+         ]
+        },
+        "xMm": {
+         "description": "Centre on the plan, same origin as the rooms, mm.",
+         "type": "number"
+        },
+        "yMm": {
+         "type": "number"
+        },
+        "widthMm": {
+         "type": "number"
+        },
+        "heightMm": {
+         "type": "number"
+        },
+        "sillMm": {
+         "description": "0 for doors.",
+         "type": "number"
+        }
+       },
+       "required": [
+        "type",
+        "xMm",
+        "yMm",
+        "widthMm",
+        "heightMm",
+        "sillMm"
+       ],
+       "additionalProperties": false
+      }
+     }
+    },
+    "required": [
+     "name",
+     "floorToFloorMm",
+     "rooms",
+     "roomOpenings"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "parapet": {
+   "type": "object",
+   "properties": {
+    "present": {
+     "type": "boolean"
+    },
+    "heightMm": {
+     "type": "number"
+    },
+    "thicknessMm": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "present",
+    "heightMm",
+    "thicknessMm"
+   ],
+   "additionalProperties": false
+  },
   "assumptions": {
    "description": "Every value NOT written on the drawing that you assumed, and why. Empty if none.",
    "type": "array",
@@ -481,6 +601,8 @@
   "elements",
   "rooms",
   "roomOpenings",
+  "upperFloors",
+  "parapet",
   "assumptions",
   "confidence"
  ],

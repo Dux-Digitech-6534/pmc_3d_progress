@@ -46,7 +46,22 @@ export interface WallGeometry {
   openings?: WallOpening[];
 }
 
-export type ElementGeometry = BoxGeometry | WallGeometry;
+/**
+ * A straight stair flight filling its box: steps on an RCC waist slab, climbing towards `up`
+ * (the run is along that axis, the width along the other horizontal axis).
+ */
+export interface StairGeometry {
+  shape: 'stair';
+  position: Vec3;
+  size: Vec3;
+  /** Number of risers. */
+  steps: number;
+  up: '+x' | '-x' | '+z' | '-z';
+  /** Waist slab thickness, metres. */
+  waist: number;
+}
+
+export type ElementGeometry = BoxGeometry | WallGeometry | StairGeometry;
 
 /** Length, height and thickness of a wall, whichever horizontal axis it runs along. */
 export function wallDims(g: Pick<WallGeometry, 'size'>) {

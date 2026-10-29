@@ -900,6 +900,32 @@ textarea {
   border-radius: 8px;
   padding: 24px;
 }
+.viewer-views {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: calc(100% - 20px);
+  z-index: 2;
+}
+.viewer-view {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--navy);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #c8d1dc;
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.viewer-view:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
 .viewer-hover {
   position: absolute;
   top: 10px;

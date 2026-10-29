@@ -38,6 +38,7 @@ import {
   type FreeElement,
   type Room,
   type RoomOpening,
+  type UpperFloor,
   type ColumnType,
   type FootingType,
   type OpeningKind,
@@ -1947,16 +1948,72 @@ function copyNext(fe: FreeElement, list: FreeElement[], dir: 'x' | 'y'): FreeEle
 
 /** Building from rooms: the rooms and doors / windows (mm, from the building's front-left corner). */
 function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Partial<BuilderSpec>) => void }) {
-  const rooms = spec.rooms ?? [];
-  const ops = spec.roomOpenings ?? [];
-  const updRoom = (i: number, patch: Partial<Room>) => setSpec({ rooms: rooms.map((x, k) => (k === i ? { ...x, ...patch } : x)) });
-  const updOp = (i: number, patch: Partial<RoomOpening>) => setSpec({ roomOpenings: ops.map((x, k) => (k === i ? { ...x, ...patch } : x)) });
+  const upper = spec.upperFloors ?? [];
+  const [floorPick, setFloor] = useState(0); // 0 = ground floor, 1 = first floor …
+  const floor = Math.min(floorPick, upper.length);
+  const cur = floor ? upper[floor - 1] : null;
+  const rooms = cur ? cur.rooms : (spec.rooms ?? []);
+  const ops = cur ? cur.roomOpenings : (spec.roomOpenings ?? []);
+  const setFloorData = (patch: { rooms?: Room[]; roomOpenings?: RoomOpening[] }) =>
+    cur ? setSpec({ upperFloors: upper.map((u, k) => (k === floor - 1 ? { ...u, ...patch } : u)) }) : setSpec(patch);
+  const setRooms = (list: Room[]) => setFloorData({ rooms: list });
+  const setOps = (list: RoomOpening[]) => setFloorData({ roomOpenings: list });
+  const updUpper = (patch: Partial<UpperFloor>) => setSpec({ upperFloors: upper.map((u, k) => (k === floor - 1 ? { ...u, ...patch } : u)) });
+  const floorName = (k: number) => (k === 0 ? 'Ground floor' : upper[k - 1]?.name?.trim() || `Floor ${k}`);
+  const ORDINAL = ['First', 'Second', 'Third', 'Fourth', 'Fifth'];
+  const addFloor = () => {
+    // a new floor starts as a copy of the top floor's plan, to be corrected from its own drawing
+    const top = upper.length ? upper[upper.length - 1] : { rooms: spec.rooms ?? [], roomOpenings: spec.roomOpenings ?? [] };
+    const name = ORDINAL[upper.length] ? `${ORDINAL[upper.length]} floor` : `Floor ${upper.length + 1}`;
+    setSpec({
+      upperFloors: [...upper, { name, height: spec.roofLevel, rooms: top.rooms.map((r) => ({ ...r })), roomOpenings: top.roomOpenings.map((o) => ({ ...o })) }],
+      ...(spec.parapet ? {} : { parapet: { enabled: true, h: 1000, t: 115 } }),
+    });
+    setFloor(upper.length + 1);
+  };
+  const removeFloor = () => {
+    setSpec({ upperFloors: upper.filter((_, k) => k !== floor - 1) });
+    setFloor(floor - 1);
+  };
+  const parapet = spec.parapet ?? { enabled: false, h: 1000, t: 115 };
+  const updRoom = (i: number, patch: Partial<Room>) => setRooms(rooms.map((x, k) => (k === i ? { ...x, ...patch } : x)));
+  const updOp = (i: number, patch: Partial<RoomOpening>) => setOps(ops.map((x, k) => (k === i ? { ...x, ...patch } : x)));
   const right = rooms.length ? Math.max(...rooms.map((r) => r.x + r.w)) : 0;
   const back = rooms.length ? Math.max(...rooms.map((r) => r.y + r.d)) : 0;
   const ft = (mm: number) => (mm / 304.8).toFixed(1);
   return (
     <section className="card">
       <h2 className="card-title">2 · Rooms (from the plan)</h2>
+      <div className="view-tabs" role="tablist" aria-label="Floor" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
+        {Array.from({ length: upper.length + 1 }, (_, k) => (
+          <button key={k} role="tab" aria-selected={floor === k} className={`view-tab ${floor === k ? 'on' : ''}`} onClick={() => setFloor(k)}>
+            {floorName(k)}
+          </button>
+        ))}
+        <button className="view-tab" onClick={addFloor} title="Add a floor on top (a copy of the top floor's rooms, to correct from its own plan)">
+          + Add floor
+        </button>
+      </div>
+      {cur && (
+        <div className="form-grid" style={{ marginBottom: 8 }}>
+          <label>
+            Floor name
+            <input value={cur.name} onChange={(e) => updUpper({ name: e.target.value })} style={{ width: 160 }} />
+          </label>
+          <label>
+            Floor-to-floor height (mm)
+            <N value={cur.height} onChange={(height) => updUpper({ height })} width={100} />
+          </label>
+          <button className="link" onClick={removeFloor}>
+            Remove this floor
+          </button>
+        </div>
+      )}
+      {cur && (
+        <p className="hint">
+          Same X / Y origin as the ground floor (the building's front-left corner). Columns that do not land on a column of the floor below are listed in the check notes.
+        </p>
+      )}
       <p className="muted small">
         Each room as a rectangle in mm: <b>X / Y</b> = its front-left corner from the building's front-left corner (X to the right, Y to the back),{' '}
         <b>width</b> along X, <b>depth</b> along Y. Walls are built on the room edges (a shared wall once), columns at every corner and junction.
@@ -1998,7 +2055,7 @@ function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Part
                   <N value={rm.d} onChange={(d) => updRoom(i, { d })} label={`Room ${i + 1} depth`} width={74} />
                 </td>
                 <td>
-                  <button className="btn-icon" aria-label={`Remove room ${rm.name || i + 1}`} onClick={() => setSpec({ rooms: rooms.filter((_, k) => k !== i) })}>
+                  <button className="btn-icon" aria-label={`Remove room ${rm.name || i + 1}`} onClick={() => setRooms(rooms.filter((_, k) => k !== i))}>
                     ×
                   </button>
                 </td>
@@ -2007,7 +2064,7 @@ function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Part
           </tbody>
         </table>
       </div>
-      <button className="link" onClick={() => setSpec({ rooms: [...rooms, { name: `Room ${rooms.length + 1}`, x: right, y: 0, w: 3000, d: 3000 }] })}>
+      <button className="link" onClick={() => setRooms([...rooms, { name: `Room ${rooms.length + 1}`, x: right, y: 0, w: 3000, d: 3000 }])}>
         + Add room
       </button>
 
@@ -2049,7 +2106,7 @@ function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Part
                 </td>
                 <td>{o.type === 'door' ? <span className="muted small">0</span> : <N value={o.sill} onChange={(sill) => updOp(i, { sill })} label={`Opening ${i + 1} sill`} width={64} />}</td>
                 <td>
-                  <button className="btn-icon" aria-label={`Remove opening ${i + 1}`} onClick={() => setSpec({ roomOpenings: ops.filter((_, k) => k !== i) })}>
+                  <button className="btn-icon" aria-label={`Remove opening ${i + 1}`} onClick={() => setOps(ops.filter((_, k) => k !== i))}>
                     ×
                   </button>
                 </td>
@@ -2059,10 +2116,10 @@ function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Part
         </table>
       </div>
       <div className="pick-actions">
-        <button className="link" onClick={() => setSpec({ roomOpenings: [...ops, { type: 'door', x: 1000, y: 0, width: 900, height: 2100, sill: 0 }] })}>
+        <button className="link" onClick={() => setOps([...ops, { type: 'door', x: 1000, y: 0, width: 900, height: 2100, sill: 0 }])}>
           + Add door
         </button>
-        <button className="link" onClick={() => setSpec({ roomOpenings: [...ops, { type: 'window', x: 1000, y: 0, width: 1200, height: 1200, sill: 900 }] })}>
+        <button className="link" onClick={() => setOps([...ops, { type: 'window', x: 1000, y: 0, width: 1200, height: 1200, sill: 900 }])}>
           + Add window
         </button>
       </div>
@@ -2080,6 +2137,22 @@ function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Part
           <input type="checkbox" checked={spec.lintel.enabled} onChange={(e) => setSpec({ lintel: { ...spec.lintel, enabled: e.target.checked } })} /> RCC lintel over
           openings, {spec.lintel.h} mm deep
         </label>
+        <label className="inline">
+          <input type="checkbox" checked={parapet.enabled} onChange={(e) => setSpec({ parapet: { ...parapet, enabled: e.target.checked } })} /> Parapet wall on open roof / terrace
+          edges
+        </label>
+        {parapet.enabled && (
+          <>
+            <label>
+              Parapet height (mm)
+              <N value={parapet.h} onChange={(h) => setSpec({ parapet: { ...parapet, h } })} width={100} />
+            </label>
+            <label>
+              Parapet thickness (mm)
+              <N value={parapet.t} onChange={(t) => setSpec({ parapet: { ...parapet, t } })} width={100} />
+            </label>
+          </>
+        )}
       </div>
     </section>
   );

@@ -226,8 +226,16 @@ def validate_model_document(doc):
 				err(f'{label}: "geometry" is required.')
 			else:
 				shape = g.get("shape")
-				if shape not in ("box", "wall"):
-					err(f'{label}: geometry.shape must be "box" or "wall" (found {js_json(shape)}).')
+				if shape not in ("box", "wall", "stair"):
+					err(f'{label}: geometry.shape must be "box", "wall" or "stair" (found {js_json(shape)}).')
+				if shape == "stair":
+					steps = g.get("steps")
+					if not (isinstance(steps, int) and not isinstance(steps, bool) and 1 <= steps <= 100):
+						err(f"{label}: geometry.steps must be a whole number from 1 to 100.")
+					if g.get("up") not in ("+x", "-x", "+z", "-z"):
+						err(f'{label}: geometry.up must be "+x", "-x", "+z" or "-z".')
+					if not _is_num(g.get("waist")) or g["waist"] <= 0:
+						err(f"{label}: geometry.waist must be a positive number (m).")
 				pos = g.get("position")
 				if not isinstance(pos, list) or len(pos) != 3 or not all(_is_num(n) for n in pos):
 					err(f"{label}: geometry.position must be three finite numbers [x, y, z].")

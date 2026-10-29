@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
-import { wallDims, type ElementGeometry, type ElementRecord } from '../domain/types';
+import { wallDims, type ElementGeometry, type ElementRecord, type StairGeometry } from '../domain/types';
 import { SELECTION_COLOR } from '../lib/colors';
 
 export interface ModelViewerProps {
@@ -98,11 +98,12 @@ export function ModelViewer(props: ModelViewerProps) {
     scene.add(root);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    // stay above the ground: looking from below turned the model upside down for users
-    controls.maxPolarAngle = Math.PI / 2 - 0.03;
+    // free orbit all round (also from below the ground); the wheel zooms towards the mouse, so
+    // pointing at a room and scrolling goes inside it
     controls.screenSpacePanning = true;
-    controls.maxDistance = 120;
-    controls.minDistance = 0.5;
+    controls.zoomToCursor = true;
+    controls.maxDistance = 200;
+    controls.minDistance = 0.1;
 
     const render = () => {
       renderer.render(scene, camera);
@@ -271,11 +272,31 @@ export function ModelViewer(props: ModelViewerProps) {
     <div className="viewer-host" ref={hostRef} data-testid="model-viewer">
       {glError && <div className="viewer-error" role="alert">{glError}</div>}
       {hoverCode && <div className="viewer-hover">{hoverCode}</div>}
+      {!glError && (
+        <div className="viewer-views" role="group" aria-label="Camera view">
+          {VIEWS.map(([label, dir, title]) => (
+            <button key={label} className="viewer-view" title={title} onClick={() => ctxRef.current && frameAll(ctxRef.current, dir)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function frameAll(ctx: Ctx) {
+/** Camera views: [button, direction from the model centre to the camera, tooltip]. */
+const VIEWS: [string, THREE.Vector3Tuple, string][] = [
+  ['3D', [0.75, 0.55, 1], 'Corner view from above'],
+  ['Front', [0, 0.15, 1], 'From the front'],
+  ['Back', [0, 0.15, -1], 'From the back'],
+  ['Left', [-1, 0.15, 0], 'From the left side'],
+  ['Right', [1, 0.15, 0], 'From the right side'],
+  ['Top', [0, 1, 0.001], 'From straight above (plan)'],
+  ['Below', [0.75, -0.6, 1], 'From below the ground: footings, plinth beams, slab undersides'],
+];
+
+function frameAll(ctx: Ctx, dir: THREE.Vector3Tuple = VIEWS[0][1]) {
   const box = new THREE.Box3();
   ctx.objects.forEach((o) => box.expandByObject(o.mesh));
   if (box.isEmpty()) {
@@ -288,8 +309,9 @@ function frameAll(ctx: Ctx) {
   const vFov = (ctx.camera.fov * Math.PI) / 180;
   const hFov = 2 * Math.atan(Math.tan(vFov / 2) * ctx.camera.aspect);
   const dist = (radius / Math.sin(Math.min(vFov, hFov) / 2)) * 1.08;
-  ctx.camera.position.copy(center).add(new THREE.Vector3(0.75, 0.55, 1).normalize().multiplyScalar(dist));
-  ctx.camera.near = Math.max(dist / 200, 0.01);
+  ctx.camera.position.copy(center).add(new THREE.Vector3(...dir).normalize().multiplyScalar(dist));
+  // small near plane: the camera may be taken inside a room
+  ctx.camera.near = Math.max(dist / 2000, 0.01);
   ctx.camera.far = dist * 20;
   ctx.camera.updateProjectionMatrix();
   ctx.controls.target.copy(center);
@@ -306,12 +328,42 @@ function disposeObjects(o: ElementObjects) {
   o.mesh.remove(o.label);
 }
 
+/** A stair flight: its side profile (steps on top, waist slab underneath) extruded across its width. */
+function stairGeometry(g: StairGeometry): THREE.BufferGeometry {
+  const alongX = g.up === '+x' || g.up === '-x';
+  const L = alongX ? g.size[0] : g.size[2];
+  const W = alongX ? g.size[2] : g.size[0];
+  const H = g.size[1];
+  const n = Math.max(1, Math.round(g.steps));
+  const T = L / n;
+  const R = H / n;
+  const d = Math.min(g.waist, H * 0.9);
+  const s = new THREE.Shape();
+  s.moveTo(-L / 2, -H / 2);
+  for (let i = 0; i < n; i++) {
+    s.lineTo(-L / 2 + i * T, -H / 2 + (i + 1) * R);
+    s.lineTo(-L / 2 + (i + 1) * T, -H / 2 + (i + 1) * R);
+  }
+  // underside parallel to the pitch line, d below the step nosings
+  s.lineTo(L / 2, Math.max(H / 2 - R - d, -H / 2));
+  s.lineTo(Math.min(-L / 2 + T + (d * L) / H, L / 2), -H / 2);
+  s.closePath();
+  const geo = new THREE.ExtrudeGeometry(s, { depth: W, bevelEnabled: false });
+  geo.translate(0, 0, -W / 2);
+  // local +X (climbing direction) → the world direction
+  if (g.up === '-x') geo.rotateY(Math.PI);
+  else if (g.up === '+z') geo.rotateY(-Math.PI / 2);
+  else if (g.up === '-z') geo.rotateY(Math.PI / 2);
+  return geo;
+}
+
 /**
  * Box elements become a BoxGeometry. Walls are extruded from their elevation outline with the
  * openings cut out: openings touching the wall bottom/top (doors) become notches in the outline,
  * the rest become holes. Result is centred on the element position like a box.
  */
 export function elementGeometry(g: ElementGeometry): THREE.BufferGeometry {
+  if (g.shape === 'stair') return stairGeometry(g);
   if (g.shape !== 'wall' || !g.openings?.length) return new THREE.BoxGeometry(...g.size);
   const { alongX, length: L, height: H, thickness: T } = wallDims(g);
   const EPS = 1e-4;

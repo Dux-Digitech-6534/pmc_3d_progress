@@ -9,6 +9,8 @@ const cabin = (): DrawingReading => ({
   elements: [],
   rooms: [],
   roomOpenings: [],
+  upperFloors: [],
+  parapet: { present: false, heightMm: 0, thicknessMm: 0 },
   projectName: 'Security Cabin',
   buildingName: 'Security Cabin',
   xSpansMm: [3230],
