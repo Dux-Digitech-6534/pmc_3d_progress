@@ -56,6 +56,9 @@ Notes:
 
 ## Develop
 
+Step by step — run locally, use a copy of the production data, and put changes on production: [docs/LOCAL_AND_DEPLOY.md](docs/LOCAL_AND_DEPLOY.md).
+
+
 Requires Node.js 20.19+ or 22.12+ (tested with Node 24). All npm commands run in `frontend/`.
 
 ```bash
