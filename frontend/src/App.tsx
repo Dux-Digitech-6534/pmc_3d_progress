@@ -15,7 +15,8 @@ import { AppProvider, useApp, type Page } from './state/AppContext';
 const NAV: { page: Page; label: string; icon: string }[] = [
   { page: 'dashboard', label: 'Dashboard', icon: '▦' },
   { page: 'projects', label: 'Projects', icon: '▤' },
-  { page: 'workspace', label: 'Work Done / Material', icon: '◈' },
+  { page: 'workspace', label: 'Work Done', icon: '◈' },
+  { page: 'material', label: 'Material Required', icon: '▥' },
   { page: 'dpr', label: 'Daily Progress Reports', icon: '☰' },
   { page: 'models', label: '3D + BOQ Upload', icon: '⬚' },
   // drawing → model with AI: only for local work; on the server the 3D + BOQ is uploaded
@@ -123,7 +124,7 @@ function Shell() {
         {!storageIsPersistent && (
           <div className="alert alert-warn banner">Browser storage is blocked: changes will be lost when the page reloads.</div>
         )}
-        <main className={`content ${page === 'workspace' ? 'content-full' : ''}`}>
+        <main className={`content ${page === 'workspace' || page === 'material' ? 'content-full' : ''}`}>
           {noAccess && (
             <EmptyState title="No access to PMC 3D Progress">
               {sessionError ??
@@ -139,7 +140,7 @@ function Shell() {
                     Open <b>3D + BOQ Upload</b> and upload the project's 3D + BOQ file.
                   </li>
                   <li>
-                    In <b>Work Done / Material</b>, tick the elements in the list or the 3D view — mark the work that is done, or see the material it needs.
+                    In <b>Work Done</b>, tick the elements and mark the work that is done; <b>Material Required</b> shows the material ticked elements need.
                   </li>
                   <li>The PMC Reviewer approves the work done; the 3D colours and progress update.</li>
                 </ol>
@@ -173,7 +174,8 @@ function Shell() {
           )}
           {!noAccess && !empty && page === 'dashboard' && <Dashboard />}
           {!noAccess && !empty && page === 'projects' && <Projects />}
-          {!noAccess && !empty && page === 'workspace' && <Workspace />}
+          {!noAccess && !empty && page === 'workspace' && <Workspace key="work" mode="work" />}
+          {!noAccess && !empty && page === 'material' && <Workspace key="material" mode="material" />}
           {!noAccess && !empty && page === 'dpr' && <DprList />}
           {!noAccess && page === 'builder' && !IS_FRAPPE && <ModelBuilder />}
           {!noAccess && page === 'models' && <ModelRegister />}

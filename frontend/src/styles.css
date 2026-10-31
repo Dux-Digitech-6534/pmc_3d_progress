@@ -2409,3 +2409,11 @@ details.advanced[open] > summary {
 .focus-tick {
   font-weight: 600;
 }
+.ws-right-title {
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--navy);
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}

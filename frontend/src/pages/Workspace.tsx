@@ -20,8 +20,15 @@ const STATUS_ORDER: ViewStatus[] = ['not-started', 'awaiting', 'in-progress', 'c
 const VIEW_LABELS: Record<ViewStatus, string> = { ...ACTIVITY_STATUS_LABELS, awaiting: 'Awaiting approval' };
 const VIEW_COLORS: Record<ViewStatus, string> = { ...STATUS_COLORS, awaiting: AWAITING_COLOR };
 
-export function Workspace() {
-  const { data, loading, loadError, selection, setSelection, go, role } = useApp();
+/**
+ * The 3D screen. Two screens use it: "work" (tick elements and record the work done) and "material"
+ * (tick elements and see the material they need). Each keeps its own ticks.
+ */
+export function Workspace({ mode }: { mode: 'work' | 'material' }) {
+  const { data, loading, loadError, selection: workSelection, setSelection: setWorkSelection, go, role } = useApp();
+  const [materialSelection, setMaterialSelection] = useState<Set<string>>(() => new Set());
+  const selection = mode === 'work' ? workSelection : materialSelection;
+  const setSelection = mode === 'work' ? setWorkSelection : setMaterialSelection;
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | ElementType>('all');
   const [levelFilter, setLevelFilter] = useState('all');
@@ -32,8 +39,6 @@ export function Workspace() {
   // hidden in the 3D view only (to look inside the building) — nothing changes in the model or progress
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
   const [hiddenTypes, setHiddenTypes] = useState<Set<ViewGroup>>(() => new Set());
-  // right panel: record work done, or see the material the ticked elements need
-  const [panel, setPanel] = useState<'work' | 'material'>('work');
   // the element whose details are open in the right panel (click in the list or the 3D view)
   const [focusId, setFocusId] = useState<string | null>(null);
 
@@ -302,14 +307,7 @@ export function Workspace() {
       </section>
 
       <aside className="ws-right" aria-label="Selected element">
-        <div className="ws-tabs" role="tablist">
-          <button role="tab" aria-selected={panel === 'work'} className={panel === 'work' ? 'on' : ''} onClick={() => setPanel('work')}>
-            Work done
-          </button>
-          <button role="tab" aria-selected={panel === 'material'} className={panel === 'material' ? 'on' : ''} onClick={() => setPanel('material')}>
-            Material required
-          </button>
-        </div>
+        <div className="ws-right-title">{mode === 'work' ? 'Work done' : 'Material required'}</div>
         <div className="ws-right-body">
           {focusEl ? (
             <div className="focus-view">
@@ -321,15 +319,19 @@ export function Workspace() {
                   <input type="checkbox" checked={selection.has(focusEl.id)} onChange={() => toggle(focusEl.id)} /> Ticked
                 </label>
               </div>
-              <ElementPanel
-                selected={[focusEl]}
-                activities={activities}
-                entries={entries}
-                allEntries={data.allEntries}
-                projectName={data.project.name}
-                modelKey={data.model.key}
-                onOpen={setFocusId}
-              />
+              {mode === 'work' ? (
+                <ElementPanel
+                  selected={[focusEl]}
+                  activities={activities}
+                  entries={entries}
+                  allEntries={data.allEntries}
+                  projectName={data.project.name}
+                  modelKey={data.model.key}
+                  onOpen={setFocusId}
+                />
+              ) : (
+                <MaterialRequiredPanel selected={[focusEl]} entries={entries} shown={0} onTickShown={() => undefined} />
+              )}
             </div>
           ) : (
             <>
@@ -349,7 +351,7 @@ export function Workspace() {
                   return st ? { label: VIEW_LABELS[st], color: VIEW_COLORS[st] } : undefined;
                 }}
               />
-              {panel === 'work' ? (
+              {mode === 'work' ? (
                 <ElementPanel
                   selected={selectedEls}
                   activities={activities}

@@ -27,7 +27,7 @@ export function MaterialRequiredPanel({
   if (!selected.length) {
     return (
       <EmptyState
-        title="Material required"
+        title="No element ticked"
         action={
           <button className="btn btn-primary" onClick={onTickShown} disabled={!shown}>
             Tick all {shown} shown elements
@@ -51,11 +51,15 @@ export function MaterialRequiredPanel({
   return (
     <div className="panel-scroll">
       <div className="panel-section">
-        <h2 className="panel-title">Material required</h2>
-        <p className="muted small">
-          {selected.length} element{selected.length === 1 ? '' : 's'}: {selected.slice(0, 12).map((e) => e.code).join(', ')}
-          {selected.length > 12 ? ` +${selected.length - 12} more` : ''}
-        </p>
+        <h2 className="panel-title">
+          {selected.length === 1 ? selected[0].code : `${selected.length} elements ticked`}
+        </h2>
+        {selected.length > 1 && (
+          <p className="muted small">
+            {selected.slice(0, 12).map((e) => e.code).join(', ')}
+            {selected.length > 12 ? ` +${selected.length - 12} more` : ''}
+          </p>
+        )}
         <div className="seg" role="group" aria-label="Quantity basis">
           <button className={`btn btn-small ${basis === 'balance' ? 'btn-on' : ''}`} onClick={() => setBasis('balance')}>
             Work still to do
