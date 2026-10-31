@@ -23,6 +23,7 @@ const roomOpeningSchema = z.object({
   widthMm: z.number(),
   heightMm: z.number(),
   sillMm: z.number().describe('0 for doors.'),
+  between: z.array(z.string()).describe('The two spaces this opening joins, by their names in rooms, or "outside" — e.g. ["Drawing room", "Porch"], ["Bed room", "outside"].'),
 });
 
 export const DrawingReadingSchema = z.object({
@@ -136,6 +137,7 @@ const toRoomOpening = (o: ReadOpening) => ({
   width: Math.round(o.widthMm),
   height: Math.round(o.heightMm),
   sill: o.type === 'door' ? 0 : Math.max(Math.round(o.sillMm), 0),
+  ...(o.between?.[0]?.trim() ? { between: [o.between[0].trim(), o.between[1]?.trim() || 'outside'] as [string, string] } : {}),
 });
 
 export function readingToSpec(r: DrawingReading, base: BuilderSpec): { spec: BuilderSpec; notes: string[] } {

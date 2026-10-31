@@ -367,3 +367,87 @@ describe('a 22 × 30 ft plan read with small errors (walls a little apart, rooms
     expect(doc.elements.filter((e) => e.type === 'door')).toHaveLength(3);
   });
 });
+
+describe('doors and windows placed by the two rooms they join', () => {
+  const f = (n: number) => Math.round(n * 304.8);
+  const rooms: Room[] = [
+    { name: 'Porch', kind: 'open', x: 0, y: 0, w: f(9.5), d: f(11.6) },
+    { name: 'Drawing room', x: f(9.5), y: 0, w: f(10.5), d: f(11.6) },
+    { name: 'Lobby', x: 0, y: f(11.6), w: f(20), d: f(8) },
+  ];
+  const spec = (roomOpenings: BuilderSpec['roomOpenings']): BuilderSpec => ({
+    ...defaultSpec(),
+    kind: 'rooms',
+    rooms,
+    roomOpenings,
+    walls: { enabled: true, t: 230, internal: true },
+    openings: [],
+  });
+  /** Plan position (mm, from the building's front-left corner) of a built element's centre. */
+  const planOf = (res: ReturnType<typeof buildModel>, code: string) => {
+    const doc = res.document!;
+    const cols = doc.elements.filter((e) => e.type === 'column');
+    const minX = Math.min(...cols.map((e) => e.geometry.position[0]));
+    const maxZ = Math.max(...cols.map((e) => e.geometry.position[2]));
+    const e = doc.elements.find((x) => x.code === code)!;
+    return { x: Math.round((e.geometry.position[0] - minX) * 1000), y: Math.round((maxZ - e.geometry.position[2]) * 1000) };
+  };
+
+  it('puts the drawing-room door in the wall to the porch even when its X / Y says the front wall', () => {
+    // read wrongly at the front wall, near the left corner of the drawing room
+    const res = buildModel(spec([
+      { type: 'door', x: f(10.5), y: 0, width: 900, height: 2100, sill: 0, between: ['Drawing room', 'Porch'] },
+      { type: 'window', x: f(15), y: 0, width: 1500, height: 1200, sill: 900, between: ['Drawing room', 'outside'] },
+    ]));
+    expect(res.errors).toEqual([]);
+    const d = planOf(res, 'D1');
+    expect(Math.abs(d.x - f(9.5))).toBeLessThan(5); // on the porch wall (x = 9.5 ft)
+    expect(d.y).toBeGreaterThan(300);
+    const w = planOf(res, 'WN1');
+    expect(Math.abs(w.y)).toBeLessThan(5); // front wall
+    expect(w.x).toBeGreaterThan(f(9.5));
+  });
+
+  it('accepts "outside" first, ignores case, and notes a pair that shares no wall or an unknown room', () => {
+    const ok = buildModel(spec([{ type: 'window', x: f(15), y: 100, width: 1200, height: 1200, sill: 900, between: ['outside', 'drawing ROOM'] }]));
+    expect(Math.abs(planOf(ok, 'WN1').y)).toBeLessThan(5);
+    const none = buildModel(spec([{ type: 'door', x: f(5), y: f(11.6), width: 900, height: 2100, sill: 0, between: ['Porch', 'Kitchen'] }]));
+    expect(none.warnings.join(' ')).toMatch(/no room named "Kitchen"/);
+    const apart = buildModel(spec([{ type: 'door', x: f(5), y: 0, width: 900, height: 2100, sill: 0, between: ['Porch', 'Lobby'] }]));
+    // the porch has no walls of its own; its edge to the lobby is the lobby's wall, so it is found
+    expect(Math.abs(planOf(apart, 'D1').y - f(11.6))).toBeLessThanOrEqual(10); // walls sit on 10 mm lines
+  });
+});
+
+describe('an opening whose two rooms share no wall', () => {
+  it('is not put in some other wall near its X / Y', () => {
+    const res = buildModel({
+      ...defaultSpec(),
+      kind: 'rooms',
+      rooms: [
+        { name: 'Bed room', x: 0, y: 0, w: 4000, d: 3000 },
+        { name: 'Toilet', x: 4000, y: 0, w: 2000, d: 1500 },
+        { name: 'OTS', x: 4500, y: 1500, w: 1500, d: 1500 },
+      ],
+      // Bed room and OTS do not touch (the toilet's corner is between); X / Y is on the OTS outside wall
+      roomOpenings: [{ type: 'door', x: 6000, y: 2200, width: 750, height: 2100, sill: 0, between: ['Bed room', 'Store'] }],
+      walls: { enabled: true, t: 230, internal: true },
+      openings: [],
+    });
+    expect(res.warnings.join(' ')).toMatch(/no room named "Store"/);
+    const res2 = buildModel({
+      ...defaultSpec(),
+      kind: 'rooms',
+      rooms: [
+        { name: 'Bed room', x: 0, y: 0, w: 4000, d: 3000 },
+        { name: 'Hall', x: 4000, y: 0, w: 500, d: 3000 },
+        { name: 'OTS', x: 4500, y: 0, w: 1500, d: 3000 },
+      ],
+      roomOpenings: [{ type: 'door', x: 6000, y: 1500, width: 750, height: 2100, sill: 0, between: ['Bed room', 'OTS'] }],
+      walls: { enabled: true, t: 230, internal: true },
+      openings: [],
+    });
+    expect(res2.warnings.join(' ')).toMatch(/share no wall and its X \/ Y is not on a wall of either — not built/);
+    expect(res2.document!.elements.some((e) => e.type === 'door')).toBe(false);
+  });
+});

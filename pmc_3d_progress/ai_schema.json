@@ -80,6 +80,13 @@
     "sillMm": {
      "type": "number",
      "description": "0 for doors."
+    },
+    "between": {
+     "type": "array",
+     "description": "The two spaces this opening joins, by their names in rooms, or \"outside\" — e.g. [\"Drawing room\", \"Porch\"], [\"Bed room\", \"outside\"].",
+     "items": {
+      "type": "string"
+     }
     }
    },
    "additionalProperties": false,
@@ -89,7 +96,8 @@
     "yMm",
     "widthMm",
     "heightMm",
-    "sillMm"
+    "sillMm",
+    "between"
    ]
   }
  },

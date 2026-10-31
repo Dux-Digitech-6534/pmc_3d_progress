@@ -1980,6 +1980,7 @@ function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Part
   const parapet = spec.parapet ?? { enabled: false, h: 1000, t: 115 };
   const updRoom = (i: number, patch: Partial<Room>) => setRooms(rooms.map((x, k) => (k === i ? { ...x, ...patch } : x)));
   const updOp = (i: number, patch: Partial<RoomOpening>) => setOps(ops.map((x, k) => (k === i ? { ...x, ...patch } : x)));
+  const roomNames = [...new Set(rooms.filter((r) => roomKind(r) !== 'terrace').map((r) => r.name.trim()).filter(Boolean))];
   const right = rooms.length ? Math.max(...rooms.map((r) => r.x + r.w)) : 0;
   const back = rooms.length ? Math.max(...rooms.map((r) => r.y + r.d)) : 0;
   const ft = (mm: number) => (mm / 304.8).toFixed(1);
@@ -2086,7 +2087,10 @@ function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Part
       </button>
 
       <h3 className="section-title" style={{ marginTop: 14 }}>Doors and windows</h3>
-      <p className="muted small">Centre of each opening on the plan (same X / Y as the rooms) — it goes into the wall it is on.</p>
+      <p className="muted small">
+        Centre of each opening on the plan (same X / Y as the rooms). <b>Between</b> = the two spaces it joins (or Outside): it is then built in the wall those two share,
+        at the point nearest its X / Y. Without it, it goes into the wall nearest its X / Y.
+      </p>
       <div className="free-table-wrap">
         <table className="table compact sched free-table">
           <thead>
@@ -2097,6 +2101,7 @@ function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Part
               <th>Width</th>
               <th>Height</th>
               <th>Sill</th>
+              <th title="The two spaces it joins: it is built in the wall they share">Between</th>
               <th />
             </tr>
           </thead>
@@ -2122,6 +2127,29 @@ function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Part
                   <N value={o.height} onChange={(height) => updOp(i, { height })} label={`Opening ${i + 1} height`} width={64} />
                 </td>
                 <td>{o.type === 'door' ? <span className="muted small">0</span> : <N value={o.sill} onChange={(sill) => updOp(i, { sill })} label={`Opening ${i + 1} sill`} width={64} />}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  {[0, 1].map((side) => (
+                    <select
+                      key={side}
+                      value={o.between?.[side] ?? ''}
+                      aria-label={`Opening ${i + 1} ${side ? 'second' : 'first'} space`}
+                      style={{ maxWidth: 120, marginRight: side ? 0 : 4 }}
+                      onChange={(e) => {
+                        const pair: [string, string] = [o.between?.[0] ?? '', o.between?.[1] ?? 'outside'];
+                        pair[side] = e.target.value;
+                        updOp(i, { between: pair[0] ? pair : undefined });
+                      }}
+                    >
+                      <option value="">{side ? '—' : 'By X / Y'}</option>
+                      {roomNames.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                      {side === 1 && <option value="outside">Outside</option>}
+                    </select>
+                  ))}
+                </td>
                 <td>
                   <button className="btn-icon" aria-label={`Remove opening ${i + 1}`} onClick={() => setOps(ops.filter((_, k) => k !== i))}>
                     ×

@@ -441,6 +441,13 @@
      "sillMm": {
       "description": "0 for doors.",
       "type": "number"
+     },
+     "between": {
+      "description": "The two spaces this opening joins, by their names in rooms, or \"outside\" — e.g. [\"Drawing room\", \"Porch\"], [\"Bed room\", \"outside\"].",
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
      }
     },
     "required": [
@@ -449,7 +456,8 @@
      "yMm",
      "widthMm",
      "heightMm",
-     "sillMm"
+     "sillMm",
+     "between"
     ],
     "additionalProperties": false
    }
@@ -542,6 +550,13 @@
         "sillMm": {
          "description": "0 for doors.",
          "type": "number"
+        },
+        "between": {
+         "description": "The two spaces this opening joins, by their names in rooms, or \"outside\" — e.g. [\"Drawing room\", \"Porch\"], [\"Bed room\", \"outside\"].",
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
         }
        },
        "required": [
@@ -550,7 +565,8 @@
         "yMm",
         "widthMm",
         "heightMm",
-        "sillMm"
+        "sillMm",
+        "between"
        ],
        "additionalProperties": false
       }

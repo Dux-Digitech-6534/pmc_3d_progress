@@ -88,6 +88,11 @@ export interface RoomOpening {
   width: number;
   height: number;
   sill: number;
+  /**
+   * The two spaces the opening joins, by room name ("outside" for an outside wall). When set, the
+   * opening goes in the wall those two share, at the point of it nearest x / y.
+   */
+  between?: [string, string];
 }
 
 /** A floor above the ground floor (kind 'rooms'): its own rooms and doors / windows, same origin as the ground floor. */
@@ -1416,20 +1421,97 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
     // ---- doors / windows in the wall piece they sit on, with lintels and chhajjas ----
     const wallPieces = pieces.filter((pc) => pc.wall);
     const outside = [...frameRects, ...kinds[k].balcony.map(rectOf)];
+    const named = (n: string) => {
+      const key = n.trim().toLowerCase();
+      return kinds[k].frame.find((rm) => rm.name.trim().toLowerCase() === key);
+    };
+    /**
+     * The wall an opening goes in when it says which two spaces it joins: a piece on the edge both
+     * rooms share (or, for "outside", on an edge of the room with nothing built beyond it), at the
+     * point nearest the opening's x / y. Null when the opening does not name its rooms.
+     */
+    type Spot = { pc: Piece; at: number; d: number };
+    const onSharedWall = (o: RoomOpening, ps: Piece[], label: string): Spot | null | 'skip' => {
+      const [n1, n2] = o.between ?? [];
+      if (!n1?.trim()) return null;
+      const out = (n: string | undefined) => !n?.trim() || /^outside$/i.test(n.trim());
+      // "outside" may be given first
+      const [first, second] = out(n1) && !out(n2) ? [n2!, n1] : [n1, n2];
+      const A = named(first);
+      const B = out(second) ? null : named(second!);
+      const pair = `"${first.trim()}" and ${out(second) ? 'outside' : `"${second!.trim()}"`}`;
+      if (!A || (!out(second) && !B)) {
+        warnings.push(`${label}: no room named ${!A ? `"${first.trim()}"` : `"${second!.trim()}"`} on this floor — placed by its X / Y.`);
+        return null;
+      }
+      const ra = rectOf(A);
+      const rb = B ? rectOf(B) : null;
+      // the stretch of the piece that lies along this room's side
+      const span = (pc: Piece, r: Rect): Iv | null => {
+        const onLine = pc.axis === 'x' ? Math.abs(pc.at - r.y0) < 1 || Math.abs(pc.at - r.y1) < 1 : Math.abs(pc.at - r.x0) < 1 || Math.abs(pc.at - r.x1) < 1;
+        const [lo, hi] = pc.axis === 'x' ? [Math.max(pc.a, r.x0), Math.min(pc.b, r.x1)] : [Math.max(pc.a, r.y0), Math.min(pc.b, r.y1)];
+        return onLine && hi - lo > 300 ? [lo, hi] : null;
+      };
+      const opensOut = (pc: Piece) => {
+        const m = (pc.a + pc.b) / 2;
+        const side = (d: number): [number, number] => (pc.axis === 'x' ? [m, pc.at + d] : [pc.at + d, m]);
+        const [p, q] = [side(-150), side(150)];
+        const inA = (x: number, y: number) => x > ra.x0 && x < ra.x1 && y > ra.y0 && y < ra.y1;
+        return (inA(...p) && !inside(outside, ...q)) || (inA(...q) && !inside(outside, ...p));
+      };
+      const cands = ps
+        .map((pc) => {
+          let iv = span(pc, ra);
+          if (iv && rb) {
+            const jv = span(pc, rb);
+            iv = jv && Math.min(iv[1], jv[1]) - Math.max(iv[0], jv[0]) > 300 ? [Math.max(iv[0], jv[0]), Math.min(iv[1], jv[1])] : null;
+          } else if (iv && !opensOut(pc)) iv = null;
+          if (!iv) return null;
+          const along = pc.axis === 'x' ? o.x : o.y;
+          const at = Math.min(Math.max(along, iv[0] + Math.min(o.width, iv[1] - iv[0]) / 2), iv[1] - Math.min(o.width, iv[1] - iv[0]) / 2);
+          const d = Math.hypot(along - at, (pc.axis === 'x' ? o.y : o.x) - pc.at);
+          return { pc, at, d };
+        })
+        .filter((c): c is { pc: Piece; at: number; d: number } => !!c)
+        .sort((p, q) => p.d - q.d);
+      if (!cands.length) {
+        // only an inside wall of one of the two rooms, near its X / Y — never an outside wall or another room's wall
+        const interior = (pc: Piece) => {
+          const m = (pc.a + pc.b) / 2;
+          return [-150, 150].every((d) => (pc.axis === 'x' ? inside(outside, m, pc.at + d) : inside(outside, pc.at + d, m)));
+        };
+        const own: Spot | undefined = ps
+          .filter((pc) => rb && (span(pc, ra) || span(pc, rb)) && interior(pc))
+          .map((pc) => ({ pc, at: pc.axis === 'x' ? o.x : o.y, d: Math.abs((pc.axis === 'x' ? o.y : o.x) - pc.at) }))
+          .filter(({ pc, at, d }) => d <= 450 && at >= pc.a - 1 && at <= pc.b + 1)
+          .sort((p, q) => p.d - q.d)[0];
+        warnings.push(
+          own
+            ? `${label}: ${pair} share no wall — placed by its X / Y in a wall of ${pair}; check the rooms or the opening.`
+            : `${label}: ${pair} share no wall and its X / Y is not on a wall of either — not built; fix the rooms or "Between".`,
+        );
+        return own ?? 'skip';
+      }
+      if (cands[0].d > 600) warnings.push(`${label} was moved ${(cands[0].d / 1000).toFixed(1)} m to the wall between ${pair}.`);
+      return cands[0];
+    };
     let nd = 0, nw = 0;
     const openings = fl.mumty ? mumtyDoor(wallPieces) : fl.openings;
     openings.forEach((o, i) => {
       if (!spec.walls.enabled) return;
       const label = `${k ? `${fl.name}: ` : ''}${o.type === 'door' ? 'Door' : 'Window'} ${i + 1} at ${Math.round(o.x)} / ${Math.round(o.y)} mm`;
       if (!pos(o.width) || !pos(o.height)) return errors.push(`${label}: width and height must be positive (mm).`);
-      const near = wallPieces
-        .map((pc) => {
-          const at = pc.axis === 'x' ? o.x : o.y;
-          const d = Math.abs((pc.axis === 'x' ? o.y : o.x) - pc.at);
-          return { pc, at, d };
-        })
-        .filter(({ pc, at, d }) => d <= 450 && at >= pc.a - 1 && at <= pc.b + 1)
-        .sort((p, q) => p.d - q.d)[0];
+      const shared = onSharedWall(o, wallPieces, label);
+      if (shared === 'skip') return;
+      const near = shared ??
+        wallPieces
+          .map((pc) => {
+            const at = pc.axis === 'x' ? o.x : o.y;
+            const d = Math.abs((pc.axis === 'x' ? o.y : o.x) - pc.at);
+            return { pc, at, d };
+          })
+          .filter(({ pc, at, d }) => d <= 450 && at >= pc.a - 1 && at <= pc.b + 1)
+          .sort((p, q) => p.d - q.d)[0];
       if (!near) return warnings.push(`${label} is not on a wall between two columns — add it by hand.`);
       const { pc } = near;
       const width = Math.min(o.width, pc.b - pc.a);
