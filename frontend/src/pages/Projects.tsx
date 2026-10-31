@@ -96,18 +96,14 @@ export function Projects() {
             {IS_FRAPPE
               ? 'All projects, models, drawings and progress are saved on this Frappe server, with your login and PMC role. '
               : 'All projects, models, drawings and progress live only in this browser (localStorage and IndexedDB). No server or account is used. '}
-            {IS_FRAPPE ? (
+            {!IS_FRAPPE && (
               <>
-                <b>Read drawing with AI</b> runs on the server with the Anthropic API key set in PMC Settings.
-              </>
-            ) : (
-              <>
-                Only <b>Read drawing with AI</b> uses the internet, with your own Anthropic API key.
+                Only <b>Read drawing with AI</b> (Model Builder) uses the internet, with your own API key.
               </>
             )}
           </li>
           <li>
-            New project: <b>Model Builder</b> → upload the drawing → Read drawing with AI → check → Create model.
+            New project: <b>3D + BOQ Upload</b> → upload the 3D + BOQ file of the project (it names the project).
             {!IS_FRAPPE && (
               <>
                 {' '}

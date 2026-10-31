@@ -252,6 +252,27 @@ def validate_model_document(doc):
 				elif "openings" in g:
 					err(f'{label}: only "wall" geometry can have openings.')
 
+			sbd = e.get("steelByDia")
+			if sbd is not None:
+				if not _is_obj(sbd):
+					err(f'{label}: "steelByDia" must be an object of bar diameter (mm) → kg, e.g. {{ "8": 12.5, "16": 30 }}.')
+				else:
+					for dia, kg in sbd.items():
+						if not (isinstance(dia, str) and dia.isdigit() and 6 <= int(dia) <= 40):
+							err(f'{label}: steelByDia bar diameter "{dia}" must be a whole number of mm from 6 to 40.')
+						if not _is_num(kg) or kg < 0:
+							err(f'{label}: steelByDia["{dia}"] must be a number of kg, 0 or more.')
+					total = sum(kg for kg in sbd.values() if _is_num(kg))
+					reinf = (e.get("plannedQuantities") or {}).get("REINF") if _is_obj(e.get("plannedQuantities")) else None
+					if _is_obj(reinf) and _is_num(reinf.get("quantity")) and abs(total - reinf["quantity"]) > max(0.5, reinf["quantity"] * 0.01):
+						warnings.append(
+							f'Element "{eid}": steelByDia adds up to {js_num(round(total, 1))} kg but planned reinforcement is '
+							f'{js_num(reinf["quantity"])} kg — the bar sizes are used as proportions.'
+						)
+			grade = e.get("concreteGrade")
+			if grade is not None and (not _is_str(grade) or len(grade) > 20):
+				err(f'{label}: "concreteGrade" must be a short text such as "M25".')
+
 			pq = e.get("plannedQuantities")
 			if not _is_obj(pq):
 				err(f'{label}: "plannedQuantities" is required (use {{}} if none are known yet).')

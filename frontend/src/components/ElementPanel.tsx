@@ -1,16 +1,16 @@
 import { IS_FRAPPE } from '../config';
 import { useMemo, useState } from 'react';
-import { approvedOf, materialsFor, normsOf, plannedOf } from '../domain/materials';
-import { computeActivityProgress, formatQty, sameModelFamily } from '../domain/progress';
+import { addMaterials, approvedOf, emptyMaterials, materialsFor, normsOf, plannedOf } from '../domain/materials';
+import { computeActivityProgress, formatQty, roundQty, sameModelFamily } from '../domain/progress';
 import { ROLE_LABELS, UNIT_LABELS, type ActivityDef, type ElementRecord, type ProgressEntry } from '../domain/types';
 import { permissions } from '../domain/workflow';
 import { errorMessages } from '../data/repository';
 import { AWAITING_COLOR, TYPE_LABELS } from '../lib/colors';
 import { useApp } from '../state/AppContext';
-import { BulkEntryForm } from './BulkEntryForm';
 import { EntryDetailsModal } from './EntryDetailsModal';
 import { EntryForm } from './EntryForm';
 import { MaterialTable } from './MaterialTable';
+import { WorkDoneForm } from './WorkDoneForm';
 import { ConfirmDialog, EmptyState, fmtDate, ProgressBadge, ProgressBar, StatusBadge } from './ui';
 
 /** Right-hand panel of the 3D workspace: details + history + entry form for the selection. */
@@ -21,7 +21,7 @@ export function ElementPanel({
   allEntries,
   projectName,
   modelKey,
-  onSelectOnly,
+  onOpen,
 }: {
   selected: ElementRecord[];
   activities: ActivityDef[];
@@ -29,7 +29,7 @@ export function ElementPanel({
   allEntries: ProgressEntry[];
   projectName: string;
   modelKey: string;
-  onSelectOnly: (id: string) => void;
+  onOpen: (id: string) => void;
 }) {
   const { role } = useApp();
   const [editing, setEditing] = useState<ProgressEntry | null>(null);
@@ -37,9 +37,9 @@ export function ElementPanel({
 
   if (selected.length === 0) {
     return (
-      <EmptyState title="No element selected">
-        Click a footing, column, beam or slab in the 3D view, or pick one from the list. Hold <kbd>Ctrl</kbd>/<kbd>⌘</kbd> or use the
-        checkboxes to select several elements for one entry.
+      <EmptyState title="No element ticked">
+        Open a type above (Footing, Column …) and tick the elements, or <kbd>Ctrl</kbd>/<kbd>⌘</kbd>-click them in the 3D view — then tick the work that
+        is done. Click an element for its details.
       </EmptyState>
     );
   }
@@ -48,19 +48,20 @@ export function ElementPanel({
     return (
       <div className="panel-scroll">
         <div className="panel-section">
-          <h2 className="panel-title">{selected.length} elements selected</h2>
+          <h2 className="panel-title">{selected.length} elements ticked</h2>
           <div className="chips">
             {selected.map((e) => (
-              <button key={e.id} className="chip" onClick={() => onSelectOnly(e.id)} title="Show only this element" aria-label={`Show only ${e.code}`}>
+              <button key={e.id} className="chip" onClick={() => onOpen(e.id)} title="Show details" aria-label={`Details of ${e.code}`}>
                 {e.code}
               </button>
             ))}
           </div>
         </div>
+        <SelectionTotals elements={selected} activities={activities} entries={entries} />
         <div className="panel-section">
-          <h3 className="section-title">Record one activity for the selection</h3>
+          <h3 className="section-title">Work done</h3>
           {permissions.canCreate(role) ? (
-            <BulkEntryForm elements={selected} activities={activities} entries={entries} onDone={() => undefined} />
+            <WorkDoneForm elements={selected} activities={activities} entries={entries} />
           ) : (
             <p className="muted">{ROLE_LABELS[role]} can view progress only. {IS_FRAPPE ? 'A PMC Site Engineer records work.' : 'Switch to Site Engineer to record work (demo role switch).'}</p>
           )}
@@ -81,9 +82,13 @@ export function ElementPanel({
         onEdit={setEditing}
       />
       <div className="panel-section">
-        <h3 className="section-title">{editing ? `Edit ${editing.id} (${editing.status})` : 'Daily progress entry'}</h3>
+        <h3 className="section-title">{editing ? `Edit ${editing.id} (${editing.status})` : 'Work done'}</h3>
         {permissions.canCreate(role) ? (
-          <EntryForm element={el} activities={activities} entries={entries} editing={editing} onDone={() => setEditing(null)} />
+          editing ? (
+            <EntryForm element={el} activities={activities} entries={entries} editing={editing} onDone={() => setEditing(null)} />
+          ) : (
+            <WorkDoneForm elements={[el]} activities={activities} entries={entries} />
+          )
         ) : (
           <p className="muted">
             {role === 'owner'
@@ -103,6 +108,69 @@ export function ElementPanel({
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** Totals for a multi-selection: planned / approved per activity and the planned material. */
+function SelectionTotals({ elements, activities, entries }: { elements: ElementRecord[]; activities: ActivityDef[]; entries: ProgressEntry[] }) {
+  const { data } = useApp();
+  const norms = normsOf(data?.model?.document);
+  const rows = useMemo(
+    () =>
+      activities
+        .map((a) => {
+          let planned = 0;
+          let approved = 0;
+          let pending = 0;
+          let count = 0;
+          for (const el of elements) {
+            const p = computeActivityProgress(el, a, entries);
+            if (p.planned === null) continue;
+            count++;
+            planned += p.planned;
+            approved += Math.min(p.approved, p.planned);
+            pending += p.pendingReview;
+          }
+          return { a, count, planned: roundQty(planned), approved: roundQty(approved), pending: roundQty(pending) };
+        })
+        .filter((r) => r.count > 0),
+    [activities, elements, entries],
+  );
+  const planned = elements.reduce((m, el) => addMaterials(m, materialsFor(plannedOf(el), norms)), emptyMaterials());
+  const used = elements.reduce((m, el) => addMaterials(m, materialsFor(approvedOf(el, entries), norms)), emptyMaterials());
+  return (
+    <div className="panel-section">
+      <h3 className="section-title">Total of the selection</h3>
+      {rows.length === 0 ? (
+        <p className="muted small">No planned quantities for these elements.</p>
+      ) : (
+        <table className="table act-table" data-testid="selection-totals">
+          <thead>
+            <tr>
+              <th>Activity</th>
+              <th className="num">Planned</th>
+              <th className="num">Done</th>
+              <th className="num">%</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.a.code}>
+                <td>
+                  {r.a.name}
+                  {r.count < elements.length && <span className="muted small"> ({r.count})</span>}
+                  {r.pending > 0 && <div className="small muted">{formatQty(r.pending, UNIT_LABELS[r.a.unit])} awaiting approval</div>}
+                </td>
+                <td className="num">{formatQty(r.planned, UNIT_LABELS[r.a.unit])}</td>
+                <td className="num">{formatQty(r.approved, UNIT_LABELS[r.a.unit])}</td>
+                <td className="num">{r.planned > 0 ? Math.round((r.approved / r.planned) * 100) : 0}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <MaterialTable planned={planned} used={used} compact />
     </div>
   );
 }

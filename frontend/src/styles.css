@@ -750,7 +750,7 @@ textarea {
 /* ---------- workspace ---------- */
 .workspace {
   display: grid;
-  grid-template-columns: 270px minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) 420px;
   height: 100%;
   min-height: 0;
 }
@@ -1379,7 +1379,7 @@ textarea {
 /* ---------- responsive ---------- */
 @media (max-width: 1280px) {
   .workspace {
-    grid-template-columns: 240px minmax(0, 1fr) 340px;
+    grid-template-columns: minmax(0, 1fr) 380px;
   }
 }
 @media (max-width: 1080px) {
@@ -2140,4 +2140,272 @@ details.advanced[open] > summary {
 }
 .builder-pick .stepper input {
   width: 76px !important;
+}
+
+/* Work done: tick the finished work */
+.wd-acts {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wd-acts legend {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.entry-form .wd-act {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 400;
+}
+.wd-act input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.wd-act.on {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+}
+.wd-act.done {
+  background: var(--green-soft);
+  cursor: default;
+}
+.wd-name {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.wd-name small {
+  color: var(--muted);
+}
+.wd-act.done .wd-name small {
+  color: var(--green);
+}
+.wd-qty {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.wd-pct {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.wd-pct > span {
+  font-weight: 600;
+  margin-right: 4px;
+}
+.entry-form .wd-pct-input {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.wd-pct-input input {
+  width: 64px;
+}
+.wd-more summary {
+  cursor: pointer;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.wd-more[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Work done | Material required switch on the workspace's right panel */
+.ws-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+.ws-tabs button {
+  flex: 1;
+  padding: 10px 8px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.ws-tabs button.on {
+  color: var(--teal);
+  border-bottom-color: var(--teal);
+}
+.seg {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+.mr-table tfoot td {
+  font-weight: 700;
+}
+.steel-split td.bad {
+  color: var(--red);
+  font-weight: 700;
+}
+
+/* Right panel: picker + panel scroll together */
+.ws-right-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.ws-right-body .panel-scroll {
+  overflow: visible;
+}
+
+/* Element picker: a tile per type, then the list of that type to tick */
+.picker {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.picker-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 6px;
+}
+.picker-tile {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.picker-tile .swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
+.picker-tile-name {
+  flex: 1;
+  font-weight: 600;
+}
+.picker-tile-count {
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.picker-tile.has {
+  border-color: var(--teal);
+}
+.picker-tile.has .picker-tile-count {
+  color: var(--teal);
+  font-weight: 700;
+}
+.picker-tile.open {
+  background: var(--teal-soft);
+  border-color: var(--teal);
+}
+.picker-list {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.picker-list-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.picker-list-head b {
+  flex: 1;
+}
+.picker-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow: auto;
+}
+.picker-list li label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 400;
+}
+.picker-list li.on {
+  background: var(--teal-soft);
+}
+.picker-list li .el-status {
+  margin-left: auto;
+}
+.picker-sel {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 13px;
+}
+.picker > input[type='search'] {
+  width: 100%;
+  margin-bottom: 8px;
+}
+.picker-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.picker-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+}
+.picker-el {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.picker-el:hover .el-code {
+  color: var(--teal);
+  text-decoration: underline;
+}
+.picker-el .el-status {
+  margin-left: auto;
+}
+.focus-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.focus-tick {
+  font-weight: 600;
 }

@@ -9,6 +9,8 @@ import { useApp } from '../state/AppContext';
 import { IS_FRAPPE } from '../config';
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
+/** The sample offered for download next to the upload: it has the BBS bar sizes and grades. */
+const FORMAT_SAMPLE = SAMPLE_MODELS.find((s) => s.id === 'b') ?? SAMPLE_MODELS[0];
 
 /** Plain-language "how was this model made" shown under the model name. */
 const HOW_MADE: Record<string, string> = {
@@ -66,6 +68,8 @@ export function ModelRegister() {
   const [activate, setActivate] = useState<ModelRecord | null>(null);
   const [errorsFor, setErrorsFor] = useState<ModelRecord | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  // the server lets PMC Site Engineers and Reviewers upload models (not the Owner)
+  const canUpload = role !== 'owner';
 
   useEffect(() => {
     let alive = true;
@@ -84,7 +88,6 @@ export function ModelRegister() {
     try {
       const out = await repo.importModel({ text, sourceName, sourceType, targetProjectId: target === '__file__' ? undefined : target });
       setResult({ ...out, sourceName });
-      setAdvancedOpen(true);
       if (out.ok && out.record) {
         notify(`Imported ${out.record.name} ${out.record.revision} — ${out.record.elementCount} elements.`);
         if (out.record.projectId !== projectId) setProjectId(out.record.projectId);
@@ -108,7 +111,11 @@ export function ModelRegister() {
     if (!/\.json$/i.test(file.name)) {
       setResult({
         ok: false,
-        errors: [/\.(pdf|jpe?g|png|webp)$/i.test(file.name) ? `${file.name} is a drawing, not a model file. Upload it in Model Builder: it shows the drawing next to a form and generates the 3D model from it.` : `${file.name} is not a .json file. Import a model JSON, or build the model from a PDF / image drawing in Model Builder.`],
+        errors: [
+          /\.(pdf|jpe?g|png|webp)$/i.test(file.name)
+            ? `${file.name} is a drawing, not a 3D + BOQ file.${IS_FRAPPE ? ' Upload the JSON file of the model (see "File format").' : ' Build the model from it in Model Builder, or upload the JSON file of the model.'}`
+            : `${file.name} is not a .json file. Upload the 3D + BOQ JSON file (see "File format").`,
+        ],
         warnings: [],
         sourceName: file.name,
       });
@@ -165,14 +172,111 @@ export function ModelRegister() {
         </Modal>
       )}
       <PageHeader
-        title="Model Register"
-        subtitle="All 3D models you have created, per project. When a model is changed it gets a new version (R02, R03 …); the Active one is shown in 3D."
+        title="3D + BOQ models"
+        subtitle="The 3D model with its BOQ, per project. An uploaded change gets a new version (R02, R03 …); the Active one is shown in 3D and used for work done and material required."
         actions={
-          <button className="btn btn-primary" onClick={() => { startBlankBuilder(); go('builder'); }}>
-            New model from drawing
-          </button>
+          !IS_FRAPPE && (
+            <button className="btn" onClick={() => { startBlankBuilder(); go('builder'); }}>
+              New model from drawing
+            </button>
+          )
         }
       />
+      {canUpload && (
+        <section className="card upload-card">
+          <h2 className="card-title">Upload 3D + BOQ</h2>
+          <p className="muted small">
+            One JSON file with the elements (footings, columns, beams, slabs, walls …), their size and position, and the BOQ quantities of each — concrete,
+            steel (with the BBS bar sizes), shuttering, brickwork, plaster. It becomes the Active model of the project straight away.
+          </p>
+          <div className="import-row">
+            <label>
+              Upload into
+              <select value={target} onChange={(e) => setTarget(e.target.value)}>
+                <option value="__file__">Project named in the file (created if new)</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.id}) — must match the file
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={`btn btn-primary ${busy ? 'disabled' : ''}`}>
+              {busy ? 'Uploading…' : 'Choose file…'}
+              <input
+                type="file"
+                accept=".json,application/json"
+                hidden
+                disabled={busy}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (f) void onFile(f);
+                }}
+              />
+            </label>
+            <button className="link" onClick={() => downloadText(FORMAT_SAMPLE.fileName, sampleText(FORMAT_SAMPLE.json), 'application/json')}>
+              Download a sample file
+            </button>
+          </div>
+          {result && (
+            <div className="import-result">
+              {result.ok && result.record ? (
+                <div className="alert alert-success">
+                  <strong>
+                    Uploaded {result.sourceName}: {result.record.name} {result.record.revision}, {result.record.elementCount} elements.
+                  </strong>
+                  {result.createdProject && <div>Project {result.record.projectId} was created from the file.</div>}
+                  {result.supersededKey && <div>The previous version is now Superseded; approved work on elements that are still there carries over.</div>}
+                  <div className="card-actions">
+                    <button className="btn btn-small btn-primary" onClick={() => go('workspace')}>
+                      Open in 3D
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <ErrorList title={`Upload of ${result.sourceName} failed — nothing was changed`} errors={result.errors} />
+              )}
+              {result.warnings.length > 0 && (
+                <div className="alert alert-warn">
+                  <strong>Warnings ({result.warnings.length})</strong>
+                  <ul>
+                    {result.warnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+          <details className="format-ref">
+            <summary>File format</summary>
+            <p className="small">
+              Format <code>pmc-procedural-model</code> version 1 (full reference: <code>docs/MODEL_FORMAT.md</code>). Lengths in metres, Y up.
+            </p>
+            <table className="table compact">
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><code>format</code>, <code>formatVersion</code></td><td>"pmc-procedural-model", 1</td></tr>
+                <tr><td><code>project.id</code>, <code>project.name</code></td><td>Required. Must match the project chosen above.</td></tr>
+                <tr><td><code>model.id</code>, <code>model.revision</code></td><td>Required. A changed model uses a new revision (R02 …); a revision is never overwritten.</td></tr>
+                <tr><td><code>buildings[]</code>, <code>levels[]</code></td><td>Unique ids; every level belongs to a building.</td></tr>
+                <tr><td><code>activities[]</code></td><td>code, name, unit (kg, m2, m3, m, nos) and the element types they apply to — REINF, SHUT, CONC, BRICK, PLAST, FIX.</td></tr>
+                <tr><td><code>elements[].id</code>, <code>code</code>, <code>type</code></td><td>Stable unique id; display code (C-01); footing, column, beam, slab, wall, lintel, chhajja, door or window.</td></tr>
+                <tr><td><code>elements[].geometry</code></td><td>{'{ shape: "box", position: [x,y,z], size: [w,h,d] }'}; walls {'"wall"'} with openings, stairs {'"stair"'}.</td></tr>
+                <tr><td><code>elements[].plannedQuantities</code></td><td>The BOQ of the element: {'{ "CONC": { quantity: 0.19, unit: "m3" }, "REINF": { … "kg" } … }'}.</td></tr>
+                <tr><td><code>elements[].steelByDia</code></td><td>Optional. BBS: bar diameter mm → kg, e.g. {'{ "8": 6.9, "12": 13.7, "16": 13.7 }'}. Used for Material required.</td></tr>
+                <tr><td><code>elements[].concreteGrade</code></td><td>Optional. e.g. "M25". Without it the grade of the model planning is used.</td></tr>
+              </tbody>
+            </table>
+          </details>
+        </section>
+      )}
       <section className="card table-card">
         <h2 className="card-title">Models</h2>
         {!models ? (
@@ -180,13 +284,8 @@ export function ModelRegister() {
         ) : models.length === 0 ? (
           <EmptyState
             title="No models yet"
-            action={
-              <button className="btn btn-primary" onClick={() => { startBlankBuilder(); go('builder'); }}>
-                New model from drawing
-              </button>
-            }
           >
-            A model is created in Model Builder from the project drawing.
+            Upload the 3D + BOQ file of the project above.
           </EmptyState>
         ) : (
           <table className="table">
@@ -239,9 +338,11 @@ export function ModelRegister() {
                     )}
                     {PLANNING_STATUSES.includes(m.status) && (
                       <span className="row-actions">
-                        <button className="link" onClick={() => correctInBuilder(m)}>
-                          {role === 'pmc-reviewer' ? 'Check / correct' : 'Correct'} in Model Builder
-                        </button>
+                        {!IS_FRAPPE && (
+                          <button className="link" onClick={() => correctInBuilder(m)}>
+                            {role === 'pmc-reviewer' ? 'Check / correct' : 'Correct'} in Model Builder
+                          </button>
+                        )}
                         {role === 'pmc-reviewer' && m.status === 'Pending Approval' && (
                           <>
                             <button className="btn btn-small btn-primary" onClick={() => (setReview({ model: m, decision: 'approve' }), setRemarks(''), setReviewErrors([]))}>
@@ -262,41 +363,14 @@ export function ModelRegister() {
         )}
       </section>
 
-      {/* JSON import / samples / file format: for local work only — on the server, models come from the Model Builder */}
+      {/* sample models: for local work only */}
       {!IS_FRAPPE && (
         <details className="card advanced" open={advancedOpen} onToggle={(e) => setAdvancedOpen((e.target as HTMLDetailsElement).open)}>
           <summary>
-            <b>Advanced</b> <span className="muted small">— import a model JSON file, sample models, file format. Not needed for normal work.</span>
+            <b>Advanced</b> <span className="muted small">— sample models. Not needed for normal work.</span>
           </summary>
           <div className="adv-block">
-            <h3 className="section-title">Import a model JSON file</h3>
-            <div className="import-row">
-              <label>
-                Import into
-                <select value={target} onChange={(e) => setTarget(e.target.value)}>
-                  <option value="__file__">Use project from file (create if new)</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.id}) — must match file
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={`btn btn-primary ${busy ? 'disabled' : ''}`}>
-                {busy ? 'Importing…' : 'Choose JSON file…'}
-                <input
-                  type="file"
-                  accept=".json,application/json"
-                  hidden
-                  disabled={busy}
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    e.target.value = '';
-                    if (f) void onFile(f);
-                  }}
-                />
-              </label>
-            </div>
+            <h3 className="section-title">Sample models</h3>
             <div className="sample-row">
               <span className="muted small">Bundled samples (same import pipeline as an uploaded file):</span>
               {SAMPLE_MODELS.map((s) => (
@@ -318,77 +392,9 @@ export function ModelRegister() {
                 </button>
               </span>
             </div>
-  
-            {result && !result.ok && /drawing/.test(result.errors.join(' ')) && (
-              <div className="card-actions">
-                <button className="btn btn-small btn-primary" onClick={() => go('builder')}>Open Model Builder</button>
-              </div>
-            )}
-            {result && (
-              <div className="import-result">
-                {result.ok && result.record ? (
-                  <div className="alert alert-success">
-                    <strong>
-                      Imported {result.sourceName}: {result.record.name} {result.record.revision}, {result.record.elementCount} elements.
-                    </strong>
-                    {result.createdProject && <div>Project {result.record.projectId} was created from the file.</div>}
-                    {result.supersededKey && (
-                      <div>The previous revision is now Superseded. Its progress stays attached to it and is not transferred to {result.record.revision}.</div>
-                    )}
-                    <div className="card-actions">
-                      <button className="btn btn-small btn-primary" onClick={() => go('workspace')}>
-                        View in 3D Workspace
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <ErrorList title={`Import of ${result.sourceName} failed — nothing was changed`} errors={result.errors} />
-                )}
-                {result.warnings.length > 0 && (
-                  <div className="alert alert-warn">
-                    <strong>Warnings ({result.warnings.length})</strong>
-                    <ul>
-                      {result.warnings.map((w, i) => (
-                        <li key={i}>{w}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          <div className="adv-block">
-            <h3 className="section-title">JSON model format (pmc-procedural-model v1)</h3>
-            <p className="small">
-              Full reference: <code>docs/MODEL_FORMAT.md</code>. Each selectable element is one box with a stable <code>id</code>. Display codes (C-01) are
-              labels only.
-            </p>
-            <table className="table compact">
-              <thead>
-                <tr>
-                  <th>Field</th>
-                  <th>Rule</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td><code>format</code>, <code>formatVersion</code></td><td>"pmc-procedural-model", 1</td></tr>
-                <tr><td><code>project.id</code>, <code>project.name</code></td><td>Required. Must match the target project when one is chosen.</td></tr>
-                <tr><td><code>model.id</code>, <code>model.revision</code></td><td>Required. A changed model must use a new revision; revisions are never overwritten.</td></tr>
-                <tr><td><code>buildings[]</code>, <code>levels[]</code></td><td>Unique ids; levels reference a building.</td></tr>
-                <tr><td><code>activities[]</code></td><td>code, name, unit (kg, m2, m3, m, nos).</td></tr>
-                <tr><td><code>elements[].id</code></td><td>Stable source element id, unique within the model.</td></tr>
-                <tr><td><code>elements[].type</code></td><td>footing, column, beam or slab.</td></tr>
-                <tr><td><code>elements[].geometry</code></td><td>{'{ shape: "box", position: [x,y,z], size: [w,h,d] }'} in metres, Y up, sizes &gt; 0.</td></tr>
-                <tr><td><code>elements[].plannedQuantities</code></td><td>{'{ ACTIVITY_CODE: { quantity, unit } }'}; unit must equal the activity unit. Missing = Not configured.</td></tr>
-              </tbody>
-            </table>
-            <p className="hint">Not supported in this prototype: IFC, RVT, DWG, SKP and GLB files. See README → Limitations.</p>
           </div>
         </details>
       )}
-
-
-
 
       {activate && (
         <ConfirmDialog

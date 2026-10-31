@@ -183,6 +183,22 @@ export function validateModelDocument(input: unknown): ModelValidationResult {
         configured.forEach((c) => {
           if (activities.has(c) && !applies(c)) err(`${label}: planned ${activities.get(c)!.name} quantity, but that activity does not apply to type "${e.type}".`);
         });
+        const sbd = e.steelByDia;
+        if (sbd !== undefined) {
+          if (!isObj(sbd)) err(`${label}: "steelByDia" must be an object of bar diameter (mm) → kg, e.g. { "8": 12.5, "16": 30 }.`);
+          else {
+            Object.entries(sbd).forEach(([dia, kg]) => {
+              if (!/^\d+$/.test(dia) || Number(dia) < 6 || Number(dia) > 40) err(`${label}: steelByDia bar diameter "${dia}" must be a whole number of mm from 6 to 40.`);
+              if (!isNum(kg) || kg < 0) err(`${label}: steelByDia["${dia}"] must be a number of kg, 0 or more.`);
+            });
+            const total = Object.values(sbd).reduce((a: number, kg) => a + (isNum(kg) ? kg : 0), 0);
+            const reinf = isObj(pq.REINF) && isNum(pq.REINF.quantity) ? pq.REINF.quantity : null;
+            if (reinf !== null && Math.abs(total - reinf) > Math.max(0.5, reinf * 0.01)) {
+              warnings.push(`Element "${e.id}": steelByDia adds up to ${Math.round(total * 10) / 10} kg but planned reinforcement is ${reinf} kg — the bar sizes are used as proportions.`);
+            }
+          }
+        }
+        if (e.concreteGrade !== undefined && (!isStr(e.concreteGrade) || e.concreteGrade.length > 20)) err(`${label}: "concreteGrade" must be a short text such as "M25".`);
         const missing = [...activities.keys()].filter((c) => applies(c) && (!configured.includes(c) || (isObj(pq[c]) && pq[c].quantity === 0)));
         if (missing.length && isStr(e.id)) {
           warnings.push(`Element "${e.id}" has no planned quantity for ${missing.map((c) => activities.get(c)?.name ?? c).join(', ')} — shown as "Not configured".`);

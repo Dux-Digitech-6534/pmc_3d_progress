@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ElementPanel } from '../components/ElementPanel';
+import { ElementPicker } from '../components/ElementPicker';
+import { MaterialRequiredPanel } from '../components/MaterialRequiredPanel';
 import { ModelViewer } from '../components/ModelViewer';
 import { EmptyState, Spinner } from '../components/ui';
 import { ACTIVITY_STATUS_LABELS, computeActivityProgress, type ActivityStatus } from '../domain/progress';
@@ -27,13 +29,19 @@ export function Workspace() {
   const [statusFilter, setStatusFilter] = useState<'all' | ViewStatus>('all');
   const [showLabels, setShowLabels] = useState(true);
   const [resetSignal, setResetSignal] = useState(0);
-  const listRef = useRef<HTMLUListElement>(null);
   // hidden in the 3D view only (to look inside the building) — nothing changes in the model or progress
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
   const [hiddenTypes, setHiddenTypes] = useState<Set<ViewGroup>>(() => new Set());
+  // right panel: record work done, or see the material the ticked elements need
+  const [panel, setPanel] = useState<'work' | 'material'>('work');
+  // the element whose details are open in the right panel (click in the list or the 3D view)
+  const [focusId, setFocusId] = useState<string | null>(null);
 
   const elements = useMemo(() => data?.elements ?? [], [data?.elements]);
-  const hiddenAll = useMemo(() => new Set([...hiddenIds, ...elements.filter((e) => hiddenTypes.has(viewGroupOf(e))).map((e) => e.id)]), [hiddenIds, hiddenTypes, elements]);
+  const hiddenAll = useMemo(
+    () => new Set([...hiddenIds, ...elements.filter((e) => hiddenTypes.has(viewGroupOf(e))).map((e) => e.id)]),
+    [hiddenIds, hiddenTypes, elements],
+  );
   const typesPresent = useMemo(() => VIEW_GROUPS.filter((t) => elements.some((e) => viewGroupOf(e) === t)), [elements]);
   const activities = useMemo(() => data?.model?.document?.activities ?? [], [data?.model]);
   const entries = useMemo(() => data?.entries ?? [], [data?.entries]);
@@ -88,35 +96,32 @@ export function Workspace() {
     },
     [selection, setSelection],
   );
-  const selectOnly = useCallback((id: string) => setSelection(new Set([id])), [setSelection]);
 
+  // Click in 3D: show that element's details; Ctrl/⌘-click ticks it.
   const onPick = useCallback(
     (id: string | null, additive: boolean) => {
       if (!id) return; // clicking empty space keeps the selection; use Clear or Esc
       if (additive) toggle(id);
-      else selectOnly(id);
+      else setFocusId(id);
     },
-    [toggle, selectOnly],
+    [toggle],
   );
+  const focusEl = focusId ? (elements.find((e) => e.id === focusId) ?? null) : null;
+  // the 3D highlights the ticked elements and the one whose details are open
+  const highlighted = useMemo(() => (focusId ? new Set([...selection, focusId]) : selection), [selection, focusId]);
 
-  // Esc clears the selection (unless typing in a field).
+  // Esc closes the details, then clears the ticks (unless typing in a field).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (e.key === 'Escape' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) && !document.querySelector('.modal')) {
-        setSelection(new Set());
+        if (focusId) setFocusId(null);
+        else setSelection(new Set());
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [setSelection]);
-
-  // Keep the list in sync with 3D picks: scroll the (last) selected row into view.
-  useEffect(() => {
-    const last = [...selection].pop();
-    if (!last) return;
-    listRef.current?.querySelector(`[data-element-id="${CSS.escape(last)}"]`)?.scrollIntoView({ block: 'nearest' });
-  }, [selection]);
+  }, [setSelection, focusId]);
 
   const legendCounts = useMemo(() => {
     const c: Record<ViewStatus, number> = { 'not-started': 0, awaiting: 0, 'in-progress': 0, complete: 0, 'not-configured': 0, 'not-applicable': 0 };
@@ -132,89 +137,44 @@ export function Workspace() {
         title={`No approved model for ${data.project.name} yet`}
         action={
           <button className="btn btn-primary" onClick={() => go('models')}>
-            Open Model Register
+            Upload 3D + BOQ
           </button>
         }
       >
-        No approved model yet. A planning made in the Model Builder becomes the 3D model once the PMC Reviewer approves it in the Model Register.
+        Upload the project's 3D + BOQ file — it becomes the 3D model that work done and material required use.
       </EmptyState>
     );
   }
 
+  const filters = (
+    <>
+      <select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)} aria-label="Level">
+        <option value="all">All levels</option>
+        {levels.map((l) => (
+          <option key={l.id} value={l.id}>
+            {l.name}
+          </option>
+        ))}
+      </select>
+      <select
+        value={statusFilter}
+        onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+        disabled={!viewActivity}
+        aria-label="Activity status"
+        title={viewActivity ? `Status of ${viewActivity.name}` : 'Choose an activity in "Colour by" to filter by status'}
+      >
+        <option value="all">{viewActivity ? `Any ${viewActivity.name.toLowerCase()} status` : 'Any status'}</option>
+        {STATUS_ORDER.map((s) => (
+          <option key={s} value={s}>
+            {VIEW_LABELS[s]}
+          </option>
+        ))}
+      </select>
+    </>
+  );
+
   return (
     <div className="workspace">
-      <aside className="ws-left" aria-label="Elements">
-        <div className="ws-filters">
-          <input type="search" placeholder="Search code or ID…" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search elements" />
-          <div className="filter-row">
-            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)} aria-label="Element type">
-              <option value="all">All types</option>
-              {ELEMENT_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {TYPE_LABELS[t]}
-                </option>
-              ))}
-            </select>
-            <select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)} aria-label="Level">
-              <option value="all">All levels</option>
-              {levels.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-            disabled={!viewActivity}
-            aria-label="Activity status"
-            title={viewActivity ? `Status of ${viewActivity.name}` : 'Choose an activity in "Colour by" to filter by status'}
-          >
-            <option value="all">{viewActivity ? `Any ${viewActivity.name.toLowerCase()} status` : 'Status filter needs an activity view'}</option>
-            {STATUS_ORDER.map((s) => (
-              <option key={s} value={s}>
-                {VIEW_LABELS[s]}
-              </option>
-            ))}
-          </select>
-          <div className="list-tools">
-            <span className="muted small">
-              {visible.length} of {elements.length} shown
-            </span>
-            <button className="link" onClick={() => setSelection(new Set([...selection, ...visible.map((e) => e.id)]))} disabled={!visible.length}>
-              Select shown
-            </button>
-          </div>
-        </div>
-        <ul className="el-list" ref={listRef}>
-          {visible.length === 0 && <li className="muted small pad">No elements match the filters.</li>}
-          {visible.map((el) => {
-            const sel = selection.has(el.id);
-            const st = statusById.get(el.id);
-            return (
-              <li key={el.id} data-element-id={el.id} className={sel ? 'sel' : ''}>
-                <input type="checkbox" checked={sel} onChange={() => toggle(el.id)} aria-label={`Select ${el.code} (multi-select)`} />
-                <button
-                  className="el-row"
-                  onClick={(e) => (e.ctrlKey || e.metaKey ? toggle(el.id) : selectOnly(el.id))}
-                  title={`${el.id} — Ctrl/⌘-click to add to selection`}
-                >
-                  <span className="el-code">{el.code}</span>
-                  <span className={`type-tag type-${el.type}`}>{TYPE_LABELS[el.type]}</span>
-                  {st && (
-                    <span className="el-status" title={`${viewActivity?.name}: ${VIEW_LABELS[st]}`}>
-                      <span className="dot" style={{ background: VIEW_COLORS[st] }} />
-                      {VIEW_LABELS[st]}
-                    </span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </aside>
-
       <section className="ws-center">
         <div className="viewer-toolbar">
           <label className="inline">
@@ -288,11 +248,11 @@ export function Workspace() {
           )}
           <span className="spacer" />
           <span className="sel-count" data-testid="selected-count">
-            {selection.size} selected
+            {selection.size} ticked
             {hiddenSelected > 0 && <span className="muted"> ({hiddenSelected} hidden by filters)</span>}
           </span>
           <button className="btn btn-small" onClick={() => setSelection(new Set())} disabled={!selection.size}>
-            Clear selection
+            Clear ticks
           </button>
         </div>
         <div className="viewer-wrap">
@@ -301,7 +261,7 @@ export function Workspace() {
             elements={elements}
             colors={colors}
             visibleIds={visibleIds}
-            selectedIds={selection}
+            selectedIds={highlighted}
             hiddenIds={hiddenAll}
             showLabels={showLabels}
             onPick={onPick}
@@ -337,20 +297,79 @@ export function Workspace() {
               Selected
             </div>
           </div>
-          <div className="viewer-help">Drag: rotate · Right-drag / Shift: pan · Wheel: zoom · Click: select · Ctrl/⌘-click: multi-select · Esc: clear</div>
+          <div className="viewer-help">Drag: rotate · Right-drag / Shift: pan · Wheel: zoom · Click: details · Ctrl/⌘-click: tick · Esc: close / clear</div>
         </div>
       </section>
 
       <aside className="ws-right" aria-label="Selected element">
-        <ElementPanel
-          selected={selectedEls}
-          activities={activities}
-          entries={entries}
-          allEntries={data.allEntries}
-          projectName={data.project.name}
-          modelKey={data.model.key}
-          onSelectOnly={selectOnly}
-        />
+        <div className="ws-tabs" role="tablist">
+          <button role="tab" aria-selected={panel === 'work'} className={panel === 'work' ? 'on' : ''} onClick={() => setPanel('work')}>
+            Work done
+          </button>
+          <button role="tab" aria-selected={panel === 'material'} className={panel === 'material' ? 'on' : ''} onClick={() => setPanel('material')}>
+            Material required
+          </button>
+        </div>
+        <div className="ws-right-body">
+          {focusEl ? (
+            <div className="focus-view">
+              <div className="focus-bar">
+                <button className="btn btn-small" onClick={() => setFocusId(null)}>
+                  ← Back to list
+                </button>
+                <label className="check focus-tick">
+                  <input type="checkbox" checked={selection.has(focusEl.id)} onChange={() => toggle(focusEl.id)} /> Ticked
+                </label>
+              </div>
+              <ElementPanel
+                selected={[focusEl]}
+                activities={activities}
+                entries={entries}
+                allEntries={data.allEntries}
+                projectName={data.project.name}
+                modelKey={data.model.key}
+                onOpen={setFocusId}
+              />
+            </div>
+          ) : (
+            <>
+              <ElementPicker
+                elements={elements}
+                listed={visible}
+                selection={selection}
+                onChange={setSelection}
+                onOpen={setFocusId}
+                type={typeFilter}
+                onType={setTypeFilter}
+                search={search}
+                onSearch={setSearch}
+                filters={filters}
+                statusOf={(id) => {
+                  const st = statusById.get(id);
+                  return st ? { label: VIEW_LABELS[st], color: VIEW_COLORS[st] } : undefined;
+                }}
+              />
+              {panel === 'work' ? (
+                <ElementPanel
+                  selected={selectedEls}
+                  activities={activities}
+                  entries={entries}
+                  allEntries={data.allEntries}
+                  projectName={data.project.name}
+                  modelKey={data.model.key}
+                  onOpen={setFocusId}
+                />
+              ) : (
+                <MaterialRequiredPanel
+                  selected={selectedEls}
+                  entries={entries}
+                  shown={visible.length}
+                  onTickShown={() => setSelection(new Set([...selection, ...visible.map((e) => e.id)]))}
+                />
+              )}
+            </>
+          )}
+        </div>
       </aside>
     </div>
   );

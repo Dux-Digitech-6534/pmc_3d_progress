@@ -1,12 +1,13 @@
 # Model JSON format — `pmc-procedural-model` v1
 
-This is the import format that drives the 3D viewer, the element list and all progress
-records. Both sample files use it:
+This is the **3D + BOQ upload** format: one file with the 3D model and the BOQ of every
+element. It drives the 3D viewer, the element list, Work Done and Material Required. Both
+sample files use it (Security Cabin B also has the BBS bar sizes and grades):
 
 - `src/data/samples/security-cabin-a.json` — 4 footings, 4 columns, 4 roof beams, 1 slab (13 elements)
 - `src/data/samples/security-cabin-b.json` — 6 footings, 6 columns, 7 plinth + 7 roof beams, 1 slab (27 elements)
 
-They can also be downloaded from **Model Register** in the app, and regenerated with
+They can also be downloaded from **3D + BOQ Upload** in the app ("Download a sample file"), and regenerated with
 `npm run generate:samples` (`scripts/generate-samples.mjs`).
 
 > The sample cabins are conceptual demonstration models, **not engineering-approved designs**.
@@ -72,9 +73,27 @@ They can also be downloaded from **Model Register** in the app, and regenerated 
     "SHUT":  { "quantity": 3.31, "unit": "m2" },
     "CONC":  { "quantity": 0.19, "unit": "m3" }
   },
+  "concreteGrade": "M25",     // optional — grade of this element
+  "steelByDia": {             // optional — BBS: bar diameter (mm) → kg
+    "8": 6.9, "12": 13.7, "16": 13.7
+  },
   "notes": "optional free text shown in the element panel"
 }
 ```
+
+## BOQ of an element
+
+- `plannedQuantities` is the element's BOQ, one entry per activity: concrete (`CONC`, m³),
+  reinforcement (`REINF`, kg), shuttering (`SHUT`, m²), brickwork (`BRICK`, m³), plaster
+  (`PLAST`, m²), fixing (`FIX`, nos). Work Done records progress against these quantities
+  (marking 100 % records the full quantity), and Material Required adds them up.
+- `steelByDia` is the bar bending schedule of the element: kg per bar diameter in mm (6 – 40).
+  Material Required shows the steel per bar size from it. It should add up to the `REINF`
+  quantity; when it does not, the bar sizes are used as proportions of `REINF` and the upload
+  shows a warning. Without `steelByDia` the typical bar mix of the model planning is used
+  (an estimate).
+- `concreteGrade` (e.g. `"M20"`, `"M25"`, `"M30"`) groups the concrete of Material Required
+  by grade. Without it the grade set for the element type in the model planning is used.
 
 ## Walls with openings
 
@@ -127,6 +146,7 @@ Import is rejected (nothing changes) when any of these fail. The message names t
 | Activity `appliesTo` lists valid element types; no planned quantity for an activity that does not apply | `planned Concreting quantity, but that activity does not apply to type "wall".` |
 | Building / level references exist | `Element "SCA-C002": "levelId" is missing or unknown.` |
 | **Valid geometry**: shape `box`, 3 finite numbers, sizes > 0 and ≤ 500 m | `geometry.size values must be greater than 0 …` |
+| `steelByDia` keys are bar diameters 6 – 40 mm, values kg ≥ 0; `concreteGrade` is short text | `steelByDia bar diameter "5" must be a whole number of mm from 6 to 40.` |
 | Planned quantity refers to a known activity, is a number ≥ 0 | `planned quantity for unknown activity "PCC".` |
 | **Planned quantity unit equals the activity unit** | `planned Concreting unit is "kg" but the activity is measured in "m3".` |
 | Target project matches (when a project is chosen in the import dialog) | `This model belongs to project "PMC-SEC-002" …` |
@@ -136,8 +156,9 @@ Warnings (import still succeeds):
 
 - An element has no planned quantity (or zero) for an activity → shown as **Not configured**; progress cannot be recorded for it until the model is revised.
 - A display code is used by more than one element (codes are labels only).
+- An element's `steelByDia` does not add up to its planned reinforcement (more than 1 % or 0.5 kg off).
 
-Try **Model Register → "Try an invalid file"** to see these messages in the app.
+In the local app, **3D + BOQ Upload → Advanced → "Try an invalid file"** shows these messages.
 
 ## Identity and revisions
 
@@ -147,6 +168,6 @@ Try **Model Register → "Try an invalid file"** to see these messages in the ap
 | Element key | model key + element `id` | element ↔ progress mapping |
 
 - Display names/codes and Three.js runtime object ids are **never** used as identifiers.
-- Importing a new revision marks the previous one *Superseded*. Progress recorded on the
-  old revision stays attached to it (visible in the DPR list and element history) and is
-  **not** copied to the new revision. A reviewed migration step would be needed for that.
+- Uploading a new revision marks the previous one *Superseded*. Approved work on elements
+  that keep their stable `id` in the new revision still counts; work on elements the new
+  revision no longer has stays in history only. So keep element ids stable between revisions.

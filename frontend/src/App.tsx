@@ -15,10 +15,11 @@ import { AppProvider, useApp, type Page } from './state/AppContext';
 const NAV: { page: Page; label: string; icon: string }[] = [
   { page: 'dashboard', label: 'Dashboard', icon: '▦' },
   { page: 'projects', label: 'Projects', icon: '▤' },
-  { page: 'workspace', label: '3D Workspace', icon: '◈' },
+  { page: 'workspace', label: 'Work Done / Material', icon: '◈' },
   { page: 'dpr', label: 'Daily Progress Reports', icon: '☰' },
-  { page: 'builder', label: 'Model Builder', icon: '✎' },
-  { page: 'models', label: 'Model Register', icon: '⬚' },
+  { page: 'models', label: '3D + BOQ Upload', icon: '⬚' },
+  // drawing → model with AI: only for local work; on the server the 3D + BOQ is uploaded
+  ...(IS_FRAPPE ? [] : [{ page: 'builder' as Page, label: 'Model Builder', icon: '✎' }]),
 ];
 
 export default function App() {
@@ -135,16 +136,16 @@ function Shell() {
                 <h1>Welcome — start your first project</h1>
                 <ol>
                   <li>
-                    Open <b>Model Builder</b> and upload the project drawing (PDF or photo).
+                    Open <b>3D + BOQ Upload</b> and upload the project's 3D + BOQ file.
                   </li>
                   <li>
-                    Click <b>Read drawing with AI</b> — the form (grid, columns, beams, slab, walls, doors, windows) is filled from the drawing.
+                    In <b>Work Done / Material</b>, tick the elements in the list or the 3D view — mark the work that is done, or see the material it needs.
                   </li>
-                  <li>Check the values against the drawing, then <b>Create model</b>. The 3D model and progress tracking open from there.</li>
+                  <li>The PMC Reviewer approves the work done; the 3D colours and progress update.</li>
                 </ol>
                 <div className="card-actions">
-                  <button className="btn btn-primary" onClick={() => go('builder')}>
-                    Open Model Builder
+                  <button className="btn btn-primary" onClick={() => go('models')}>
+                    Upload 3D + BOQ
                   </button>
                   {!IS_FRAPPE && (
                   <button
@@ -174,7 +175,7 @@ function Shell() {
           {!noAccess && !empty && page === 'projects' && <Projects />}
           {!noAccess && !empty && page === 'workspace' && <Workspace />}
           {!noAccess && !empty && page === 'dpr' && <DprList />}
-          {!noAccess && page === 'builder' && <ModelBuilder />}
+          {!noAccess && page === 'builder' && !IS_FRAPPE && <ModelBuilder />}
           {!noAccess && page === 'models' && <ModelRegister />}
         </main>
       </div>

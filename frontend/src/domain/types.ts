@@ -108,6 +108,10 @@ export interface ModelElementDef {
   geometry: ElementGeometry;
   /** Keyed by activity code. A missing key or a zero quantity means "Not configured". */
   plannedQuantities: Record<string, PlannedQuantity>;
+  /** Concrete grade of this element, e.g. "M25" (from the BOQ). Absent = the grade set in the model planning. */
+  concreteGrade?: string;
+  /** Reinforcement by bar diameter from the bar bending schedule: mm → kg, e.g. { "8": 12.5, "16": 30 }. */
+  steelByDia?: Record<string, number>;
   notes?: string;
 }
 
@@ -179,7 +183,7 @@ export interface ModelRecord {
 export type ViewGroup = ElementType | 'stair';
 export const VIEW_GROUPS: ViewGroup[] = [...ELEMENT_TYPES, 'stair'];
 export const viewGroupOf = (e: Pick<ModelElementDef, 'type' | 'code' | 'geometry'>): ViewGroup =>
-  e.geometry.shape === 'stair' || /(^|-)STd+-LD$/.test(e.code) ? 'stair' : e.type;
+  e.geometry.shape === 'stair' || /(^|-)ST\d+-LD$/.test(e.code) ? 'stair' : e.type;
 
 export interface ElementRecord extends ModelElementDef {
   /** projectId|modelId|revision|sourceElementId — unique across the whole application. */

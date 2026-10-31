@@ -2,14 +2,14 @@ import { IS_FRAPPE } from '../config';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { savePhoto } from '../data/photoStore';
 import { errorMessages, RepositoryError } from '../data/repository';
-import { computeActivityProgress, formatQty } from '../domain/progress';
+import { computeActivityProgress, formatQty, roundQty } from '../domain/progress';
 import { activityApplies, SUPPORTED_UNITS, UNIT_LABELS, type ActivityDef, type ElementRecord, type PhotoMeta, type ProgressEntry } from '../domain/types';
 import { checkQuantity, todayISO, validateDate } from '../domain/workflow';
 import { newRequestId, useApp } from '../state/AppContext';
 import { PhotoPicker } from './Photos';
 import { ErrorList } from './ui';
 
-/** Single-element daily progress entry (create, or edit a Draft/Returned entry). */
+/** Edit a Draft / Returned work-done entry of one element: how far the work got, in % of the planned quantity. */
 export function EntryForm({
   element,
   activities,
@@ -66,19 +66,32 @@ export function EntryForm({
     () => (activity ? computeActivityProgress(element, activity, entries.filter((e) => e.id !== editing?.id)) : null),
     [activity, element, entries, editing?.id],
   );
-  const qtyNum = quantity.trim() === '' ? Number.NaN : Number(quantity);
+  // others = approved + awaiting work of this element and activity, not counting the entry being edited
+  const others = progress ? progress.approved + progress.pendingReview : 0;
+  const planned = progress?.planned ?? null;
+  const [percent, setPercent] = useState('');
+  const initialPct = planned && editing ? String(Math.round(((others + editing.quantity) / planned) * 100)) : '';
+  useEffect(() => {
+    setPercent(initialPct);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [element.id, editing?.id, planned]);
+  const pctNum = percent.trim() === '' ? Number.NaN : Number(percent);
+  const qtyNum = planned === null ? (quantity.trim() === '' ? Number.NaN : Number(quantity)) : editing && percent === initialPct ? editing.quantity // unchanged: keep the exact quantity, not the rounded %
+        : roundQty((planned * pctNum) / 100 - others);
 
   const liveErrors = useMemo(() => {
     if (!activity) return ['Choose an activity.'];
     return [
       ...validateDate(date),
-      ...(quantity.trim() === '' ? ['Enter the completed quantity.'] : []),
-      ...(quantity.trim() === ''
+      ...(planned !== null && !(pctNum > 0 && pctNum <= 100) ? ['Work done must be between 1 and 100 %.'] : []),
+      ...(planned !== null && pctNum > 0 && !(qtyNum > 0) ? [`${Math.round((others / planned) * 100)}% is already approved or awaiting approval — enter more than that.`] : []),
+      ...(planned === null && quantity.trim() === '' ? ['Enter the completed quantity.'] : []),
+      ...((planned === null ? quantity.trim() === '' : !(qtyNum > 0))
         ? []
         : checkQuantity({ element, activity, quantity: qtyNum, unit, entries, excludeEntryId: editing?.id, mode: 'claim' })),
       ...(remarks.length > 500 ? ['Remarks must be 500 characters or fewer.'] : []),
     ];
-  }, [activity, date, quantity, qtyNum, unit, element, entries, editing?.id, remarks]);
+  }, [activity, date, quantity, qtyNum, pctNum, planned, others, unit, element, entries, editing?.id, remarks]);
 
   async function save(submit: boolean) {
     setTouched(true);
@@ -178,6 +191,13 @@ export function EntryForm({
             ))}
           </select>
         </label>
+        {planned !== null ? (
+          <label>
+            Work done (% of planned)
+            <input type="number" inputMode="numeric" min="1" max="100" step="1" value={percent} onChange={(e) => setPercent(e.target.value)} />
+            {qtyNum > 0 && <small className="muted">records {formatQty(qtyNum, UNIT_LABELS[unit as keyof typeof UNIT_LABELS] ?? unit)}</small>}
+          </label>
+        ) : (
         <div className="qty-unit">
           <label>
             Completed quantity
@@ -203,6 +223,7 @@ export function EntryForm({
             </select>
           </label>
         </div>
+        )}
       </div>
 
       {progress && (

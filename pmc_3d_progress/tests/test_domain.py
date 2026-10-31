@@ -68,6 +68,30 @@ class ModelValidation(unittest.TestCase):
 		self.assertEqual(errors, ['Element "W1": opening 2 overlaps another opening.'])
 
 
+	def test_bbs_steel_by_dia_and_grade(self):
+		doc = sample("security-cabin-a.json")
+		col = next(e for e in doc["elements"] if e["type"] == "column")
+		kg = col["plannedQuantities"]["REINF"]["quantity"]
+		col["steelByDia"] = {"8": kg * 0.25, "16": kg * 0.75}
+		col["concreteGrade"] = "M25"
+		v = d.validate_model_document(doc)
+		self.assertEqual(v["errors"], [])
+		self.assertFalse(any("steelByDia" in w for w in v["warnings"]))
+
+		col["steelByDia"] = {"8": 1, "12": 2}
+		v = d.validate_model_document(doc)
+		self.assertTrue(v["ok"])
+		self.assertTrue(any("steelByDia adds up to 3 kg" in w for w in v["warnings"]))
+
+		col["steelByDia"] = {"5": 2, "12": -1, "abc": 3}
+		col["concreteGrade"] = ""
+		errs = "\n".join(d.validate_model_document(doc)["errors"])
+		self.assertIn('bar diameter "5"', errs)
+		self.assertIn('bar diameter "abc"', errs)
+		self.assertIn('steelByDia["12"] must be a number of kg', errs)
+		self.assertIn("concreteGrade", errs)
+
+
 class Quantities(unittest.TestCase):
 	def test_over_plan_message_matches_frontend(self):
 		errs = d.check_quantity(C01, CONC, 5, "m3", [], "claim")

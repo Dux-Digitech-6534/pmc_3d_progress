@@ -4,7 +4,7 @@ import { AiReaderCard } from '../components/AiReaderCard';
 import { ModelViewer } from '../components/ModelViewer';
 import { ConfirmDialog, ErrorList, PageHeader } from '../components/ui';
 import { MaterialTable } from '../components/MaterialTable';
-import { CONCRETE_MIXES, materialsFor, plannedOf, withNormDefaults, type MaterialNorms } from '../domain/materials';
+import { BAR_DIAS, CONCRETE_GRADES, CONCRETE_MIXES, gradeName, materialsFor, plannedOf, RCC_ELEMENT_TYPES, withNormDefaults, type MaterialNorms } from '../domain/materials';
 import { errorMessages } from '../data/repository';
 import {
   DRAWING_ACCEPT,
@@ -2328,7 +2328,15 @@ function NormsCard({ norms, onChange }: { norms: MaterialNorms; onChange: (n: Ma
               onChange={(e) =>
                 e.target.value === '__custom__'
                   ? onChange({ ...norms, concreteGrade: 'Custom' })
-                  : onChange({ ...norms, concreteGrade: e.target.value, concrete: CONCRETE_MIXES[e.target.value] })
+                  : onChange({
+                      ...norms,
+                      concreteGrade: e.target.value,
+                      concrete: CONCRETE_MIXES[e.target.value],
+                      // element types still on the old grade follow the new one
+                      gradeByType: Object.fromEntries(
+                        RCC_ELEMENT_TYPES.map((t) => [t, norms.gradeByType[t] === gradeName(norms.concreteGrade) ? gradeName(e.target.value) : norms.gradeByType[t]]),
+                      ) as MaterialNorms['gradeByType'],
+                    })
               }
             >
               {Object.keys(CONCRETE_MIXES).map((g) => (
@@ -2361,6 +2369,74 @@ function NormsCard({ norms, onChange }: { norms: MaterialNorms; onChange: (n: Ma
         </div>
       </div>
       <p className="hint">Steel comes from the reinforcement quantity (kg) of each element; plaster is counted on both faces of a wall.</p>
+
+      <div className="field-label" style={{ marginTop: 12 }}>
+        Concrete grade and steel bar sizes by element
+      </div>
+      <div className="table-scroll">
+        <table className="table compact steel-split">
+          <thead>
+            <tr>
+              <th>Element</th>
+              <th>Grade</th>
+              {BAR_DIAS.map((d) => (
+                <th key={d} className="num">
+                  {d} mm %
+                </th>
+              ))}
+              <th className="num">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {RCC_ELEMENT_TYPES.map((t) => {
+              const split = norms.steelSplit[t] ?? {};
+              const total = BAR_DIAS.reduce((a, d) => a + (split[d] ?? 0), 0);
+              return (
+                <tr key={t}>
+                  <td>{t[0].toUpperCase() + t.slice(1)}</td>
+                  <td>
+                    <select
+                      value={norms.gradeByType[t]}
+                      aria-label={`${t} concrete grade`}
+                      onChange={(e) => onChange({ ...norms, gradeByType: { ...norms.gradeByType, [t]: e.target.value } })}
+                    >
+                      {[...new Set([...CONCRETE_GRADES, norms.gradeByType[t]])].map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  {BAR_DIAS.map((d) => (
+                    <td key={d} className="num">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="any"
+                        style={{ width: 54 }}
+                        aria-label={`${t} ${d} mm %`}
+                        value={split[d] ?? ''}
+                        onChange={(e) => {
+                          const next = { ...split };
+                          if (e.target.value === '' || Number(e.target.value) === 0) delete next[d];
+                          else next[d] = Number(e.target.value);
+                          onChange({ ...norms, steelSplit: { ...norms.steelSplit, [t]: next } });
+                        }}
+                      />
+                    </td>
+                  ))}
+                  <td className={`num ${Math.abs(total - 100) > 0.5 ? 'bad' : ''}`}>{total}%</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="hint">
+        Used for “Material required” in the 3D workspace (steel per bar size, concrete per grade). The bar sizes are a typical mix — enter the split of
+        the bar bending schedule (BBS) when you have it. Cement, sand and gitti use the concrete mix above.
+      </p>
     </section>
   );
 }

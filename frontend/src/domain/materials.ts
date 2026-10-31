@@ -29,7 +29,31 @@ export interface MaterialNorms {
   wastagePct: number;
   /** Weight of one cement bag, kg. */
   bagKg: number;
+  /** Concrete grade of each RCC element type (for "Material required" by grade). */
+  gradeByType: Record<RccType, string>;
+  /** Share of each RCC element type's steel by bar diameter (mm → %), adding up to 100. */
+  steelSplit: Record<RccType, SteelSplit>;
 }
+
+export const RCC_ELEMENT_TYPES = ['footing', 'column', 'beam', 'slab', 'lintel', 'chhajja'] as const;
+export type RccType = (typeof RCC_ELEMENT_TYPES)[number];
+/** Bar diameters, mm. */
+export const BAR_DIAS = [8, 10, 12, 16, 20, 25] as const;
+export type SteelSplit = Partial<Record<string, number>>;
+export const CONCRETE_GRADES = ['M15', 'M20', 'M25', 'M30', 'M35', 'M40'] as const;
+
+/**
+ * Typical bar mix of small RCC buildings when there is no bar bending schedule: ties / stirrups in
+ * 8 mm, main bars 10–16 mm. Replace with the BBS split of the project.
+ */
+export const DEFAULT_STEEL_SPLIT: Record<RccType, SteelSplit> = {
+  footing: { 10: 40, 12: 60 },
+  column: { 8: 20, 12: 40, 16: 40 },
+  beam: { 8: 25, 12: 45, 16: 30 },
+  slab: { 8: 40, 10: 60 },
+  lintel: { 8: 40, 10: 60 },
+  chhajja: { 8: 50, 10: 50 },
+};
 
 /** Nominal mixes: 1 m³ of concrete needs 1.54 m³ of dry materials; cement 1440 kg/m³. */
 export const CONCRETE_MIXES: Record<string, ConcreteNorm> = {
@@ -47,7 +71,12 @@ export const DEFAULT_MATERIAL_NORMS: MaterialNorms = {
   plaster: { cementKg: 3.3, sandM3: 0.0137 },
   wastagePct: 0,
   bagKg: 50,
+  gradeByType: { footing: 'M20', column: 'M20', beam: 'M20', slab: 'M20', lintel: 'M20', chhajja: 'M20' },
+  steelSplit: DEFAULT_STEEL_SPLIT,
 };
+
+/** "M20 (1:1.5:3)" → "M20". */
+export const gradeName = (label: string) => /^M\d+/.exec(label.trim())?.[0] ?? label.trim();
 
 export const MATERIALS = [
   { key: 'cement', label: 'Cement', unit: 'bags' },
@@ -82,6 +111,9 @@ export function withNormDefaults(n: Partial<MaterialNorms> | undefined): Materia
     concrete: { ...d.concrete, ...n?.concrete },
     brickwork: { ...d.brickwork, ...n?.brickwork },
     plaster: { ...d.plaster, ...n?.plaster },
+    // a model planned before grades by type existed: every type has the model's grade
+    gradeByType: { ...(n?.gradeByType ? d.gradeByType : Object.fromEntries(RCC_ELEMENT_TYPES.map((t) => [t, gradeName(n?.concreteGrade ?? d.concreteGrade)]))), ...n?.gradeByType } as Record<RccType, string>,
+    steelSplit: { ...d.steelSplit, ...n?.steelSplit },
   };
 }
 
@@ -94,6 +126,11 @@ export function normErrors(n: MaterialNorms): string[] {
   if (![n.plaster.cementKg, n.plaster.sandM3].every(ok)) out.push('Plaster norms must be numbers of 0 or more.');
   if (!ok(n.wastagePct) || n.wastagePct > 50) out.push('Wastage must be between 0 and 50 %.');
   if (!(Number.isFinite(n.bagKg) && n.bagKg > 0)) out.push('Cement bag weight must be more than 0 kg.');
+  for (const t of RCC_ELEMENT_TYPES) {
+    const parts = Object.values(n.steelSplit[t] ?? {}).map((v) => v ?? 0);
+    if (!parts.every(ok)) out.push(`Steel bar sizes for ${t}: percentages must be 0 or more.`);
+    else if (Math.abs(parts.reduce((a, b) => a + b, 0) - 100) > 0.5) out.push(`Steel bar sizes for ${t} must add up to 100 %.`);
+  }
   return out;
 }
 
