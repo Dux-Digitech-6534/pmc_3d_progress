@@ -3,7 +3,7 @@ import { ElementPanel } from '../components/ElementPanel';
 import { ModelViewer } from '../components/ModelViewer';
 import { EmptyState, Spinner } from '../components/ui';
 import { ACTIVITY_STATUS_LABELS, computeActivityProgress, type ActivityStatus } from '../domain/progress';
-import { ELEMENT_TYPES, type ElementType } from '../domain/types';
+import { ELEMENT_TYPES, VIEW_GROUPS, viewGroupOf, type ElementType, type ViewGroup } from '../domain/types';
 import { AWAITING_COLOR, STATUS_COLORS, TYPE_COLORS, TYPE_LABELS, SELECTION_COLOR } from '../lib/colors';
 import { useApp } from '../state/AppContext';
 
@@ -30,11 +30,11 @@ export function Workspace() {
   const listRef = useRef<HTMLUListElement>(null);
   // hidden in the 3D view only (to look inside the building) — nothing changes in the model or progress
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
-  const [hiddenTypes, setHiddenTypes] = useState<Set<ElementType>>(() => new Set());
+  const [hiddenTypes, setHiddenTypes] = useState<Set<ViewGroup>>(() => new Set());
 
   const elements = useMemo(() => data?.elements ?? [], [data?.elements]);
-  const hiddenAll = useMemo(() => new Set([...hiddenIds, ...elements.filter((e) => hiddenTypes.has(e.type)).map((e) => e.id)]), [hiddenIds, hiddenTypes, elements]);
-  const typesPresent = useMemo(() => ELEMENT_TYPES.filter((t) => elements.some((e) => e.type === t)), [elements]);
+  const hiddenAll = useMemo(() => new Set([...hiddenIds, ...elements.filter((e) => hiddenTypes.has(viewGroupOf(e))).map((e) => e.id)]), [hiddenIds, hiddenTypes, elements]);
+  const typesPresent = useMemo(() => VIEW_GROUPS.filter((t) => elements.some((e) => viewGroupOf(e) === t)), [elements]);
   const activities = useMemo(() => data?.model?.document?.activities ?? [], [data?.model]);
   const entries = useMemo(() => data?.entries ?? [], [data?.entries]);
   const viewActivity = activities.find((a) => a.code === view) ?? null;
@@ -247,7 +247,7 @@ export function Workspace() {
                 setHiddenTypes(new Set());
                 return;
               }
-              const t = v as ElementType;
+              const t = v as ViewGroup;
               setHiddenTypes((h) => {
                 const n = new Set(h);
                 if (n.has(t)) n.delete(t);
@@ -259,7 +259,7 @@ export function Workspace() {
             <option value="">👁 Show / hide…</option>
             {typesPresent.map((t) => (
               <option key={t} value={t}>
-                {hiddenTypes.has(t) ? 'Show' : 'Hide'} {TYPE_LABELS[t].toLowerCase()}s
+                {hiddenTypes.has(t) ? 'Show' : 'Hide'} {t === 'stair' ? 'stair' : TYPE_LABELS[t].toLowerCase()}s
               </option>
             ))}
             {hiddenAll.size > 0 && <option value="__all__">Show all</option>}

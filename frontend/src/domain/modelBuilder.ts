@@ -1173,7 +1173,69 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
   type Line = { axis: 'x' | 'y'; at: number; a: number; b: number };
   type Piece = { axis: 'x' | 'y'; at: number; a: number; b: number; wall: boolean };
   type Rect = { x0: number; x1: number; y0: number; y1: number };
-  const rectOf = (rm: Room): Rect => ({ x0: R(rm.x), x1: R(rm.x + rm.w), y0: R(rm.y), y1: R(rm.y + rm.d) });
+  // A drawing read by AI often puts one wall a little apart in two rooms (3000 in one, 3150 in the next): room edges
+  // closer than SNAP become one line, so no second wall stands right in front of a door or across a stair.
+  const SNAP = 300;
+  const snapOf = (vals: number[]) => {
+    const count = new Map<number, number>();
+    vals.forEach((v) => count.set(R(v), (count.get(R(v)) ?? 0) + 1));
+    const sorted = [...count.keys()].sort((p, q) => p - q);
+    const map = new Map<number, number>();
+    let group: number[] = [];
+    const flush = () => {
+      // the line most rooms agree on wins
+      const best = [...group].sort((p, q) => count.get(q)! - count.get(p)! || p - q)[0];
+      group.forEach((g) => map.set(g, best));
+      group = [];
+    };
+    for (const v of sorted) {
+      if (group.length && (v - group[group.length - 1] > SNAP || v - group[0] > SNAP * 1.5)) flush();
+      group.push(v);
+    }
+    if (group.length) flush();
+    return (v: number) => map.get(R(v)) ?? R(v);
+  };
+  const allRooms = floors.flatMap((fl) => fl.rooms);
+  const sx = snapOf(allRooms.flatMap((rm) => [rm.x, rm.x + rm.w]));
+  const sy = snapOf(allRooms.flatMap((rm) => [rm.y, rm.y + rm.d]));
+  const lined = (rm: Room): Rect => ({ x0: sx(rm.x), x1: sx(rm.x + rm.w), y0: sy(rm.y), y1: sy(rm.y + rm.d) });
+  // Two rooms read overlapping (a lobby reaching into the stair): the bigger one is cut back to the
+  // smaller one's edge, on the side where they overlap least, so both keep their walls and doors.
+  const trimmedRect = new Map<Room, Rect>();
+  floors.forEach((fl) => {
+    const list = fl.rooms.filter((rm) => roomKind(rm) !== 'terrace');
+    list.forEach((rm) => trimmedRect.set(rm, lined(rm)));
+    for (let i = 0; i < list.length; i++)
+      for (let j = i + 1; j < list.length; j++) {
+        const a = trimmedRect.get(list[i])!, b = trimmedRect.get(list[j])!;
+        const ox = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0);
+        const oy = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+        if (ox <= 50 || oy <= 50) continue;
+        const area = (r: Rect) => (r.x1 - r.x0) * (r.y1 - r.y0);
+        const [big, small, bigRoom, smallRoom] = area(a) >= area(b) ? [a, b, list[i], list[j]] : [b, a, list[j], list[i]];
+        const next = { ...big };
+        if (ox <= oy) {
+          if (big.x0 < small.x0) next.x1 = small.x0;
+          else next.x0 = small.x1;
+        } else if (big.y0 < small.y0) next.y1 = small.y0;
+        else next.y0 = small.y1;
+        // only a small cut: a room mostly inside another is a reading error to fix by hand
+        if ((next.x1 - next.x0) * (next.y1 - next.y0) < area(big) * 0.6 || next.x1 <= next.x0 || next.y1 <= next.y0) continue;
+        trimmedRect.set(bigRoom, next);
+        warnings.push(`${fl.name}: "${bigRoom.name}" overlapped "${smallRoom.name}" by ${((ox * oy) / 1e6).toFixed(1)} m² and was cut back to its wall — check both rooms against the drawing.`);
+      }
+  });
+  const rectOf = (rm: Room): Rect => trimmedRect.get(rm) ?? lined(rm);
+  const tooSmall = (rm: Room) => {
+    const r = rectOf(rm);
+    return r.x1 - r.x0 < SNAP || r.y1 - r.y0 < SNAP;
+  };
+  let snapped = 0;
+  allRooms.forEach((rm) => {
+    const r = lined(rm);
+    if (r.x0 !== R(rm.x) || r.x1 !== R(rm.x + rm.w) || r.y0 !== R(rm.y) || r.y1 !== R(rm.y + rm.d)) snapped++;
+  });
+  if (snapped) warnings.push(`${snapped} room${snapped === 1 ? '' : 's'} had an edge less than ${SNAP} mm from another room's wall and were lined up with it (one wall instead of two) — check the room sizes.`);
   const merge = (ivs: Iv[]) =>
     [...ivs]
       .sort((p, q) => p[0] - q[0])
@@ -1204,7 +1266,9 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
    * room; open spaces (parking, verandah) get columns and beams but no walls of their own.
    */
   const planOf = (frame: Room[], closed: Room[]) => {
-    const { h: hRaw, v: vRaw } = edgesOf(frame.map(rectOf));
+    const frameRects = frame.map(rectOf);
+    const crossing = new Set<string>();
+    const { h: hRaw, v: vRaw } = edgesOf(frameRects);
     const { h: hWall, v: vWall } = edgesOf(closed.map(rectOf));
     const lines: Line[] = [
       ...[...hRaw].flatMap(([y, ivs]) => merge(ivs).map(([a, b]) => ({ axis: 'x' as const, at: y, a, b }))),
@@ -1240,14 +1304,20 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
         const b = stops[i][k + 1] - half;
         if (b - a <= 10) continue;
         const c0 = stops[i][k], c1 = stops[i][k + 1];
-        const wall = covered((ln.axis === 'x' ? hWall : vWall).get(ln.at), c0, c1) >= (c1 - c0) / 2;
+        // no wall through the middle of a room (two rooms read overlapping): nothing to separate there
+        const m = (c0 + c1) / 2;
+        const [p1, p2] = ln.axis === 'x' ? [[m, ln.at - 150], [m, ln.at + 150]] : [[ln.at - 150, m], [ln.at + 150, m]];
+        const through = frameRects.some((r) => [p1, p2].every(([x, y]) => x > r.x0 && x < r.x1 && y > r.y0 && y < r.y1));
+        if (through) crossing.add(frame[frameRects.findIndex((r) => [p1, p2].every(([x, y]) => x > r.x0 && x < r.x1 && y > r.y0 && y < r.y1))].name);
+        const wall = !through && covered((ln.axis === 'x' ? hWall : vWall).get(ln.at), c0, c1) >= (c1 - c0) / 2;
         pieces.push({ axis: ln.axis, at: ln.at, a, b, wall });
       }
     });
-    return { pts, pieces };
+    return { pts, pieces, crossing };
   };
   const kinds = floors.map((fl, k) => {
-    const live = fl.rooms.filter((rm) => roomKind(rm) !== 'terrace');
+    fl.rooms.filter(tooSmall).forEach((rm) => warnings.push(`${fl.name}: "${rm.name}" is narrower than ${SNAP} mm after lining up the walls and was left out.`));
+    const live = fl.rooms.filter((rm) => roomKind(rm) !== 'terrace' && !tooSmall(rm));
     // a balcony on the ground floor is just an open space (sit-out / porch)
     const balcony = k === 0 ? [] : live.filter((rm) => roomKind(rm) === 'balcony');
     const frame = live.filter((rm) => !balcony.includes(rm));
@@ -1256,6 +1326,8 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
   });
   const plans = floors.map((_, k) => planOf(kinds[k].frame, kinds[k].closed));
   floors.forEach((fl, k) => {
+    if (plans[k].crossing.size)
+      warnings.push(`${fl.name}: other rooms' edges cross ${[...plans[k].crossing].map((n) => `"${n}"`).join(', ')} — no wall is built through ${plans[k].crossing.size === 1 ? 'it' : 'them'}; check for overlapping rooms.`);
     if (!plans[k].pts.length) errors.push(`${fl.name}: every room is a terrace / balcony — add at least one room or open space with columns.`);
   });
   if (errors.length) return fail();
@@ -1366,6 +1438,11 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
       const height = Math.min(o.height, wallTop - fl.base - sill);
       if (height <= 0) return warnings.push(`${label} does not fit under the roof beam — check its sill and height.`);
       const code = `${t}${o.type === 'door' ? `D${++nd}` : `WN${++nw}`}`;
+      if (o.type === 'door') {
+        const lo = mid - width / 2, hi = mid + width / 2;
+        const block = wallPieces.find((q) => q !== pc && q.axis === pc.axis && Math.abs(q.at - pc.at) > 50 && Math.abs(q.at - pc.at) < 900 && Math.min(q.b, hi) - Math.max(q.a, lo) > width / 2);
+        if (block) warnings.push(`${code}: a wall stands ${Math.round(Math.abs(block.at - pc.at))} mm in front of this door — check the rooms on both sides of it.`);
+      }
       boxes.push({ code, type: o.type, ...along(pc, width, spec.walls.t + 20, fl.base + sill, height, mid), level: fl.level });
       const lintelTop = sill + height + spec.lintel.h;
       if (spec.lintel.enabled && lintelTop <= wallTop - fl.base) {
@@ -1394,15 +1471,19 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
         const to = k + 1 < floors.length ? floors[k + 1].base : fl.top + slabT;
         const rise = to - fl.base;
         const ht = spec.walls.enabled ? spec.walls.t / 2 : 0;
-        const [x0, x1, y0, y1] = [rm.x + ht, rm.x + rm.w - ht, rm.y + ht, rm.y + rm.d - ht];
+        const sr = rectOf(rm);
+        const [x0, x1, y0, y1] = [sr.x0 + ht, sr.x1 - ht, sr.y0 + ht, sr.y1 - ht];
         const alongY = y1 - y0 >= x1 - x0;
         const long = alongY ? y1 - y0 : x1 - x0;
         const half = (alongY ? x1 - x0 : y1 - y0) / 2;
-        const landing = Math.min(Math.max(half, 900), long * 0.4);
+        const steps = Math.max(2, Math.round(rise / 2 / 165));
+        // the landing is as wide as a flight when the room is long enough, but never less than 900 mm,
+        // so the treads get as close to 250 mm as the room allows
+        const landing = Math.max(900, Math.min(half, long - steps * 250, long * 0.4));
         const run = long - landing;
         const where = `${fl.name}, ${rm.name.trim() || `room ${j + 1}`}`;
         if (run < 1200 || half < 600) return warnings.push(`${where}: the room is too small for a dog-legged stair — add the stair by hand.`);
-        const steps = Math.max(2, Math.round(rise / 2 / 165));
+        if (run / steps < 230) warnings.push(`${where}: treads come out at only ${Math.round(run / steps)} mm (room ${Math.round(long)} mm long inside) — check the stair room size on the drawing.`);
         const code = `${t}ST${j + 1}`;
         const box = (a0: number, a1: number, b0: number, b1: number) =>
           alongY ? { x: (a0 + a1) / 2, y: (b0 + b1) / 2, l: a1 - a0, w: b1 - b0 } : { x: (b0 + b1) / 2, y: (a0 + a1) / 2, l: b1 - b0, w: a1 - a0 };

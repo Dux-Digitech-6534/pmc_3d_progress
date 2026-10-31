@@ -175,6 +175,12 @@ export interface ModelRecord {
 }
 
 /** An element resolved in the context of a project + model revision. */
+/** Groups for show / hide in 3D: the element types, with stair flights and landings apart from the slabs. */
+export type ViewGroup = ElementType | 'stair';
+export const VIEW_GROUPS: ViewGroup[] = [...ELEMENT_TYPES, 'stair'];
+export const viewGroupOf = (e: Pick<ModelElementDef, 'type' | 'code' | 'geometry'>): ViewGroup =>
+  e.geometry.shape === 'stair' || /(^|-)STd+-LD$/.test(e.code) ? 'stair' : e.type;
+
 export interface ElementRecord extends ModelElementDef {
   /** projectId|modelId|revision|sourceElementId — unique across the whole application. */
   key: string;

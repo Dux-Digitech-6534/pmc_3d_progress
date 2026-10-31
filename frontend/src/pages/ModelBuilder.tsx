@@ -47,7 +47,7 @@ import {
   type OpeningPlacement,
   type OpeningType,
 } from '../domain/modelBuilder';
-import { ELEMENT_TYPES, PLANNING_STATUSES, type ElementRecord, type ElementType, type ModelRecord } from '../domain/types';
+import { ELEMENT_TYPES, PLANNING_STATUSES, VIEW_GROUPS, viewGroupOf, type ElementRecord, type ElementType, type ModelRecord, type ViewGroup } from '../domain/types';
 import { TYPE_COLORS } from '../lib/colors';
 import { downloadText } from '../lib/download';
 import { useApp } from '../state/AppContext';
@@ -216,7 +216,7 @@ export function ModelBuilder() {
   const [pickCode, setPickCode] = useState<string | null>(null);
   // hidden in the preview only (to look inside / behind) — not removed from the model
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
-  const [hiddenTypes, setHiddenTypes] = useState<Set<ElementType>>(() => new Set());
+  const [hiddenTypes, setHiddenTypes] = useState<Set<ViewGroup>>(() => new Set());
   const [undoSpec, setUndoSpec] = useState<BuilderSpec | null>(null);
   const pickedEl = picked ? preview.find((e) => e.id === picked) : undefined;
   const pickedRef = picked ? built.refs[picked] : undefined;
@@ -257,10 +257,10 @@ export function ModelBuilder() {
   }
 
   const hiddenAll = useMemo(
-    () => new Set([...hiddenIds, ...(built.document?.elements.filter((e) => hiddenTypes.has(e.type)).map((e) => e.id) ?? [])]),
+    () => new Set([...hiddenIds, ...(built.document?.elements.filter((e) => hiddenTypes.has(viewGroupOf(e))).map((e) => e.id) ?? [])]),
     [hiddenIds, hiddenTypes, built],
   );
-  const typesPresent = useMemo(() => ELEMENT_TYPES.filter((t) => built.document?.elements.some((e) => e.type === t)), [built]);
+  const typesPresent = useMemo(() => VIEW_GROUPS.filter((t) => built.document?.elements.some((e) => viewGroupOf(e) === t)), [built]);
 
   /** An element of the built model as a box element (mm from the model centre). */
   const boxOf = (e: Pick<ElementRecord, 'code' | 'type' | 'geometry'>, code = e.code): FreeElement => {
@@ -585,7 +585,7 @@ export function ModelBuilder() {
                           setHiddenTypes(new Set());
                           return;
                         }
-                        const t = v as ElementType;
+                        const t = v as ViewGroup;
                         setHiddenTypes((h) => {
                           const n = new Set(h);
                           if (n.has(t)) n.delete(t);

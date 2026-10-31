@@ -295,12 +295,75 @@ describe('open spaces, balconies, terraces, mumty, stair opening, chhajjas, plan
 
   it('notes overlapping rooms, a plan with a gap, and an upper floor off the floor below', () => {
     const overlap = buildModel(house({ rooms: [...house().rooms!, { name: 'Toilet', x: 5000, y: 3000, w: 1500, d: 1500 }], upperFloors: [] }));
-    expect(overlap.warnings.join(' ')).toMatch(/overlap by/);
+    // a small overlap is cut back and noted; a room lying mostly inside another stays and is noted as an overlap
+    expect(overlap.warnings.join(' ')).toMatch(/"Kitchen" overlapped "Toilet" by [\d.]+ m² and was cut back/);
+    const inside = buildModel(house({ rooms: [...house().rooms!, { name: 'Store', x: 3200, y: 4000, w: 3000, d: 3500 }], upperFloors: [] }));
+    expect(inside.warnings.join(' ')).toMatch(/"Kitchen" and "Store" overlap by/);
     const gap = buildModel(house({ rooms: house().rooms!.filter((r) => r.name !== 'Kitchen'), upperFloors: [] }));
     expect(gap.warnings.join(' ')).toMatch(/cover only \d+ %/);
     const shifted = buildModel(
       house({ upperFloors: [{ name: 'First floor', height: 3050, rooms: [{ name: 'Bed room', x: 2000, y: 0, w: 6700, d: 3600 }], roomOpenings: [] }] }),
     );
     expect(shifted.warnings.join(' ')).toMatch(/stick.* out more than 600 mm/);
+  });
+});
+
+describe('a 22 × 30 ft plan read with small errors (walls a little apart, rooms overlapping)', () => {
+  // as an AI reading tends to give it: the kitchen's right edge 150 mm past the lobby's left edge,
+  // the drawing room 150 mm deeper than where the lobby starts, and the lobby reaching into the stair
+  const f = (n: number) => Math.round(n * 304.8);
+  const spec = (): BuilderSpec => ({
+    ...defaultSpec(),
+    kind: 'rooms',
+    rooms: [
+      { name: 'Porch', kind: 'open', x: 0, y: 0, w: f(9.5), d: f(8) },
+      { name: 'Drawing room', x: f(9.5), y: 0, w: f(10.5), d: f(11.6) + 150 },
+      { name: 'Stair', x: 0, y: f(8), w: f(9.5), d: f(7.4) },
+      { name: 'Lobby', x: f(9.5) - 400, y: f(11.6), w: f(10.5) + 400, d: f(8.3) },
+      { name: 'Kitchen', x: 0, y: f(15.4), w: f(9.5) + 150, d: f(5.2) },
+      { name: 'Bed room', x: 0, y: f(20.6), w: f(14), d: f(9.4) },
+      { name: 'Toilet', x: f(14), y: f(19.9), w: f(6), d: f(5.7) },
+      { name: 'OTS', x: f(15.4), y: f(25.6), w: f(4.6), d: f(4.4) },
+    ],
+    roomOpenings: [
+      { type: 'door', x: f(9.5), y: f(1.7), width: 900, height: 2100, sill: 0 }, // drawing room main door, from the porch
+      { type: 'door', x: f(9.5), y: f(13.5), width: 900, height: 2100, sill: 0 }, // stair landing → lobby
+      { type: 'door', x: f(11), y: f(20.6), width: 900, height: 2100, sill: 0 }, // lobby → bed room
+    ],
+    walls: { enabled: true, t: 230, internal: true },
+    openings: [],
+    mumty: { enabled: false, h: 2440 },
+  });
+
+  it('builds one wall per line (no wall right in front of a door) and no wall across the stair', () => {
+    const res = buildModel(spec());
+    expect(res.errors).toEqual([]);
+    const doc = res.document!;
+    expect(validateModelDocument(doc).errors ?? []).toEqual([]);
+    const walls = doc.elements.filter((e) => e.type === 'wall');
+    // no two parallel walls closer than 300 mm that run side by side
+    for (const a of walls)
+      for (const b of walls) {
+        if (a === b) continue;
+        const ax = a.geometry.size[0] >= a.geometry.size[2];
+        const bx = b.geometry.size[0] >= b.geometry.size[2];
+        if (ax !== bx) continue;
+        const [i, j] = ax ? [2, 0] : [0, 2];
+        const gap = Math.abs(a.geometry.position[i] - b.geometry.position[i]);
+        const overlap = Math.min(a.geometry.position[j] + a.geometry.size[j] / 2, b.geometry.position[j] + b.geometry.size[j] / 2) - Math.max(a.geometry.position[j] - a.geometry.size[j] / 2, b.geometry.position[j] - b.geometry.size[j] / 2);
+        if (gap > 0.01 && gap < 0.3) expect(overlap).toBeLessThanOrEqual(0.05);
+      }
+    expect(res.warnings.join(' ')).not.toMatch(/stands \d+ mm in front of this door/);
+    expect(res.warnings.join(' ')).toMatch(/lined up with it/);
+    // the lobby read into the stair: no wall through the stair, and it is reported
+    expect(res.warnings.join(' ')).toMatch(/"Lobby" overlapped "Stair" by [\d.]+ m² and was cut back/);
+    // the stair flights stay inside the stair room (between its side walls)
+    const st = doc.elements.filter((e) => /^ST\d+-/.test(e.code));
+    expect(st).toHaveLength(3);
+    // and inside the stair room on plan: x 0 … 9.5 ft from the left, i.e. left of the stair's right wall
+    const xs = doc.elements.filter((e) => e.type === 'column').map((e) => e.geometry.position[0]);
+    const left = Math.min(...xs);
+    for (const e of st) expect(e.geometry.position[0] + e.geometry.size[0] / 2).toBeLessThanOrEqual(left + f(9.5) / 1000 + 0.001);
+    expect(doc.elements.filter((e) => e.type === 'door')).toHaveLength(3);
   });
 });
