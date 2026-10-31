@@ -39,6 +39,8 @@ import {
   type Room,
   type RoomOpening,
   type UpperFloor,
+  type RoomKind,
+  roomKind,
   type ColumnType,
   type FootingType,
   type OpeningKind,
@@ -2016,7 +2018,8 @@ function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Part
       )}
       <p className="muted small">
         Each room as a rectangle in mm: <b>X / Y</b> = its front-left corner from the building's front-left corner (X to the right, Y to the back),{' '}
-        <b>width</b> along X, <b>depth</b> along Y. Walls are built on the room edges (a shared wall once), columns at every corner and junction.
+        <b>width</b> along X, <b>depth</b> along Y. Walls are built on the room edges (a shared wall once), columns at every corner and junction. A room named
+        "Stair" gets a dog-legged stair; parking / verandah are "Open" (columns and slab, no walls).
         {rooms.length > 0 && (
           <>
             {' '}
@@ -2029,6 +2032,7 @@ function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Part
           <thead>
             <tr>
               <th>Room</th>
+              <th>Type</th>
               <th>X</th>
               <th>Y</th>
               <th>Width</th>
@@ -2041,6 +2045,19 @@ function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Part
               <tr key={i}>
                 <td>
                   <input value={rm.name} onChange={(e) => updRoom(i, { name: e.target.value })} aria-label={`Room ${i + 1} name`} style={{ width: 150 }} />
+                </td>
+                <td>
+                  <select
+                    value={roomKind(rm)}
+                    onChange={(e) => updRoom(i, { kind: e.target.value === 'room' ? undefined : (e.target.value as RoomKind) })}
+                    aria-label={`Room ${i + 1} type`}
+                    title="Room: walls all round · Open: parking / verandah, no walls of its own · Balcony: cantilever slab + railing · Terrace: open to sky, nothing built"
+                  >
+                    <option value="room">Room</option>
+                    <option value="open">Open (no walls)</option>
+                    {floor > 0 && <option value="balcony">Balcony</option>}
+                    {floor > 0 && <option value="terrace">Terrace</option>}
+                  </select>
                 </td>
                 <td>
                   <NS value={rm.x} onChange={(x) => updRoom(i, { x })} label={`Room ${i + 1} X`} width={74} />
@@ -2137,6 +2154,20 @@ function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Part
           <input type="checkbox" checked={spec.lintel.enabled} onChange={(e) => setSpec({ lintel: { ...spec.lintel, enabled: e.target.checked } })} /> RCC lintel over
           openings, {spec.lintel.h} mm deep
         </label>
+        <label className="inline">
+          <input type="checkbox" checked={spec.chhajja.enabled} onChange={(e) => setSpec({ chhajja: { ...spec.chhajja, enabled: e.target.checked } })} /> Chhajja over
+          outside windows{spec.chhajja.overDoors ? ' and doors' : ''}, {spec.chhajja.projection} mm out
+        </label>
+        <label className="inline">
+          <input type="checkbox" checked={spec.mumty?.enabled ?? true} onChange={(e) => setSpec({ mumty: { h: spec.mumty?.h ?? 2440, enabled: e.target.checked } })} /> Mumty (stair cabin)
+          on the roof over the top-floor stair
+        </label>
+        {(spec.mumty?.enabled ?? true) && (
+          <label>
+            Mumty height (mm)
+            <N value={spec.mumty?.h ?? 2440} onChange={(h) => setSpec({ mumty: { enabled: true, h } })} width={100} />
+          </label>
+        )}
         <label className="inline">
           <input type="checkbox" checked={parapet.enabled} onChange={(e) => setSpec({ parapet: { ...parapet, enabled: e.target.checked } })} /> Parapet wall on open roof / terrace
           edges

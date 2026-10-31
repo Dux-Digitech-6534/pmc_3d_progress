@@ -199,3 +199,108 @@ describe('staircase in the stair room', () => {
     expect(res.document!.elements.some((e) => e.code === 'ST1-1')).toBe(true);
   });
 });
+
+describe('open spaces, balconies, terraces, mumty, stair opening, chhajjas, plan checks', () => {
+  // a 22 × 30 ft style house: parking (open) in front, rooms behind; first floor with a front balcony and a back terrace
+  const house = (over: Partial<BuilderSpec> = {}): BuilderSpec => ({
+    ...defaultSpec(),
+    kind: 'rooms',
+    rooms: [
+      { name: 'Parking', kind: 'open', x: 0, y: 0, w: 3000, d: 3600 },
+      { name: 'Drawing room', x: 3000, y: 0, w: 3700, d: 3600 },
+      { name: 'Stair', x: 0, y: 3600, w: 2600, d: 4500 },
+      { name: 'Kitchen', x: 2600, y: 3600, w: 4100, d: 4500 },
+    ],
+    roomOpenings: [
+      { type: 'window', x: 4850, y: 0, width: 1500, height: 1200, sill: 900 }, // front wall of the drawing room (outside)
+      { type: 'door', x: 4850, y: 3600, width: 900, height: 2100, sill: 0 }, // drawing room → kitchen (inside)
+    ],
+    walls: { enabled: true, t: 230, internal: true },
+    openings: [],
+    roofLevel: 3050,
+    chhajja: { enabled: true, projection: 450, t: 75, overDoors: true },
+    upperFloors: [
+      {
+        name: 'First floor',
+        height: 3050,
+        rooms: [
+          { name: 'Balcony', kind: 'balcony', x: 0, y: -1200, w: 6700, d: 1200 },
+          { name: 'Bed room', x: 0, y: 0, w: 6700, d: 3600 },
+          { name: 'Stair', x: 0, y: 3600, w: 2600, d: 4500 },
+          { name: 'Terrace', kind: 'terrace', x: 2600, y: 3600, w: 4100, d: 4500 },
+        ],
+        roomOpenings: [{ type: 'door', x: 3350, y: 0, width: 900, height: 2100, sill: 0 }],
+      },
+    ],
+    parapet: { enabled: true, h: 1000, t: 115 },
+    ...over,
+  });
+  const built = (over: Partial<BuilderSpec> = {}) => {
+    const res = buildModel(house(over));
+    expect(res.errors).toEqual([]);
+    expect(validateModelDocument(res.document!).errors ?? []).toEqual([]);
+    return res;
+  };
+  const els = (res: ReturnType<typeof buildModel>) => res.document!.elements;
+
+  it('builds no walls on the open sides of the parking, but keeps its columns and beams', () => {
+    const res = built();
+    const walls = els(res).filter((e) => e.type === 'wall' && e.levelId === 'GF');
+    // ground floor wall pieces: none on the parking front edge (y = 0, x 0..3000) nor its left side
+    const cx = 3350, cy = 4050; // centre of the ground frame in plan mm
+    const onParkingFront = walls.filter((e) => Math.abs(-e.geometry.position[2] * 1000 + cy - 0) < 20 && e.geometry.position[0] * 1000 + cx < 3000);
+    expect(onParkingFront).toEqual([]);
+    expect(els(res).filter((e) => e.type === 'column' && e.levelId === 'GF').length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('puts a cantilever balcony slab with railings, builds nothing on the terrace, and a mumty over the top stair', () => {
+    const res = built();
+    const codes = els(res).map((e) => e.code);
+    expect(codes).toContain('1F-BAL1');
+    expect(codes.filter((c) => c.startsWith('1F-BAL1-R'))).toHaveLength(3); // front + both ends; the back is the bed room wall
+    // terrace: no first-floor wall inside the terrace area, and no columns only for it
+    expect(codes.some((c) => c.startsWith('MT-C'))).toBe(true);
+    expect(codes).toContain('MT-SL');
+    expect(codes.filter((c) => c.startsWith('MT-D'))).toHaveLength(1);
+    const mt = els(res).find((e) => e.code === 'MT-SL')!;
+    expect(mt.levelId).toBe('RF');
+    expect(res.document!.levels.map((l) => l.id)).toEqual(['FDN', 'GF', '1F', 'RF']);
+    // no mumty when switched off
+    expect(built({ mumty: { enabled: false, h: 2440 } }).document!.elements.some((e) => e.code.startsWith('MT-'))).toBe(false);
+  });
+
+  it('leaves the slab open over the stair (slab per room) and keeps one slab when there is no stair', () => {
+    const res = built();
+    const gfSlabs = els(res).filter((e) => e.code.startsWith('SL-RF'));
+    expect(gfSlabs.length).toBe(3); // parking, drawing room, kitchen — not the stair
+    const stairCentre = { x: (1300 - 3350) / 1000, z: -(5850 - 4050) / 1000 };
+    for (const s of gfSlabs) {
+      const [x, , z] = s.geometry.position;
+      const [l, , w] = s.geometry.size;
+      const covers = Math.abs(x - stairCentre.x) < l / 2 && Math.abs(z - stairCentre.z) < w / 2;
+      expect(covers).toBe(false);
+    }
+    const noStair = built({ rooms: house().rooms!.map((r) => (r.name === 'Stair' ? { ...r, name: 'Store' } : r)), upperFloors: [] });
+    expect(els(noStair).filter((e) => e.type === 'slab').map((e) => e.code)).toEqual(['SL-RF']);
+  });
+
+  it('puts a chhajja over the outside window only', () => {
+    const res = built();
+    const ch = els(res).filter((e) => e.type === 'chhajja' && e.levelId === 'GF');
+    expect(ch.map((e) => e.code)).toEqual(['CH-WN1']);
+    // it projects outside: in front of the front wall (plan y < 0 → world z > front wall)
+    const wallZ = (4050 - 0) / 1000;
+    expect(ch[0].geometry.position[2]).toBeGreaterThan(wallZ);
+  });
+
+  it('notes overlapping rooms, a plan with a gap, and an upper floor off the floor below', () => {
+    const overlap = buildModel(house({ rooms: [...house().rooms!, { name: 'Toilet', x: 5000, y: 3000, w: 1500, d: 1500 }], upperFloors: [] }));
+    expect(overlap.warnings.join(' ')).toMatch(/overlap by/);
+    const gap = buildModel(house({ rooms: house().rooms!.filter((r) => r.name !== 'Kitchen'), upperFloors: [] }));
+    expect(gap.warnings.join(' ')).toMatch(/cover only \d+ %/);
+    const shifted = buildModel(
+      house({ upperFloors: [{ name: 'First floor', height: 3050, rooms: [{ name: 'Bed room', x: 2000, y: 0, w: 6700, d: 3600 }], roomOpenings: [] }] }),
+    );
+    expect(shifted.warnings.join(' ')).toMatch(/stick.* out more than 600 mm/);
+  });
+});

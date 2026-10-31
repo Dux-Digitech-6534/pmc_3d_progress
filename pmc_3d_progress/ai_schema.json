@@ -26,6 +26,10 @@
     "name": {
      "type": "string"
     },
+    "kind": {
+     "type": "string",
+     "description": "room = walls all round; open = under the roof without its own walls (parking, porch, verandah); balcony = projecting balcony on an upper floor; terrace = open to the sky.\n\n{enum: [\"room\",\"open\",\"balcony\",\"terrace\"]}"
+    },
     "xMm": {
      "type": "number",
      "description": "Front-left corner from the building's front-left corner, along X, mm."
@@ -46,6 +50,7 @@
    "additionalProperties": false,
    "required": [
     "name",
+    "kind",
     "xMm",
     "yMm",
     "widthMm",
@@ -471,6 +476,23 @@
     "thicknessMm"
    ]
   },
+  "mumty": {
+   "type": "object",
+   "description": "Stair cabin on the roof over the top-floor stair.",
+   "properties": {
+    "present": {
+     "type": "boolean"
+    },
+    "heightMm": {
+     "type": "number"
+    }
+   },
+   "additionalProperties": false,
+   "required": [
+    "present",
+    "heightMm"
+   ]
+  },
   "assumptions": {
    "type": "array",
    "description": "Every value NOT written on the drawing that you assumed, and why. Empty if none.",
@@ -508,6 +530,7 @@
   "roomOpenings",
   "upperFloors",
   "parapet",
+  "mumty",
   "assumptions",
   "confidence"
  ],

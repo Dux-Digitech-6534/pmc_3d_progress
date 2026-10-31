@@ -8,6 +8,9 @@ import { ELEMENT_TYPES } from '../domain/types';
 const presentSize = z.object({ present: z.boolean(), widthMm: z.number(), depthMm: z.number() });
 const roomSchema = z.object({
   name: z.string(),
+  kind: z
+    .enum(['room', 'open', 'balcony', 'terrace'])
+    .describe('room = walls all round; open = under the roof without its own walls (parking, porch, verandah); balcony = projecting balcony on an upper floor; terrace = open to the sky.'),
   xMm: z.number().describe("Front-left corner from the building's front-left corner, along X, mm."),
   yMm: z.number().describe("Front-left corner from the building's front-left corner, along Y (front to back), mm."),
   widthMm: z.number().describe('Along X, mm.'),
@@ -93,6 +96,7 @@ export const DrawingReadingSchema = z.object({
     )
     .describe('For structureKind "building": every floor above the ground floor, bottom to top, same origin as the ground-floor rooms. Empty for one storey.'),
   parapet: z.object({ present: z.boolean(), heightMm: z.number(), thicknessMm: z.number() }),
+  mumty: z.object({ present: z.boolean(), heightMm: z.number() }).describe('Stair cabin on the roof over the top-floor stair.'),
   assumptions: z.array(z.string()).describe('Every value NOT written on the drawing that you assumed, and why. Empty if none.'),
   confidence: z.enum(['high', 'medium', 'low']),
 });
@@ -112,12 +116,19 @@ export const parseGrid = (g: string) => {
  */
 /** An answer from an older server (before structure types) is a building with no free elements. */
 export function withReadingDefaults(raw: unknown): unknown {
-  return raw && typeof raw === 'object' ? { structureKind: 'building', elements: [], rooms: [], roomOpenings: [], upperFloors: [], parapet: { present: false, heightMm: 0, thicknessMm: 0 }, ...(raw as object) } : raw;
+  return raw && typeof raw === 'object' ? { structureKind: 'building', elements: [], rooms: [], roomOpenings: [], upperFloors: [], parapet: { present: false, heightMm: 0, thicknessMm: 0 }, mumty: { present: true, heightMm: 0 }, ...(raw as object) } : raw;
 }
 
 type ReadRoom = z.infer<typeof roomSchema>;
 type ReadOpening = z.infer<typeof roomOpeningSchema>;
-const toRoom = (rm: ReadRoom) => ({ name: rm.name.trim(), x: Math.round(rm.xMm), y: Math.round(rm.yMm), w: Math.round(rm.widthMm), d: Math.round(rm.depthMm) });
+const toRoom = (rm: ReadRoom) => ({
+  name: rm.name.trim(),
+  ...(rm.kind && rm.kind !== 'room' ? { kind: rm.kind } : {}),
+  x: Math.round(rm.xMm),
+  y: Math.round(rm.yMm),
+  w: Math.round(rm.widthMm),
+  d: Math.round(rm.depthMm),
+});
 const toRoomOpening = (o: ReadOpening) => ({
   type: o.type,
   x: Math.round(o.xMm),
@@ -212,6 +223,7 @@ export function readingToSpec(r: DrawingReading, base: BuilderSpec): { spec: Bui
             roomOpenings: fl.roomOpenings.map(toRoomOpening),
           })),
           parapet: { enabled: r.parapet.present, h: Math.round(r.parapet.heightMm) || 1000, t: Math.round(r.parapet.thicknessMm) || 115 },
+          mumty: { enabled: r.mumty.present, h: Math.round(r.mumty.heightMm) || 2440 },
           extraElements: [],
           omit: [],
         }

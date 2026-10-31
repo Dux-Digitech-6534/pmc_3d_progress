@@ -374,6 +374,16 @@
      "name": {
       "type": "string"
      },
+     "kind": {
+      "description": "room = walls all round; open = under the roof without its own walls (parking, porch, verandah); balcony = projecting balcony on an upper floor; terrace = open to the sky.",
+      "type": "string",
+      "enum": [
+       "room",
+       "open",
+       "balcony",
+       "terrace"
+      ]
+     },
      "xMm": {
       "description": "Front-left corner from the building's front-left corner, along X, mm.",
       "type": "number"
@@ -393,6 +403,7 @@
     },
     "required": [
      "name",
+     "kind",
      "xMm",
      "yMm",
      "widthMm",
@@ -465,6 +476,16 @@
         "name": {
          "type": "string"
         },
+        "kind": {
+         "description": "room = walls all round; open = under the roof without its own walls (parking, porch, verandah); balcony = projecting balcony on an upper floor; terrace = open to the sky.",
+         "type": "string",
+         "enum": [
+          "room",
+          "open",
+          "balcony",
+          "terrace"
+         ]
+        },
         "xMm": {
          "description": "Front-left corner from the building's front-left corner, along X, mm.",
          "type": "number"
@@ -484,6 +505,7 @@
        },
        "required": [
         "name",
+        "kind",
         "xMm",
         "yMm",
         "widthMm",
@@ -563,6 +585,23 @@
    ],
    "additionalProperties": false
   },
+  "mumty": {
+   "description": "Stair cabin on the roof over the top-floor stair.",
+   "type": "object",
+   "properties": {
+    "present": {
+     "type": "boolean"
+    },
+    "heightMm": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "present",
+    "heightMm"
+   ],
+   "additionalProperties": false
+  },
   "assumptions": {
    "description": "Every value NOT written on the drawing that you assumed, and why. Empty if none.",
    "type": "array",
@@ -603,6 +642,7 @@
   "roomOpenings",
   "upperFloors",
   "parapet",
+  "mumty",
   "assumptions",
   "confidence"
  ],

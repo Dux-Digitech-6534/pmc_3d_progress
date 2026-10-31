@@ -62,9 +62,18 @@ export interface OpeningPlacement {
 /** What the Model Builder makes: a column-grid building, a boundary wall, or free elements. */
 export type StructureKind = 'building' | 'boundary' | 'free' | 'rooms';
 
+/**
+ * What a space on the plan is: room = walls on every side (also kitchens, toilets, stairs, passages);
+ * open = columns, beams and slab but no walls of its own (parking, porch, verandah, open hall);
+ * balcony = a cantilever slab with a railing (upper floors); terrace = open to the sky, nothing is built.
+ */
+export type RoomKind = 'room' | 'open' | 'balcony' | 'terrace';
+export const roomKind = (rm: Pick<Room, 'kind'>): RoomKind => rm.kind ?? 'room';
+
 /** A room on the plan (mm): front-left corner from the building's front-left corner, width along X, depth along Y. */
 export interface Room {
   name: string;
+  kind?: RoomKind;
   x: number;
   y: number;
   w: number;
@@ -125,6 +134,8 @@ export interface BuilderSpec {
   upperFloors?: UpperFloor[];
   /** kind 'rooms': parapet wall on the open edges of every roof (mm). */
   parapet?: { enabled: boolean; h: number; t: number };
+  /** kind 'rooms': the stair cabin on the roof over the top floor's stair (on unless switched off). */
+  mumty?: { enabled: boolean; h: number };
   /**
    * Elements added by hand on top of a building / boundary wall template (a wall, a footing …).
    * Same box format as a free model, with x / y measured from the model centre (mm).
@@ -1129,7 +1140,7 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
 
   const upper = spec.upperFloors ?? [];
   const slabT = spec.slab.enabled ? spec.slab.t : 0;
-  type Floor = { tag: string; name: string; level: string; rooms: Room[]; openings: RoomOpening[]; base: number; top: number };
+  type Floor = { tag: string; name: string; level: string; rooms: Room[]; openings: RoomOpening[]; base: number; top: number; mumty?: boolean };
   const floors: Floor[] = [{ tag: '', name: 'Ground floor', level: 'GF', rooms, openings: spec.roomOpenings ?? [], base: 0, top: spec.roofLevel }];
   upper.forEach((fl, k) => {
     const name = fl.name?.trim() || `Floor ${k + 1}`;
@@ -1145,13 +1156,24 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
   });
   const pp = spec.parapet;
   if (pp?.enabled && (!pos(pp.h) || !pos(pp.t))) errors.push('Parapet height and thickness must be positive (mm).');
+  const isStair = (rm: Room) => roomKind(rm) === 'room' && /stair/i.test(rm.name ?? '');
+  // mumty (stair cabin) on the roof over the top floor's stair
+  const last = floors[floors.length - 1];
+  const mumtyH = spec.mumty?.h ?? 2440;
+  const topStairs = last.rooms.filter(isStair);
+  if (topStairs.length && (spec.mumty?.enabled ?? true)) {
+    if (!(mumtyH >= 2000)) errors.push('Mumty height must be at least 2000 mm.');
+    else floors.push({ tag: 'MT-', name: 'Mumty', level: 'RF', rooms: topStairs.map((rm) => ({ ...rm, name: 'Mumty' })), openings: [], base: last.top + slabT, top: last.top + slabT + mumtyH, mumty: true });
+  }
   if (errors.length) return fail();
 
   // ---- wall lines from the room edges (10 mm tolerance), merged so a shared wall is built once ----
   const R = (n: number) => Math.round(n / 10) * 10;
   type Iv = [number, number];
   type Line = { axis: 'x' | 'y'; at: number; a: number; b: number };
-  type Piece = { axis: 'x' | 'y'; at: number; a: number; b: number };
+  type Piece = { axis: 'x' | 'y'; at: number; a: number; b: number; wall: boolean };
+  type Rect = { x0: number; x1: number; y0: number; y1: number };
+  const rectOf = (rm: Room): Rect => ({ x0: R(rm.x), x1: R(rm.x + rm.w), y0: R(rm.y), y1: R(rm.y + rm.d) });
   const merge = (ivs: Iv[]) =>
     [...ivs]
       .sort((p, q) => p[0] - q[0])
@@ -1161,18 +1183,29 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
         else out.push([iv[0], iv[1]]);
         return out;
       }, []);
-  /** One floor's column points (ends and crossings of the wall lines, more along long walls) and wall pieces between columns. */
-  const planOf = (list: Room[]) => {
-    const hRaw = new Map<number, Iv[]>();
-    const vRaw = new Map<number, Iv[]>();
+  /** The room edges as intervals per line: horizontal (along X, keyed by Y) and vertical (along Y, keyed by X). */
+  const edgesOf = (list: Rect[]) => {
+    const h = new Map<number, Iv[]>();
+    const v = new Map<number, Iv[]>();
     const add = (m: Map<number, Iv[]>, k: number, a: number, b: number) => m.set(k, [...(m.get(k) ?? []), [Math.min(a, b), Math.max(a, b)]]);
-    for (const rm of list) {
-      const [x0, x1, y0, y1] = [R(rm.x), R(rm.x + rm.w), R(rm.y), R(rm.y + rm.d)];
-      add(hRaw, y0, x0, x1);
-      add(hRaw, y1, x0, x1);
-      add(vRaw, x0, y0, y1);
-      add(vRaw, x1, y0, y1);
+    for (const r of list) {
+      add(h, r.y0, r.x0, r.x1);
+      add(h, r.y1, r.x0, r.x1);
+      add(v, r.x0, r.y0, r.y1);
+      add(v, r.x1, r.y0, r.y1);
     }
+    return { h, v };
+  };
+  /** How much of [a, b] on a line is covered by these intervals (mm). */
+  const covered = (ivs: Iv[] | undefined, a: number, b: number) => (ivs ?? []).reduce((s, [p, q]) => s + Math.max(0, Math.min(b, q) - Math.max(a, p)), 0);
+  /**
+   * One floor's frame: columns at the ends and crossings of the room edges (more along long ones),
+   * and the pieces between columns. A piece carries a wall only when it is on an edge of a closed
+   * room; open spaces (parking, verandah) get columns and beams but no walls of their own.
+   */
+  const planOf = (frame: Room[], closed: Room[]) => {
+    const { h: hRaw, v: vRaw } = edgesOf(frame.map(rectOf));
+    const { h: hWall, v: vWall } = edgesOf(closed.map(rectOf));
     const lines: Line[] = [
       ...[...hRaw].flatMap(([y, ivs]) => merge(ivs).map(([a, b]) => ({ axis: 'x' as const, at: y, a, b }))),
       ...[...vRaw].flatMap(([x, ivs]) => merge(ivs).map(([a, b]) => ({ axis: 'y' as const, at: x, a, b }))),
@@ -1205,13 +1238,53 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
         const half = (ln.axis === 'x' ? col!.w : col!.d) / 2;
         const a = stops[i][k] + half;
         const b = stops[i][k + 1] - half;
-        if (b - a > 10) pieces.push({ axis: ln.axis, at: ln.at, a, b });
+        if (b - a <= 10) continue;
+        const c0 = stops[i][k], c1 = stops[i][k + 1];
+        const wall = covered((ln.axis === 'x' ? hWall : vWall).get(ln.at), c0, c1) >= (c1 - c0) / 2;
+        pieces.push({ axis: ln.axis, at: ln.at, a, b, wall });
       }
     });
     return { pts, pieces };
   };
-  const plans = floors.map((fl) => planOf(fl.rooms));
+  const kinds = floors.map((fl, k) => {
+    const live = fl.rooms.filter((rm) => roomKind(rm) !== 'terrace');
+    // a balcony on the ground floor is just an open space (sit-out / porch)
+    const balcony = k === 0 ? [] : live.filter((rm) => roomKind(rm) === 'balcony');
+    const frame = live.filter((rm) => !balcony.includes(rm));
+    const closed = frame.filter((rm) => roomKind(rm) === 'room');
+    return { frame, closed, balcony };
+  });
+  const plans = floors.map((_, k) => planOf(kinds[k].frame, kinds[k].closed));
+  floors.forEach((fl, k) => {
+    if (!plans[k].pts.length) errors.push(`${fl.name}: every room is a terrace / balcony — add at least one room or open space with columns.`);
+  });
+  if (errors.length) return fail();
   const allPts = plans.flatMap((p) => p.pts);
+
+  // ---- checks for a plan that was probably read wrong ----
+  floors.forEach((fl, k) => {
+    if (fl.mumty) return;
+    const list = fl.rooms.filter((rm) => roomKind(rm) !== 'terrace');
+    const rs = list.map(rectOf);
+    for (let i = 0; i < rs.length; i++)
+      for (let j = i + 1; j < rs.length; j++) {
+        const ov = Math.max(0, Math.min(rs[i].x1, rs[j].x1) - Math.max(rs[i].x0, rs[j].x0)) * Math.max(0, Math.min(rs[i].y1, rs[j].y1) - Math.max(rs[i].y0, rs[j].y0));
+        if (ov > 200_000) warnings.push(`${fl.name}: "${list[i].name}" and "${list[j].name}" overlap by ${(ov / 1e6).toFixed(1)} m² — check their X / Y and sizes.`);
+      }
+    const frame = kinds[k].frame.map(rectOf);
+    if (frame.length > 1) {
+      const area = frame.reduce((s, r) => s + (r.x1 - r.x0) * (r.y1 - r.y0), 0);
+      const box = (Math.max(...frame.map((r) => r.x1)) - Math.min(...frame.map((r) => r.x0))) * (Math.max(...frame.map((r) => r.y1)) - Math.min(...frame.map((r) => r.y0)));
+      if (area < box * 0.85) warnings.push(`${fl.name}: the rooms cover only ${Math.round((area / box) * 100)} % of the building outline — a room, passage or open space may be missing (fine for an L-shaped plan).`);
+    }
+    if (k > 0 && !floors[k - 1].mumty) {
+      const below = kinds[k - 1].frame.map(rectOf);
+      const out = kinds[k].frame
+        .map(rectOf)
+        .filter((r) => r.x0 < Math.min(...below.map((b) => b.x0)) - 600 || r.x1 > Math.max(...below.map((b) => b.x1)) + 600 || r.y0 < Math.min(...below.map((b) => b.y0)) - 600 || r.y1 > Math.max(...below.map((b) => b.y1)) + 600);
+      if (out.length) warnings.push(`${fl.name}: ${out.length} room${out.length === 1 ? '' : 's'} stick${out.length === 1 ? 's' : ''} out more than 600 mm past the floor below — check the X / Y origin of this floor (or mark it as a balcony).`);
+    }
+  });
 
   const prefix = spec.modelId.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 10) || 'MDL';
   const bId = `BLD-${prefix}`;
@@ -1220,7 +1293,7 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
   const omit = new Set(spec.omit ?? []);
   const boxes: (FreeElement & { level: string })[] = [];
   const footTop = -spec.foundationDepth + foot!.t;
-  const along = (pc: Piece, len: number, thick: number, z: number, h: number, mid = (pc.a + pc.b) / 2) =>
+  const along = (pc: Pick<Piece, 'axis' | 'at' | 'a' | 'b'>, len: number, thick: number, z: number, h: number, mid = (pc.a + pc.b) / 2) =>
     pc.axis === 'x' ? { x: mid, y: pc.at, z, l: len, w: thick, h } : { x: pc.at, y: mid, z, l: thick, w: len, h };
   /** The outline of a floor's columns (outer faces), grown by `grow` mm. */
   const outline = (pts: { x: number; y: number }[], grow: number) => ({
@@ -1229,14 +1302,24 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
     minY: Math.min(...pts.map((p) => p.y)) - col!.d / 2 - grow,
     maxY: Math.max(...pts.map((p) => p.y)) + col!.d / 2 + grow,
   });
+  const inside = (rs: Rect[], x: number, y: number) => rs.some((r) => x > r.x0 && x < r.x1 && y > r.y0 && y < r.y1);
   type Flight = FreeElement & { level: string; steps: number; up: '+x' | '-x' | '+y' | '-y' };
   const flights: Flight[] = [];
+  /** The mumty door: in its wall nearest the middle of the building (towards the terrace). */
+  const mumtyDoor = (ps: Piece[]): RoomOpening[] => {
+    const mid = (pc: Piece) => (pc.axis === 'x' ? { x: (pc.a + pc.b) / 2, y: pc.at } : { x: pc.at, y: (pc.a + pc.b) / 2 });
+    const best = ps
+      .filter((pc) => pc.b - pc.a >= 1000)
+      .sort((p, q) => Math.hypot(mid(p).x - cx, mid(p).y - cy) - Math.hypot(mid(q).x - cx, mid(q).y - cy))[0];
+    return best ? [{ type: 'door', ...mid(best), width: 900, height: 2100, sill: 0 }] : [];
+  };
   /** The level a roof slab belongs to: the floor above it, or the roof. */
   const roofLevelOf = (k: number) => (k === floors.length - 1 ? 'RF' : floors[k + 1].level);
 
   floors.forEach((fl, k) => {
     const { pts, pieces } = plans[k];
     const t = fl.tag;
+    const frameRects = kinds[k].frame.map(rectOf);
     // ---- columns (footings under the ground-floor ones); an upper column starts on the slab below ----
     pts.forEach((p, i) => {
       if (k === 0) boxes.push({ code: `F${i + 1}`, type: 'footing', x: p.x, y: p.y, z: -spec.foundationDepth, l: foot!.w, w: foot!.d, h: foot!.t, level: 'FDN' });
@@ -1249,22 +1332,25 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
       if (floating) warnings.push(`${fl.name}: ${floating} column${floating === 1 ? ' does' : 's do'} not stand on a column of the floor below (resting on a beam) — check with the structural drawing.`);
     }
 
-    // ---- beams and walls between neighbouring columns ----
+    // ---- beams and walls between neighbouring columns (no walls on the open sides of parking / verandah) ----
     const wallTop = spec.roofBeam.enabled ? fl.top - spec.roofBeam.h : fl.top;
     pieces.forEach((pc, i) => {
       const len = pc.b - pc.a;
       if (k === 0 && spec.plinthBeam.enabled) boxes.push({ code: `PB${i + 1}`, type: 'beam', ...along(pc, len, spec.plinthBeam.w, -spec.plinthBeam.h, spec.plinthBeam.h), level: 'GF' });
       if (spec.roofBeam.enabled) boxes.push({ code: `${t}RB${i + 1}`, type: 'beam', ...along(pc, len, spec.roofBeam.w, fl.top - spec.roofBeam.h, spec.roofBeam.h), level: fl.level });
-      if (spec.walls.enabled && wallTop > fl.base) boxes.push({ code: `${t}W${i + 1}`, type: 'wall', ...along(pc, len, spec.walls.t, fl.base, wallTop - fl.base), level: fl.level });
+      if (pc.wall && spec.walls.enabled && wallTop > fl.base) boxes.push({ code: `${t}W${i + 1}`, type: 'wall', ...along(pc, len, spec.walls.t, fl.base, wallTop - fl.base), level: fl.level });
     });
 
-    // ---- doors / windows in the wall piece they sit on, with lintels ----
+    // ---- doors / windows in the wall piece they sit on, with lintels and chhajjas ----
+    const wallPieces = pieces.filter((pc) => pc.wall);
+    const outside = [...frameRects, ...kinds[k].balcony.map(rectOf)];
     let nd = 0, nw = 0;
-    fl.openings.forEach((o, i) => {
+    const openings = fl.mumty ? mumtyDoor(wallPieces) : fl.openings;
+    openings.forEach((o, i) => {
       if (!spec.walls.enabled) return;
       const label = `${k ? `${fl.name}: ` : ''}${o.type === 'door' ? 'Door' : 'Window'} ${i + 1} at ${Math.round(o.x)} / ${Math.round(o.y)} mm`;
       if (!pos(o.width) || !pos(o.height)) return errors.push(`${label}: width and height must be positive (mm).`);
-      const near = pieces
+      const near = wallPieces
         .map((pc) => {
           const at = pc.axis === 'x' ? o.x : o.y;
           const d = Math.abs((pc.axis === 'x' ? o.y : o.x) - pc.at);
@@ -1281,47 +1367,104 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
       if (height <= 0) return warnings.push(`${label} does not fit under the roof beam — check its sill and height.`);
       const code = `${t}${o.type === 'door' ? `D${++nd}` : `WN${++nw}`}`;
       boxes.push({ code, type: o.type, ...along(pc, width, spec.walls.t + 20, fl.base + sill, height, mid), level: fl.level });
-      if (spec.lintel.enabled && sill + height + spec.lintel.h <= wallTop - fl.base) {
+      const lintelTop = sill + height + spec.lintel.h;
+      if (spec.lintel.enabled && lintelTop <= wallTop - fl.base) {
         const lo = Math.max(mid - width / 2 - spec.lintel.bearing, pc.a);
         const hi = Math.min(mid + width / 2 + spec.lintel.bearing, pc.b);
         boxes.push({ code: `L-${code}`, type: 'lintel', ...along(pc, hi - lo, spec.walls.t, fl.base + sill + height, spec.lintel.h, (lo + hi) / 2), level: fl.level });
       }
+      // chhajja over an opening in an outside wall (nothing built on one side of it)
+      if (spec.chhajja.enabled && (o.type === 'window' || spec.chhajja.overDoors) && pos(spec.chhajja.projection) && pos(spec.chhajja.t)) {
+        const probe = (side: number) => (pc.axis === 'x' ? inside(outside, mid, pc.at + side * 300) : inside(outside, pc.at + side * 300, mid));
+        const [neg, posSide] = [probe(-1), probe(1)];
+        if (neg !== posSide) {
+          const dir = posSide ? -1 : 1;
+          const at = pc.at + dir * (spec.walls.t / 2 + spec.chhajja.projection / 2);
+          const z = fl.base + Math.min(spec.lintel.enabled ? lintelTop : sill + height, wallTop - fl.base) - spec.chhajja.t;
+          const len = width + 300;
+          boxes.push({ code: `CH-${code}`, type: 'chhajja', ...along({ ...pc, at }, len, spec.chhajja.projection, z, spec.chhajja.t, mid), level: fl.level });
+        }
+      }
     });
-
-    // ---- the slab over this floor ----
-    if (spec.slab.enabled) {
-      const o = outline(pts, spec.slab.overhang);
-      boxes.push({ code: k === 0 ? 'SL-RF' : `${t}SL`, type: 'slab', x: (o.minX + o.maxX) / 2, y: (o.minY + o.maxY) / 2, z: fl.top, l: o.maxX - o.minX, w: o.maxY - o.minY, h: spec.slab.t, level: roofLevelOf(k) });
-    }
 
     // ---- staircase: a dog-legged stair (two flights and a mid landing) in every stair room, up to the next floor / the roof ----
-    fl.rooms.forEach((rm, j) => {
-      if (!/stair/i.test(rm.name ?? '')) return;
-      const to = k + 1 < floors.length ? floors[k + 1].base : fl.top + slabT;
-      const rise = to - fl.base;
-      const ht = spec.walls.enabled ? spec.walls.t / 2 : 0;
-      const [x0, x1, y0, y1] = [rm.x + ht, rm.x + rm.w - ht, rm.y + ht, rm.y + rm.d - ht];
-      const alongY = y1 - y0 >= x1 - x0;
-      const long = alongY ? y1 - y0 : x1 - x0;
-      const half = (alongY ? x1 - x0 : y1 - y0) / 2;
-      const landing = Math.min(Math.max(half, 900), long * 0.4);
-      const run = long - landing;
-      const where = `${fl.name}, ${rm.name.trim() || `room ${j + 1}`}`;
-      if (run < 1200 || half < 600) return warnings.push(`${where}: the room is too small for a dog-legged stair — add the stair by hand.`);
-      const steps = Math.max(2, Math.round(rise / 2 / 165));
-      const code = `${t}ST${j + 1}`;
-      const box = (a0: number, a1: number, b0: number, b1: number) =>
-        alongY ? { x: (a0 + a1) / 2, y: (b0 + b1) / 2, l: a1 - a0, w: b1 - b0 } : { x: (b0 + b1) / 2, y: (a0 + a1) / 2, l: b1 - b0, w: a1 - a0 };
-      // a = across the run (the two flights side by side), b = along the run
-      const [a0, a1, b0] = alongY ? [x0, x1, y0] : [y0, y1, x0];
-      flights.push({ code: `${code}-1`, type: 'slab', ...box(a0, a0 + half, b0, b0 + run), z: fl.base, h: rise / 2, steps, up: alongY ? '+y' : '+x', level: fl.level });
-      boxes.push({ code: `${code}-LD`, type: 'slab', ...box(a0, a1, b0 + run, b0 + long), z: fl.base + rise / 2 - STAIR_WAIST, h: STAIR_WAIST, level: fl.level });
-      flights.push({ code: `${code}-2`, type: 'slab', ...box(a0 + half, a1, b0, b0 + run), z: fl.base + rise / 2, h: rise / 2, steps, up: alongY ? '-y' : '-x', level: fl.level });
-      warnings.push(`${where}: dog-legged stair, 2 × ${steps} risers of ${Math.round(rise / 2 / steps)} mm, tread ${Math.round(run / steps)} mm — check against the stair detail.`);
+    if (!fl.mumty)
+      fl.rooms.forEach((rm, j) => {
+        if (!isStair(rm)) return;
+        const to = k + 1 < floors.length ? floors[k + 1].base : fl.top + slabT;
+        const rise = to - fl.base;
+        const ht = spec.walls.enabled ? spec.walls.t / 2 : 0;
+        const [x0, x1, y0, y1] = [rm.x + ht, rm.x + rm.w - ht, rm.y + ht, rm.y + rm.d - ht];
+        const alongY = y1 - y0 >= x1 - x0;
+        const long = alongY ? y1 - y0 : x1 - x0;
+        const half = (alongY ? x1 - x0 : y1 - y0) / 2;
+        const landing = Math.min(Math.max(half, 900), long * 0.4);
+        const run = long - landing;
+        const where = `${fl.name}, ${rm.name.trim() || `room ${j + 1}`}`;
+        if (run < 1200 || half < 600) return warnings.push(`${where}: the room is too small for a dog-legged stair — add the stair by hand.`);
+        const steps = Math.max(2, Math.round(rise / 2 / 165));
+        const code = `${t}ST${j + 1}`;
+        const box = (a0: number, a1: number, b0: number, b1: number) =>
+          alongY ? { x: (a0 + a1) / 2, y: (b0 + b1) / 2, l: a1 - a0, w: b1 - b0 } : { x: (b0 + b1) / 2, y: (a0 + a1) / 2, l: b1 - b0, w: a1 - a0 };
+        // a = across the run (the two flights side by side), b = along the run
+        const [a0, a1, b0] = alongY ? [x0, x1, y0] : [y0, y1, x0];
+        flights.push({ code: `${code}-1`, type: 'slab', ...box(a0, a0 + half, b0, b0 + run), z: fl.base, h: rise / 2, steps, up: alongY ? '+y' : '+x', level: fl.level });
+        boxes.push({ code: `${code}-LD`, type: 'slab', ...box(a0, a1, b0 + run, b0 + long), z: fl.base + rise / 2 - STAIR_WAIST, h: STAIR_WAIST, level: fl.level });
+        flights.push({ code: `${code}-2`, type: 'slab', ...box(a0 + half, a1, b0, b0 + run), z: fl.base + rise / 2, h: rise / 2, steps, up: alongY ? '-y' : '-x', level: fl.level });
+        warnings.push(`${where}: dog-legged stair, 2 × ${steps} risers of ${Math.round(rise / 2 / steps)} mm, tread ${Math.round(run / steps)} mm — check against the stair detail.`);
+      });
+
+    // ---- the slab over this floor: one slab, or one per room when the plan is not a full rectangle or a stair goes up through it ----
+    if (spec.slab.enabled) {
+      const stairs = fl.mumty ? [] : kinds[k].frame.filter(isStair);
+      const parts = kinds[k].frame.filter((rm) => !stairs.includes(rm)).map(rectOf);
+      const all = kinds[k].frame.map(rectOf);
+      const area = all.reduce((s, r) => s + (r.x1 - r.x0) * (r.y1 - r.y0), 0);
+      const o0 = outline(pts, 0);
+      const full = !stairs.length && area >= (o0.maxX - o0.minX - col!.w) * (o0.maxY - o0.minY - col!.d) * 0.99;
+      const level = roofLevelOf(k);
+      const grow = fl.mumty ? 150 : spec.slab.overhang;
+      if (full) {
+        const o = outline(pts, grow);
+        boxes.push({ code: k === 0 ? 'SL-RF' : `${t}SL`, type: 'slab', x: (o.minX + o.maxX) / 2, y: (o.minY + o.maxY) / 2, z: fl.top, l: o.maxX - o.minX, w: o.maxY - o.minY, h: spec.slab.t, level });
+      } else {
+        const { h, v } = edgesOf(all);
+        // an edge another room (or the stair opening) shares stops at the wall centre line; an outside edge reaches the wall face + overhang
+        const side = (ivs: Iv[] | undefined, a: number, b: number, self: number) => (covered(ivs, a, b) - self >= (b - a) / 2 ? 0 : col!.w / 2 + grow);
+        parts.forEach((r, i) => {
+          const gx0 = side(v.get(r.x0), r.y0, r.y1, r.y1 - r.y0);
+          const gx1 = side(v.get(r.x1), r.y0, r.y1, r.y1 - r.y0);
+          const gy0 = side(h.get(r.y0), r.x0, r.x1, r.x1 - r.x0);
+          const gy1 = side(h.get(r.y1), r.x0, r.x1, r.x1 - r.x0);
+          const [x0, x1, y0, y1] = [r.x0 - gx0, r.x1 + gx1, r.y0 - gy0, r.y1 + gy1];
+          boxes.push({ code: `${k === 0 ? 'SL-RF' : `${t}SL`}-${i + 1}`, type: 'slab', x: (x0 + x1) / 2, y: (y0 + y1) / 2, z: fl.top, l: x1 - x0, w: y1 - y0, h: spec.slab.t, level });
+        });
+      }
+    }
+
+    // ---- balconies: a cantilever slab at floor level with a railing wall on its open edges ----
+    kinds[k].balcony.forEach((rm, j) => {
+      const r = rectOf(rm);
+      const bt = slabT || 125;
+      const code = `${t}BAL${j + 1}`;
+      boxes.push({ code, type: 'slab', x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2, z: fl.base - bt, l: r.x1 - r.x0, w: r.y1 - r.y0, h: bt, level: fl.level });
+      const rt = pp?.t ?? 115;
+      const rh = pp?.h ?? 1000;
+      const { h, v } = edgesOf(frameRects);
+      let n = 0;
+      const rail = (axis: 'x' | 'y', at: number, a: number, b: number, shared: number) => {
+        if (shared >= (b - a) / 2 || b - a < 300) return;
+        boxes.push({ code: `${code}-R${++n}`, type: 'wall', ...along({ axis, at, a, b }, b - a, rt, fl.base, rh), level: fl.level });
+      };
+      const inset = rt / 2;
+      rail('x', r.y0 + inset, r.x0, r.x1, covered(h.get(r.y0), r.x0, r.x1));
+      rail('x', r.y1 - inset, r.x0, r.x1, covered(h.get(r.y1), r.x0, r.x1));
+      rail('y', r.x0 + inset, r.y0 + rt, r.y1 - rt, covered(v.get(r.x0), r.y0, r.y1));
+      rail('y', r.x1 - inset, r.y0 + rt, r.y1 - rt, covered(v.get(r.x1), r.y0, r.y1));
     });
 
-    // ---- parapet on the open edges of this slab (the floor above covers the rest) ----
-    if (spec.slab.enabled && pp?.enabled) {
+    // ---- parapet on the open edges of this slab (the floor or mumty above covers the rest) ----
+    if (spec.slab.enabled && pp?.enabled && !fl.mumty) {
       const o = outline(pts, spec.slab.overhang);
       const up = plans[k + 1] ? outline(plans[k + 1].pts, 0) : null;
       const near = spec.slab.overhang + col!.w + 300;
@@ -1333,8 +1476,7 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
         const parts: Iv[] = c ? [[lo, Math.min(hi, c[0])], [Math.max(lo, c[1]), hi]] : [[lo, hi]];
         for (const [a, b] of parts) {
           if (b - a < 300) continue;
-          const pc: Piece = { axis, at, a, b };
-          boxes.push({ code: `${t}PP${++n}`, type: 'wall', ...along(pc, b - a, pp.t, fl.top + spec.slab.t, pp.h), level: roofLevelOf(k) });
+          boxes.push({ code: `${t}PP${++n}`, type: 'wall', ...along({ axis, at, a, b }, b - a, pp.t, fl.top + spec.slab.t, pp.h), level: roofLevelOf(k) });
         }
       };
       edge('x', o.minY + half, o.minX, o.maxX, up && up.minY - o.minY <= near ? [up.minX, up.maxX] : null);
@@ -1344,6 +1486,7 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
     }
   });
   if (errors.length) return fail();
+  const roofTop = floors[floors.length - 1].top;
 
   const kept = boxes.filter((b) => !omit.has(b.code));
   const sum = emptySummary();
@@ -1373,8 +1516,8 @@ function buildRooms(spec: BuilderSpec, errors: string[], warnings: string[]): Bu
   }
   // doors / windows cut their wall, whether made from the rooms or by hand (both in plan mm here)
   cutOpenings([...kept, ...extras.map((x) => ({ ...x, x: x.x + cx, y: x.y + cy }))], elements, sum);
-  const floorLevels = floors.slice(1).map((fl) => ({ id: fl.level, name: fl.name, elevation: mm(fl.base) }));
-  return finishModel(spec, { elements, sum, errors, warnings, refs, bId, foundation: -mm(spec.foundationDepth), roof: mm(floors[floors.length - 1].top), removed: omit.size, floorLevels });
+  const floorLevels = floors.slice(1).filter((fl) => !fl.mumty).map((fl) => ({ id: fl.level, name: fl.name, elevation: mm(fl.base) }));
+  return finishModel(spec, { elements, sum, errors, warnings, refs, bId, foundation: -mm(spec.foundationDepth), roof: mm(roofTop), removed: omit.size, floorLevels });
 }
 
 /** A model's elements as a free model (to change anything the templates cannot). Walls lose their cut-outs. */

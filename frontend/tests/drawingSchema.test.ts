@@ -11,6 +11,7 @@ const cabin = (): DrawingReading => ({
   roomOpenings: [],
   upperFloors: [],
   parapet: { present: false, heightMm: 0, thicknessMm: 0 },
+  mumty: { present: false, heightMm: 0 },
   projectName: 'Security Cabin',
   buildingName: 'Security Cabin',
   xSpansMm: [3230],
@@ -119,5 +120,35 @@ describe('AI reading → structure type', () => {
     const parsed = DrawingReadingSchema.safeParse(withReadingDefaults(old));
     expect(parsed.success).toBe(true);
     expect(readingToSpec(parsed.data!, defaultSpec()).spec.kind).toBe('building');
+  });
+});
+
+describe('reading a house with open spaces, a balcony and a mumty', () => {
+  it('keeps each space kind and the mumty, and builds a valid model from them', () => {
+    const room = (name: string, kind: 'room' | 'open' | 'balcony' | 'terrace', xMm: number, yMm: number, widthMm: number, depthMm: number) => ({ name, kind, xMm, yMm, widthMm, depthMm });
+    const r: DrawingReading = {
+      ...cabin(),
+      rooms: [room('Parking', 'open', 0, 0, 3000, 3600), room('Hall', 'room', 3000, 0, 3700, 3600), room('Stair', 'room', 0, 3600, 2600, 4500), room('Kitchen', 'room', 2600, 3600, 4100, 4500)],
+      upperFloors: [
+        {
+          name: 'First floor',
+          floorToFloorMm: 3050,
+          rooms: [room('Balcony', 'balcony', 0, -1200, 6700, 1200), room('Bed room', 'room', 0, 0, 6700, 3600), room('Stair', 'room', 0, 3600, 2600, 4500), room('Terrace', 'terrace', 2600, 3600, 4100, 4500)],
+          roomOpenings: [],
+        },
+      ],
+      parapet: { present: true, heightMm: 1000, thicknessMm: 115 },
+      mumty: { present: true, heightMm: 2600 },
+    };
+    expect(DrawingReadingSchema.safeParse(r).success).toBe(true);
+    const { spec } = readingToSpec(r, defaultSpec());
+    expect(spec.rooms![0]).toMatchObject({ name: 'Parking', kind: 'open' });
+    expect(spec.rooms![1].kind).toBeUndefined();
+    expect(spec.upperFloors![0].rooms.map((x) => x.kind ?? 'room')).toEqual(['balcony', 'room', 'room', 'terrace']);
+    expect(spec.mumty).toEqual({ enabled: true, h: 2600 });
+    const res = buildModel(spec);
+    expect(res.errors).toEqual([]);
+    expect(validateModelDocument(res.document!).errors ?? []).toEqual([]);
+    expect(res.document!.elements.some((e) => e.code === 'MT-SL')).toBe(true);
   });
 });
