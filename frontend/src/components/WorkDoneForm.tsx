@@ -16,7 +16,15 @@ const QUICK_PERCENTS = [25, 50, 75, 100];
  * Work done for the ticked elements: tick the activities that are finished (or how far they got, in %)
  * and press OK — no quantities to type. Quantities come from the model's planned quantities.
  */
-export function WorkDoneForm({ elements, activities: allActivities, entries }: { elements: ElementRecord[]; activities: ActivityDef[]; entries: ProgressEntry[] }) {
+export function WorkDoneForm({
+  elements,
+  activities: allActivities,
+  entries,
+}: {
+  elements: ElementRecord[];
+  activities: ActivityDef[];
+  entries: ProgressEntry[];
+}) {
   const { repo, role, notify, refresh } = useApp();
   // Activities that apply to at least one ticked element.
   const activities = useMemo(() => allActivities.filter((a) => elements.some((el) => activityApplies(a, el.type))), [allActivities, elements]);
@@ -135,7 +143,9 @@ export function WorkDoneForm({ elements, activities: allActivities, entries }: {
       setBusy(false);
     }
     if (done.length) {
-      notify(`${done.join(', ')} marked ${pct}% done on ${elements.length} element${elements.length === 1 ? '' : 's'} — ${submit ? 'sent for PMC approval' : 'saved as draft'}.`);
+      notify(
+        `${done.join(', ')} marked ${pct}% done on ${elements.length} element${elements.length === 1 ? '' : 's'} — ${submit ? 'sent for PMC approval' : 'saved as draft'}.`,
+      );
       setTicked((t) => new Set([...t].filter((c) => !doneCodes.has(c))));
       if (!failed.length) {
         setRemarks('');
@@ -147,6 +157,7 @@ export function WorkDoneForm({ elements, activities: allActivities, entries }: {
   }
 
   if (!activities.length) return <p className="muted">No activity applies to the selected elements.</p>;
+  const allMarked = status.every((s) => !s.configured || s.done === s.configured);
 
   return (
     <form
@@ -185,48 +196,66 @@ export function WorkDoneForm({ elements, activities: allActivities, entries }: {
         })}
       </fieldset>
 
-      <div className="wd-pct">
-        <span>How much?</span>
-        {QUICK_PERCENTS.map((p) => (
-          <button key={p} type="button" className={`btn btn-small ${pct === p ? 'btn-on' : ''}`} onClick={() => setPercent(String(p))}>
-            {p === 100 ? 'Done 100%' : `${p}%`}
-          </button>
-        ))}
-        <label className="wd-pct-input">
-          <input type="number" min="1" max="100" step="1" inputMode="numeric" value={percent} onChange={(e) => setPercent(e.target.value)} aria-label="Work done percent" />%
-        </label>
-      </div>
+      {allMarked ? (
+        <p className="hint">All work of the selected elements is marked done.</p>
+      ) : !ticked.size ? (
+        <p className="hint">Select the work that is done to enter it.</p>
+      ) : (
+        <>
+          <div className="wd-pct">
+            <span>How much?</span>
+            {QUICK_PERCENTS.map((p) => (
+              <button key={p} type="button" className={`btn btn-small ${pct === p ? 'btn-on' : ''}`} onClick={() => setPercent(String(p))}>
+                {p === 100 ? 'Done 100%' : `${p}%`}
+              </button>
+            ))}
+            <label className="wd-pct-input">
+              <input
+                type="number"
+                min="1"
+                max="100"
+                step="1"
+                inputMode="numeric"
+                value={percent}
+                onChange={(e) => setPercent(e.target.value)}
+                aria-label="Work done percent"
+              />
+              %
+            </label>
+          </div>
 
-      {plans.some((p) => p.rows.some((r) => r.skip === 'already-done')) && pctOk && (
-        <p className="hint">Elements already marked {pct}% or more for a selected activity are skipped.</p>
+          {plans.some((p) => p.rows.some((r) => r.skip === 'already-done')) && pctOk && (
+            <p className="hint">Elements already marked {pct}% or more for a selected activity are skipped.</p>
+          )}
+
+          <details className="wd-more">
+            <summary>Date, remarks, photos</summary>
+            <label>
+              Date
+              <input type="date" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} />
+            </label>
+            <label>
+              Remarks
+              <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} maxLength={500} placeholder="Optional" />
+            </label>
+            <PhotoPicker pending={pending} onChange={setPending} disabled={busy} />
+          </details>
+
+          <ErrorList errors={errors} />
+
+          <div className="form-actions">
+            <button type="button" className="btn" disabled={busy} onClick={() => void save(false)}>
+              Save draft
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              {busy ? 'Saving…' : 'OK — mark done'}
+            </button>
+          </div>
+          <p className="hint">
+            Goes to the PMC Reviewer for approval; the 3D colour changes once approved.{IS_FRAPPE ? '' : ' Quantities are taken from the model planning.'}
+          </p>
+        </>
       )}
-
-      <details className="wd-more">
-        <summary>Date, remarks, photos</summary>
-        <label>
-          Date
-          <input type="date" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} />
-        </label>
-        <label>
-          Remarks
-          <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} maxLength={500} placeholder="Optional" />
-        </label>
-        <PhotoPicker pending={pending} onChange={setPending} disabled={busy} />
-      </details>
-
-      <ErrorList errors={errors} />
-
-      <div className="form-actions">
-        <button type="button" className="btn" disabled={busy} onClick={() => void save(false)}>
-          Save draft
-        </button>
-        <button type="submit" className="btn btn-primary" disabled={busy}>
-          {busy ? 'Saving…' : 'OK — mark done'}
-        </button>
-      </div>
-      <p className="hint">
-        Goes to the PMC Reviewer for approval; the 3D colour changes once approved.{IS_FRAPPE ? '' : ' Quantities are taken from the model planning.'}
-      </p>
     </form>
   );
 }
