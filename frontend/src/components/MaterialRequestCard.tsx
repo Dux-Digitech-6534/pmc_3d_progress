@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { IS_FRAPPE } from '../config';
 import { errorMessages, type ErpItem } from '../data/repository';
-import { inItemUnit, requestNeeds, suggestItem } from '../domain/materialRequest';
+import { requestNeeds, suggestItem } from '../domain/materialRequest';
 import type { MaterialRequired } from '../domain/materialRequired';
-import { formatQty } from '../domain/progress';
 import { useApp } from '../state/AppContext';
 import { ErrorList } from './ui';
 
@@ -13,7 +12,7 @@ const inDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().sli
 
 /**
  * Material Request for the material the selected elements need: the materials come from the
- * elements, the engineer sets each quantity, saves it as a draft and then submits it for approval.
+ * elements, the engineer types each quantity, saves it as a draft and then submits it for approval.
  */
 export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialRequired; elementIds: string; bagKg: number }) {
   const { repo, role, notify } = useApp();
@@ -57,8 +56,7 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
     () =>
       needs.map((n) => {
         const item = suggestItem(n, items ?? [], bagKg);
-        const suggested = item ? inItemUnit(n, item.uom, bagKg) : null;
-        const text = typed[n.key] ?? (suggested !== null ? String(suggested) : '');
+        const text = typed[n.key] ?? '';
         return { need: n, item, text, qty: Number(text) };
       }),
     [needs, typed, items, bagKg],
@@ -112,15 +110,13 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
             <thead>
               <tr>
                 <th>Material</th>
-                <th className="num">Required</th>
-                <th className="num">Request qty</th>
+                <th className="num">Qty</th>
               </tr>
             </thead>
             <tbody>
               {lines.map(({ need, item, text }) => (
                 <tr key={need.key}>
                   <td>{need.label}</td>
-                  <td className="num">{formatQty(need.qty, need.unit)}</td>
                   <td className="num">
                     {item ? (
                       <span className="mr-qty">
@@ -131,7 +127,8 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
                           inputMode="decimal"
                           value={text}
                           disabled={locked}
-                          aria-label={`Request quantity of ${need.label} in ${item.uom}`}
+                          placeholder="0"
+                          aria-label={`Quantity of ${need.label} in ${item.uom}`}
                           onChange={(e) => setTyped((t) => ({ ...t, [need.key]: e.target.value }))}
                         />
                         <span className="muted small">{item.uom}</span>
@@ -170,7 +167,7 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
             </div>
           )}
           <p className="hint">
-            Materials and quantities come from the selected elements; change a quantity if needed. Materials with 0 or no item are left out.
+            Materials come from the selected elements; enter the quantity to request. Materials left blank are not requested.
           </p>
         </>
       )}
