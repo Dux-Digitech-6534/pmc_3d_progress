@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { MATERIALS, normsOf, roundMaterial } from '../domain/materials';
-import { materialRequired, type RequiredBasis } from '../domain/materialRequired';
+import { materialRequired } from '../domain/materialRequired';
 import { formatQty } from '../domain/progress';
 import type { ElementRecord, ProgressEntry } from '../domain/types';
 import { useApp } from '../state/AppContext';
@@ -25,8 +25,7 @@ export function MaterialRequiredPanel({
 }) {
   const { data } = useApp();
   const norms = normsOf(data?.model?.document);
-  const [basis, setBasis] = useState<RequiredBasis>('balance');
-  const req = useMemo(() => materialRequired(selected, entries, norms, basis), [selected, entries, norms, basis]);
+  const req = useMemo(() => materialRequired(selected, entries, norms, 'balance'), [selected, entries, norms]);
 
   if (!selected.length) {
     return (
@@ -38,8 +37,8 @@ export function MaterialRequiredPanel({
           </button>
         }
       >
-        Select the elements to be cast or built next (e.g. all slabs of the first floor) above, or click them in the 3D view — the steel by bar size and the concrete by
-        grade they need is shown here.
+        Select the elements to be cast or built next (e.g. all slabs of the first floor) above, or click them in the 3D view — the steel by bar size and the
+        concrete by grade they need is shown here.
       </EmptyState>
     );
   }
@@ -55,32 +54,22 @@ export function MaterialRequiredPanel({
   return (
     <div className="panel-scroll">
       <div className="panel-section">
-        <h2 className="panel-title">
-          {selected.length === 1 ? selected[0].code : `${selected.length} elements selected`}
-        </h2>
+        <h2 className="panel-title">{selected.length === 1 ? selected[0].code : `${selected.length} elements selected`}</h2>
         {selected.length > 1 && (
           <p className="muted small">
-            {selected.slice(0, 12).map((e) => e.code).join(', ')}
+            {selected
+              .slice(0, 12)
+              .map((e) => e.code)
+              .join(', ')}
             {selected.length > 12 ? ` +${selected.length - 12} more` : ''}
           </p>
         )}
-        <div className="seg" role="group" aria-label="Quantity basis">
-          <button className={`btn btn-small ${basis === 'balance' ? 'btn-on' : ''}`} onClick={() => setBasis('balance')}>
-            Work still to do
-          </button>
-          <button className={`btn btn-small ${basis === 'planned' ? 'btn-on' : ''}`} onClick={() => setBasis('planned')}>
-            Full planned work
-          </button>
-        </div>
-        <p className="hint">
-          {basis === 'balance' ? 'Planned quantity less the approved work done.' : 'The whole planned quantity of these elements.'}
-          {norms.wastagePct ? ` Includes ${norms.wastagePct}% wastage.` : ''}
-        </p>
+        {norms.wastagePct ? <p className="hint">Includes {norms.wastagePct}% wastage.</p> : null}
       </div>
 
       {nothing && (
         <div className="panel-section">
-          <p className="muted">{basis === 'balance' ? 'All the work of these elements is done — nothing more is required.' : 'No planned quantities for these elements.'}</p>
+          <p className="muted">No material is required for these elements.</p>
         </div>
       )}
 
@@ -165,7 +154,9 @@ export function MaterialRequiredPanel({
               ))}
             </tbody>
           </table>
-          {mats.some((m) => m.key === 'cement') && <p className="hint">Cement, sand and gitti with the concrete mix {norms.concreteGrade} of the model planning.</p>}
+          {mats.some((m) => m.key === 'cement') && (
+            <p className="hint">Cement, sand and gitti with the concrete mix {norms.concreteGrade} of the model planning.</p>
+          )}
         </div>
       )}
       {withRequest && <MaterialRequestCard req={req} elementIds={selected.map((e) => e.id).join(',')} bagKg={norms.bagKg} />}

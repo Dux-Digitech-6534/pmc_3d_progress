@@ -57,6 +57,8 @@ export interface PmcRepository {
   listErpWarehouses(company: string): Promise<string[]>;
   /** Create an ERPNext Material Request (Purchase); it starts in the ERP's approval workflow. */
   createMaterialRequest(input: MaterialRequestInput): Promise<{ name: string; state: string }>;
+  /** Send a saved (draft) Material Request on: its ERPNext workflow's first step, or a plain submit without a workflow. */
+  submitMaterialRequest(name: string): Promise<{ name: string; state: string }>;
 }
 
 export interface ErpProject {

@@ -102,6 +102,20 @@ export function frappeMock(): Plugin {
           return send(res, 200, { message: { name: out.name, workflow_state: out.state } });
         }
 
+        // Submit of a saved request: the demo workflow has one forward action
+        if (url.pathname === '/api/method/frappe.client.get') return send(res, 200, { message: { name: url.searchParams.get('name'), docstatus: 0 } });
+        if (url.pathname === '/api/method/frappe.model.workflow.get_transitions') return send(res, 200, { message: [{ action: 'Approve' }] });
+        if (url.pathname === '/api/method/frappe.model.workflow.apply_workflow') {
+          const { doc } = JSON.parse(raw.toString('utf8') || '{}') as { doc: { name: string } };
+          try {
+            const out = await (await getRepo()).submitMaterialRequest(doc.name);
+            return send(res, 200, { message: { name: out.name, docstatus: 0, workflow_state: out.state } });
+          } catch (e) {
+            const err = e as { code?: string; message?: string };
+            return fail(res, err.code ?? 'validation', [err.message ?? String(e)]);
+          }
+        }
+
         const method = url.pathname.replace('/api/method/pmc_3d_progress.', '');
         const args: Json = req.method === 'POST' ? JSON.parse(raw.toString('utf8') || '{}') : Object.fromEntries(url.searchParams);
         const r = await getRepo();

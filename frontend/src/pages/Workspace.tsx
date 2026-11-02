@@ -50,7 +50,8 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
   const typesPresent = useMemo(() => VIEW_GROUPS.filter((t) => elements.some((e) => viewGroupOf(e) === t)), [elements]);
   const activities = useMemo(() => data?.model?.document?.activities ?? [], [data?.model]);
   const entries = useMemo(() => data?.entries ?? [], [data?.entries]);
-  const viewActivity = activities.find((a) => a.code === view) ?? null;
+  // the material screen shows no work progress: elements are coloured by type
+  const viewActivity = mode === 'material' ? null : (activities.find((a) => a.code === view) ?? null);
 
   // Fall back to a valid view if the model's activities differ.
   useEffect(() => {
@@ -165,20 +166,22 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
           </option>
         ))}
       </select>
-      <select
-        value={statusFilter}
-        onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-        disabled={!viewActivity}
-        aria-label="Activity status"
-        title={viewActivity ? `Status of ${viewActivity.name}` : 'Choose an activity in "Colour by" to filter by status'}
-      >
-        <option value="all">{viewActivity ? `Any ${viewActivity.name.toLowerCase()} status` : 'Any status'}</option>
-        {STATUS_ORDER.map((s) => (
-          <option key={s} value={s}>
-            {VIEW_LABELS[s]}
-          </option>
-        ))}
-      </select>
+      {mode === 'work' && (
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+          disabled={!viewActivity}
+          aria-label="Activity status"
+          title={viewActivity ? `Status of ${viewActivity.name}` : 'Choose an activity in "Colour by" to filter by status'}
+        >
+          <option value="all">{viewActivity ? `Any ${viewActivity.name.toLowerCase()} status` : 'Any status'}</option>
+          {STATUS_ORDER.map((s) => (
+            <option key={s} value={s}>
+              {VIEW_LABELS[s]}
+            </option>
+          ))}
+        </select>
+      )}
     </>
   );
 
@@ -186,17 +189,19 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
     <div className="workspace">
       <section className="ws-center">
         <div className="viewer-toolbar">
-          <label className="inline">
-            Colour by
-            <select value={view} onChange={(e) => setView(e.target.value)} aria-label="Colour by">
-              {activities.map((a) => (
-                <option key={a.code} value={a.code}>
-                  {a.name} progress
-                </option>
-              ))}
-              <option value="type">Element type</option>
-            </select>
-          </label>
+          {mode === 'work' && (
+            <label className="inline">
+              Colour by
+              <select value={view} onChange={(e) => setView(e.target.value)} aria-label="Colour by">
+                {activities.map((a) => (
+                  <option key={a.code} value={a.code}>
+                    {a.name} progress
+                  </option>
+                ))}
+                <option value="type">Element type</option>
+              </select>
+            </label>
+          )}
           <button className="btn btn-small" onClick={() => setResetSignal((n) => n + 1)}>
             Reset camera
           </button>
@@ -306,7 +311,9 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
               Selected
             </div>
           </div>
-          <div className="viewer-help">Drag: rotate · Right-drag / Shift: pan · Wheel: zoom · Click: select / unselect · Esc: close details / clear selection</div>
+          <div className="viewer-help">
+            Drag: rotate · Right-drag / Shift: pan · Wheel: zoom · Click: select / unselect · Esc: close details / clear selection
+          </div>
         </div>
       </section>
 

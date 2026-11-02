@@ -192,6 +192,18 @@ export class FrappeRepository implements PmcRepository {
     });
     return { name: doc.name, state: doc.workflow_state || doc.status || 'Draft' };
   }
+
+  async submitMaterialRequest(name: string) {
+    type MrDoc = { name: string; docstatus: number; workflow_state?: string; status?: string };
+    const doc = await callMethod<MrDoc>('frappe.client.get', { doctype: 'Material Request', name }, 'GET');
+    // with an approval workflow the request moves on by the workflow's first forward action (not Reject)
+    const actions = await callMethod<{ action: string }[]>('frappe.model.workflow.get_transitions', { doc });
+    const forward = actions.find((t) => !/reject|cancel/i.test(t.action));
+    const out = forward
+      ? await callMethod<MrDoc>('frappe.model.workflow.apply_workflow', { doc, action: forward.action })
+      : await callMethod<MrDoc>('frappe.client.submit', { doc });
+    return { name: out.name, state: out.workflow_state || out.status || 'Submitted' };
+  }
 }
 
 export interface SessionInfo {

@@ -733,7 +733,20 @@ export class LocalRepository implements PmcRepository {
       const list = JSON.parse(this.storage.getItem(key) ?? '[]') as unknown[];
       const name = `MAT-MR-DEMO-${String(list.length + 1).padStart(5, '0')}`;
       this.storage.setItem(key, JSON.stringify([...list, { name, ...input, createdAt: this.nowIso() }]));
-      return { name, state: 'L1 Approval Pending' };
+      return { name, state: 'Draft' };
+    });
+  }
+
+  submitMaterialRequest(name: string): Promise<{ name: string; state: string }> {
+    return this.op(() => {
+      const key = `${STORAGE_PREFIX}demoMaterialRequests`;
+      const list = JSON.parse(this.storage.getItem(key) ?? '[]') as { name: string; state?: string }[];
+      const mr = list.find((m) => m.name === name);
+      if (!mr) throw new RepositoryError('not-found', `Material Request ${name} not found.`);
+      if (mr.state) throw new RepositoryError('conflict', `Material Request ${name} is already submitted.`);
+      mr.state = 'L2 Approval Pending';
+      this.storage.setItem(key, JSON.stringify(list));
+      return { name, state: mr.state };
     });
   }
 }

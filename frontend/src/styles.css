@@ -2506,19 +2506,28 @@ details.advanced[open] > summary {
   width: 100%;
   min-width: 0;
 }
-.mr-lines select {
+.mr-qty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
   width: 100%;
+}
+.mr-qty input {
+  width: 100%;
+  max-width: 90px;
   min-width: 0;
+  text-align: right;
 }
 .mr-lines {
   table-layout: fixed;
   width: 100%;
 }
 .mr-lines th:first-child {
-  width: 30%;
+  width: 34%;
 }
 .mr-lines th:last-child {
-  width: 22%;
+  width: 40%;
 }
 .mr-lines td {
   overflow-wrap: anywhere;
