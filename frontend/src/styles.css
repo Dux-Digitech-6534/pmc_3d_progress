@@ -2487,7 +2487,7 @@ details.advanced[open] > summary {
 }
 .mr-fields {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
   margin-bottom: 10px;
 }
@@ -2498,11 +2498,47 @@ details.advanced[open] > summary {
   font-size: 12px;
   font-weight: 600;
 }
+.mr-fields label {
+  min-width: 0;
+}
 .mr-fields select,
 .mr-fields input {
+  width: 100%;
   min-width: 0;
 }
 .mr-lines select {
   width: 100%;
   min-width: 0;
+}
+.mr-lines {
+  table-layout: fixed;
+  width: 100%;
+}
+.mr-lines th:first-child {
+  width: 30%;
+}
+.mr-lines th:last-child {
+  width: 22%;
+}
+.mr-lines td {
+  overflow-wrap: anywhere;
+}
+/* the right panel never scrolls sideways: long names wrap, tables fit */
+.ws-right-body {
+  overflow-x: hidden;
+}
+.ws-right-body select {
+  max-width: 100%;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+.ws-right-body .table {
+  width: 100%;
+}
+.ws-right-body .table th,
+.ws-right-body .table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding-left: 6px;
+  padding-right: 6px;
 }
