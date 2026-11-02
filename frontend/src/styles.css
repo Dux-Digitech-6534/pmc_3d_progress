@@ -2472,3 +2472,11 @@ details.advanced[open] > summary {
 .detail-card .focus-bar b {
   flex: 1;
 }
+.approve-ticked {
+  background: var(--teal-soft);
+}
+.approve-list {
+  max-height: 320px;
+  overflow: auto;
+  padding-left: 18px;
+}

@@ -60,6 +60,7 @@ export function ElementPanel({
             ))}
           </div>
         </div>
+        <ApproveTicked elements={selected} entries={entries} />
         <SelectionTotals elements={selected} activities={activities} entries={entries} />
         <div className="panel-section">
           <h3 className="section-title">Work done</h3>
@@ -111,6 +112,72 @@ export function ElementPanel({
             setViewing(null);
             setEditing(e);
           }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** PMC Reviewer: approve every submitted entry of the ticked elements in one go. */
+function ApproveTicked({ elements, entries }: { elements: ElementRecord[]; entries: ProgressEntry[] }) {
+  const { role, repo, notify, refresh } = useApp();
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const ids = new Set(elements.map((e) => e.id));
+  const submitted = entries
+    .filter((e) => ids.has(e.elementId) && permissions.canReview(role, e))
+    .sort((a, b) => a.elementCode.localeCompare(b.elementCode) || a.createdAt.localeCompare(b.createdAt));
+  if (!submitted.length) return null;
+
+  async function approveAll() {
+    setBusy(true);
+    const failed: string[] = [];
+    let ok = 0;
+    for (const e of submitted) {
+      try {
+        await repo.reviewProgressEntry(e.id, 'approve', '', role);
+        ok++;
+      } catch (err) {
+        failed.push(`${e.elementCode} ${e.id}: ${errorMessages(err).join(' ')}`);
+      }
+    }
+    setBusy(false);
+    setConfirm(false);
+    await refresh();
+    if (ok) notify(`${ok} entr${ok === 1 ? 'y' : 'ies'} of ${elements.length} ticked elements approved — progress updated.`);
+    if (failed.length) notify(`Not approved: ${failed.join(' | ')}`, 'error');
+  }
+
+  return (
+    <div className="panel-section approve-ticked">
+      <div className="history-head">
+        <span>
+          <b>{submitted.length}</b> submitted entr{submitted.length === 1 ? 'y' : 'ies'} on the ticked elements
+        </span>
+        <button className="btn btn-small btn-primary" disabled={busy} onClick={() => setConfirm(true)}>
+          Approve all submitted ({submitted.length})
+        </button>
+      </div>
+      {confirm && (
+        <ConfirmDialog
+          title={`Approve ${submitted.length} entr${submitted.length === 1 ? 'y' : 'ies'}?`}
+          message={
+            <>
+              <ul className="approve-list">
+                {submitted.map((e) => (
+                  <li key={e.id}>
+                    <b>{e.elementCode}</b> · {e.activityName} {formatQty(e.quantity, UNIT_LABELS[e.unit])} · {fmtDate(e.date)}
+                    {e.remarks ? ` — ${e.remarks}` : ''}
+                  </li>
+                ))}
+              </ul>
+              <p className="muted small">Approve only what you have checked on site. Approved entries count towards progress and cannot be edited.</p>
+            </>
+          }
+          confirmLabel="Approve all"
+          busy={busy}
+          onCancel={() => setConfirm(false)}
+          onConfirm={() => void approveAll()}
         />
       )}
     </div>
