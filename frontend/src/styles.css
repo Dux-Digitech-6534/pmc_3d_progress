@@ -2548,3 +2548,12 @@ details.advanced[open] > summary {
   padding-left: 6px;
   padding-right: 6px;
 }
+
+/* reviewer: which activities of the selection to approve */
+.approve-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 8px;
+  font-size: 13px;
+}

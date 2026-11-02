@@ -124,10 +124,14 @@ function ApproveTicked({ elements, entries }: { elements: ElementRecord[]; entri
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const ids = new Set(elements.map((e) => e.id));
-  const submitted = entries
+  // activities the reviewer leaves out (all are approved unless unselected)
+  const [skipped, setSkipped] = useState<Set<string>>(() => new Set());
+  const all = entries
     .filter((e) => ids.has(e.elementId) && permissions.canReview(role, e))
     .sort((a, b) => a.elementCode.localeCompare(b.elementCode) || a.createdAt.localeCompare(b.createdAt));
-  if (!submitted.length) return null;
+  const acts = [...new Map(all.map((e) => [e.activityCode, e.activityName])).entries()];
+  const submitted = acts.length > 1 ? all.filter((e) => !skipped.has(e.activityCode)) : all;
+  if (!all.length) return null;
 
   async function approveAll() {
     setBusy(true);
@@ -143,6 +147,7 @@ function ApproveTicked({ elements, entries }: { elements: ElementRecord[]; entri
     }
     setBusy(false);
     setConfirm(false);
+    setSkipped(new Set());
     await refresh();
     if (ok) notify(`${ok} entr${ok === 1 ? 'y' : 'ies'} of ${elements.length} selected elements approved — progress updated.`);
     if (failed.length) notify(`Not approved: ${failed.join(' | ')}`, 'error');
@@ -152,12 +157,33 @@ function ApproveTicked({ elements, entries }: { elements: ElementRecord[]; entri
     <div className="panel-section approve-ticked">
       <div className="history-head">
         <span>
-          <b>{submitted.length}</b> submitted entr{submitted.length === 1 ? 'y' : 'ies'} on the selected elements
+          <b>{all.length}</b> submitted entr{all.length === 1 ? 'y' : 'ies'} on the selected elements
         </span>
-        <button className="btn btn-small btn-primary" disabled={busy} onClick={() => setConfirm(true)}>
-          Approve all submitted ({submitted.length})
+        <button className="btn btn-small btn-primary" disabled={busy || !submitted.length} onClick={() => setConfirm(true)}>
+          {submitted.length === all.length ? `Approve all submitted (${all.length})` : `Approve selected (${submitted.length})`}
         </button>
       </div>
+      {acts.length > 1 && (
+        <div className="approve-acts" role="group" aria-label="Activities to approve">
+          {acts.map(([code, name]) => (
+            <label key={code} className="check">
+              <input
+                type="checkbox"
+                checked={!skipped.has(code)}
+                onChange={() =>
+                  setSkipped((s) => {
+                    const next = new Set(s);
+                    if (next.has(code)) next.delete(code);
+                    else next.add(code);
+                    return next;
+                  })
+                }
+              />{' '}
+              {name} ({all.filter((e) => e.activityCode === code).length})
+            </label>
+          ))}
+        </div>
+      )}
       {confirm && (
         <ConfirmDialog
           title={`Approve ${submitted.length} entr${submitted.length === 1 ? 'y' : 'ies'}?`}
@@ -174,7 +200,7 @@ function ApproveTicked({ elements, entries }: { elements: ElementRecord[]; entri
               <p className="muted small">Approve only what you have checked on site. Approved entries count towards progress and cannot be edited.</p>
             </>
           }
-          confirmLabel="Approve all"
+          confirmLabel={submitted.length === all.length ? 'Approve all' : 'Approve selected'}
           busy={busy}
           onCancel={() => setConfirm(false)}
           onConfirm={() => void approveAll()}
@@ -361,7 +387,11 @@ function History({
   const list = entries
     .filter((e) => e.elementId === element.id)
     .sort((a, b) => (a.date === b.date ? b.createdAt.localeCompare(a.createdAt) : b.date.localeCompare(a.date)));
-  const submitted = list.filter((e) => permissions.canReview(role, e)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const reviewable = list.filter((e) => permissions.canReview(role, e)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  // entries the reviewer selected; none selected = approve all submitted
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  const chosen = reviewable.filter((e) => picked.has(e.id));
+  const submitted = chosen.length ? chosen : reviewable;
 
   async function approveAll() {
     setBusy(true);
@@ -377,6 +407,7 @@ function History({
     }
     setBusy(false);
     setConfirmAll(false);
+    setPicked(new Set());
     await refresh();
     if (ok) notify(`${ok} entr${ok === 1 ? 'y' : 'ies'} for ${element.code} approved — progress updated.`);
     if (failed.length) notify(`Not approved: ${failed.join(' | ')}`, 'error');
@@ -386,12 +417,13 @@ function History({
     <div className="panel-section">
       <div className="history-head">
         <h3 className="section-title">Progress history ({list.length})</h3>
-        {submitted.length > 0 && (
+        {reviewable.length > 0 && (
           <button className="btn btn-small btn-primary" disabled={busy} onClick={() => setConfirmAll(true)}>
-            Approve all submitted ({submitted.length})
+            {chosen.length ? `Approve selected (${chosen.length})` : `Approve all submitted (${reviewable.length})`}
           </button>
         )}
       </div>
+      {reviewable.length > 1 && <p className="hint">Select entries below to approve only those, or approve all submitted.</p>}
       {confirmAll && (
         <ConfirmDialog
           title={`Approve ${submitted.length} entr${submitted.length === 1 ? 'y' : 'ies'} for ${element.code}?`}
@@ -407,7 +439,7 @@ function History({
               <p className="muted small">Approve only what you have checked on site. Approved entries count towards progress and cannot be edited.</p>
             </>
           }
-          confirmLabel="Approve all"
+          confirmLabel={chosen.length ? 'Approve selected' : 'Approve all'}
           busy={busy}
           onCancel={() => setConfirmAll(false)}
           onConfirm={() => void approveAll()}
@@ -420,6 +452,21 @@ function History({
           {list.map((e) => (
             <li key={e.id}>
               <div className="history-main">
+                {reviewable.length > 1 && permissions.canReview(role, e) && (
+                  <input
+                    type="checkbox"
+                    checked={picked.has(e.id)}
+                    aria-label={`Select ${e.activityName} ${e.id} to approve`}
+                    onChange={() =>
+                      setPicked((s) => {
+                        const next = new Set(s);
+                        if (next.has(e.id)) next.delete(e.id);
+                        else next.add(e.id);
+                        return next;
+                      })
+                    }
+                  />
+                )}
                 <StatusBadge status={e.status} />
                 <span>
                   <b>{e.activityName}</b> {formatQty(e.quantity, UNIT_LABELS[e.unit])}
