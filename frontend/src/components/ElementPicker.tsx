@@ -73,7 +73,7 @@ export function ElementPicker({
             <b>{type === 'all' ? 'Search results' : `${TYPE_LABELS[type]}s`}</b>
             {listed.length > 0 && (
               <button className="link" onClick={() => set(listed.map((e) => e.id), !allTicked)}>
-                {allTicked ? 'Untick all' : 'Tick all'} ({listed.length})
+                {allTicked ? 'Unselect all' : 'Select all'} ({listed.length})
               </button>
             )}
             <button
@@ -95,7 +95,7 @@ export function ElementPicker({
                 const on = selection.has(el.id);
                 return (
                   <li key={el.id} className={on ? 'on' : ''} data-element-id={el.id}>
-                    <input type="checkbox" checked={on} onChange={() => set([el.id], !on)} aria-label={`Tick ${el.code}`} />
+                    <input type="checkbox" checked={on} onChange={() => set([el.id], !on)} aria-label={`Select ${el.code}`} />
                     <button className="picker-el" onClick={() => onOpen(el.id)} title="Show details">
                       <span className="el-code">{el.code}</span>
                       <span className="muted small">{type === 'all' ? TYPE_LABELS[el.type] : el.levelName}</span>
@@ -117,7 +117,7 @@ export function ElementPicker({
       {selection.size > 0 && (
         <div className="picker-sel">
           <span>
-            <b>{selection.size}</b> ticked
+            <b>{selection.size}</b> selected
           </span>
           <button className="link" onClick={() => onChange(new Set())}>
             Clear

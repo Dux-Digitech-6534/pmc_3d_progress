@@ -142,7 +142,7 @@ function Shell() {
                     Open <b>3D + BOQ Upload</b> and upload the project's 3D + BOQ file.
                   </li>
                   <li>
-                    In <b>Work Done</b>, tick the elements and mark the work that is done; <b>Material Required</b> shows the material ticked elements need.
+                    In <b>Work Done</b>, select the elements and mark the work that is done; <b>Material Required</b> shows the material the selected elements need.
                   </li>
                   <li>The PMC Reviewer approves the work done; the 3D colours and progress update.</li>
                 </ol>

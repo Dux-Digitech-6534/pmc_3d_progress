@@ -257,11 +257,11 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
           )}
           <span className="spacer" />
           <span className="sel-count" data-testid="selected-count">
-            {selection.size} ticked
+            {selection.size} selected
             {hiddenSelected > 0 && <span className="muted"> ({hiddenSelected} hidden by filters)</span>}
           </span>
           <button className="btn btn-small" onClick={() => setSelection(new Set())} disabled={!selection.size}>
-            Clear ticks
+            Clear selection
           </button>
         </div>
         <div className="viewer-wrap">
@@ -306,7 +306,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
               Selected
             </div>
           </div>
-          <div className="viewer-help">Drag: rotate · Right-drag / Shift: pan · Wheel: zoom · Click: tick / untick · Esc: close details / clear ticks</div>
+          <div className="viewer-help">Drag: rotate · Right-drag / Shift: pan · Wheel: zoom · Click: select / unselect · Esc: close details / clear selection</div>
         </div>
       </section>
 
@@ -318,7 +318,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
               <div className="focus-bar">
                 <b>Details of {focusEl.code}</b>
                 <label className="check focus-tick">
-                  <input type="checkbox" checked={selection.has(focusEl.id)} onChange={() => toggle(focusEl.id)} /> Ticked
+                  <input type="checkbox" checked={selection.has(focusEl.id)} onChange={() => toggle(focusEl.id)} /> Selected
                 </label>
                 <button className="btn btn-small" onClick={() => setFocusId(null)} aria-label="Close details">
                   ✕ Close

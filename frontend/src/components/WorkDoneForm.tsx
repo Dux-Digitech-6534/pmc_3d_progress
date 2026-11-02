@@ -63,9 +63,9 @@ export function WorkDoneForm({ elements, activities: allActivities, entries }: {
 
   const liveErrors = useMemo(() => {
     const errs = [...validateDate(date)];
-    if (!ticked.size) errs.push('Tick at least one activity.');
+    if (!ticked.size) errs.push('Select at least one activity.');
     if (!pctOk) errs.push('Work done must be between 1 and 100 %.');
-    else if (ticked.size && !plans.some((p) => p.recording.length)) errs.push(`Nothing new to record — the ticked work is already marked ${pct}% or more.`);
+    else if (ticked.size && !plans.some((p) => p.recording.length)) errs.push(`Nothing new to record — the selected work is already marked ${pct}% or more.`);
     if (remarks.length > 500) errs.push('Remarks must be 500 characters or fewer.');
     return errs;
   }, [date, ticked, pctOk, pct, plans, remarks]);
@@ -204,7 +204,7 @@ export function WorkDoneForm({ elements, activities: allActivities, entries }: {
       </div>
 
       {plans.some((p) => p.rows.some((r) => r.skip === 'already-done')) && pctOk && (
-        <p className="hint">Elements already marked {pct}% or more for a ticked activity are skipped.</p>
+        <p className="hint">Elements already marked {pct}% or more for a selected activity are skipped.</p>
       )}
 
       <details className="wd-more">

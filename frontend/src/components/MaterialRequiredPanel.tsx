@@ -27,14 +27,14 @@ export function MaterialRequiredPanel({
   if (!selected.length) {
     return (
       <EmptyState
-        title="No element ticked"
+        title="No element selected"
         action={
           <button className="btn btn-primary" onClick={onTickShown} disabled={!shown}>
-            Tick all {shown} shown elements
+            Select all {shown} shown elements
           </button>
         }
       >
-        Tick the elements to be cast or built next (e.g. all slabs of the first floor) above (or Ctrl-click them in the 3D view) — the steel by bar size and the concrete by
+        Select the elements to be cast or built next (e.g. all slabs of the first floor) above, or click them in the 3D view — the steel by bar size and the concrete by
         grade they need is shown here.
       </EmptyState>
     );
@@ -52,7 +52,7 @@ export function MaterialRequiredPanel({
     <div className="panel-scroll">
       <div className="panel-section">
         <h2 className="panel-title">
-          {selected.length === 1 ? selected[0].code : `${selected.length} elements ticked`}
+          {selected.length === 1 ? selected[0].code : `${selected.length} elements selected`}
         </h2>
         {selected.length > 1 && (
           <p className="muted small">

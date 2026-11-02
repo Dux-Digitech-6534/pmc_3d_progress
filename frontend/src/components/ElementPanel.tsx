@@ -40,9 +40,9 @@ export function ElementPanel({
 
   if (selected.length === 0) {
     return (
-      <EmptyState title="No element ticked">
-        Open a type above (Footing, Column …) and tick the elements, or click them in the 3D view (click again to untick) — then tick the
-        work that is done.
+      <EmptyState title="No element selected">
+        Open a type above (Footing, Column …) and select the elements, or click them in the 3D view (click again to unselect) — then
+        mark the work that is done.
       </EmptyState>
     );
   }
@@ -51,7 +51,7 @@ export function ElementPanel({
     return (
       <div className="panel-scroll">
         <div className="panel-section">
-          <h2 className="panel-title">{selected.length} elements ticked</h2>
+          <h2 className="panel-title">{selected.length} elements selected</h2>
           <div className="chips">
             {selected.map((e) => (
               <button key={e.id} className="chip" onClick={() => onOpen(e.id)} title="Show details" aria-label={`Details of ${e.code}`}>
@@ -144,7 +144,7 @@ function ApproveTicked({ elements, entries }: { elements: ElementRecord[]; entri
     setBusy(false);
     setConfirm(false);
     await refresh();
-    if (ok) notify(`${ok} entr${ok === 1 ? 'y' : 'ies'} of ${elements.length} ticked elements approved — progress updated.`);
+    if (ok) notify(`${ok} entr${ok === 1 ? 'y' : 'ies'} of ${elements.length} selected elements approved — progress updated.`);
     if (failed.length) notify(`Not approved: ${failed.join(' | ')}`, 'error');
   }
 
@@ -152,7 +152,7 @@ function ApproveTicked({ elements, entries }: { elements: ElementRecord[]; entri
     <div className="panel-section approve-ticked">
       <div className="history-head">
         <span>
-          <b>{submitted.length}</b> submitted entr{submitted.length === 1 ? 'y' : 'ies'} on the ticked elements
+          <b>{submitted.length}</b> submitted entr{submitted.length === 1 ? 'y' : 'ies'} on the selected elements
         </span>
         <button className="btn btn-small btn-primary" disabled={busy} onClick={() => setConfirm(true)}>
           Approve all submitted ({submitted.length})
