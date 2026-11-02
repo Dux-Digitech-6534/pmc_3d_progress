@@ -1,7 +1,7 @@
 import { IS_FRAPPE } from '../config';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { savePhoto } from '../data/photoStore';
-import { errorMessages, RepositoryError } from '../data/repository';
+import { errorMessages } from '../data/repository';
 import { formatQty } from '../domain/progress';
 import { activityApplies, UNIT_LABELS, type ActivityDef, type ElementRecord, type PhotoMeta, type ProgressEntry } from '../domain/types';
 import { markedPercent, planWorkDone } from '../domain/workDone';
@@ -26,8 +26,6 @@ export function WorkDoneForm({ elements, activities: allActivities, entries }: {
   const [remarks, setRemarks] = useState('');
   const [pending, setPending] = useState<File[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
-  const [dupWarning, setDupWarning] = useState<string | null>(null);
-  const [confirmDup, setConfirmDup] = useState(false);
   const [busy, setBusy] = useState(false);
   const requestIds = useRef(new Map<string, string>());
   const inFlight = useRef(false);
@@ -38,8 +36,6 @@ export function WorkDoneForm({ elements, activities: allActivities, entries }: {
     // Selection changed: start the ticks again.
     setTicked(new Set());
     setErrors([]);
-    setDupWarning(null);
-    setConfirmDup(false);
     requestIds.current.clear();
   }, [ids]);
 
@@ -120,7 +116,8 @@ export function WorkDoneForm({ elements, activities: allActivities, entries }: {
               allocationMethod: 'manual',
               allocations: Object.fromEntries(plan.recording.map((r) => [r.element.id, r.quantity])),
               submit,
-              confirmDuplicate: confirmDup,
+              // the % only adds the work not yet recorded, so the same quantity on the same day is real work
+              confirmDuplicate: true,
             },
             role,
           );
@@ -128,7 +125,6 @@ export function WorkDoneForm({ elements, activities: allActivities, entries }: {
           done.push(plan.activity.name);
           doneCodes.add(code);
         } catch (e) {
-          if (e instanceof RepositoryError && e.code === 'possible-duplicate') setDupWarning(e.message);
           failed.push(`${plan.activity.name}: ${errorMessages(e).join(' ')}`);
         }
       }
@@ -144,8 +140,6 @@ export function WorkDoneForm({ elements, activities: allActivities, entries }: {
       if (!failed.length) {
         setRemarks('');
         setPending([]);
-        setDupWarning(null);
-        setConfirmDup(false);
       }
       await refresh();
     }
@@ -221,14 +215,6 @@ export function WorkDoneForm({ elements, activities: allActivities, entries }: {
       </details>
 
       <ErrorList errors={errors} />
-      {dupWarning && (
-        <div className="alert alert-warn" role="alert">
-          <strong>Possible duplicate.</strong> {dupWarning}
-          <label className="check">
-            <input type="checkbox" checked={confirmDup} onChange={(e) => setConfirmDup(e.target.checked)} /> This is separate work, save anyway
-          </label>
-        </div>
-      )}
 
       <div className="form-actions">
         <button type="button" className="btn" disabled={busy} onClick={() => void save(false)}>
