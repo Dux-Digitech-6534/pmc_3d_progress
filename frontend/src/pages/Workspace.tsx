@@ -336,7 +336,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
                   detailsOnly
                 />
               ) : (
-                <MaterialRequiredPanel selected={[focusEl]} entries={entries} shown={0} onTickShown={() => undefined} />
+                <MaterialRequiredPanel selected={[focusEl]} entries={entries} shown={0} onTickShown={() => undefined} withRequest={false} />
               )}
             </div>
           )}

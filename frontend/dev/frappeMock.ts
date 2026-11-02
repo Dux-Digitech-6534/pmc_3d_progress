@@ -70,12 +70,36 @@ export function frappeMock(): Plugin {
           const q = Object.fromEntries(url.searchParams);
           const r = await getRepo();
           if (q.doctype === 'Project') return send(res, 200, { message: (await r.listErpProjects()).map((p) => ({ name: p.id, project_name: p.name })) });
+          if (q.doctype === 'Item') return send(res, 200, { message: (await r.listErpItems()).map((i) => ({ name: i.code, item_name: i.name, stock_uom: i.uom })) });
+          if (q.doctype === 'Company') return send(res, 200, { message: (await r.listErpCompanies()).map((name) => ({ name })) });
+          if (q.doctype === 'Warehouse') {
+            const company = (JSON.parse(q.filters || '[]') as unknown[][]).find((f) => f[1] === 'company')?.[3] as string;
+            return send(res, 200, { message: (await r.listErpWarehouses(company)).map((name) => ({ name })) });
+          }
           const orf = JSON.parse(q.or_filters || '[]') as unknown[][];
           const flt = JSON.parse(q.filters || '[]') as unknown[][];
           const date = (op: string) => flt.find((f) => f[1] === 'posting_date' && f[2] === op)?.[3] as string | undefined;
           const lines = await r.listMaterialSent(String(orf[0]?.[3] ?? ''), date('>='), date('<='));
           const ours = lines.filter((l) => (q.doctype === 'Purchase Receipt') === l.voucher.startsWith('MAT-PRE'));
           return send(res, 200, { message: ours.map((l) => ({ name: l.voucher, posting_date: l.date, item_code: l.itemCode, item_name: l.itemName, qty: l.qty, uom: l.uom })) });
+        }
+
+        if (url.pathname === '/api/method/frappe.client.insert') {
+          const doc = JSON.parse(raw.toString('utf8') || '{}').doc as {
+            company: string;
+            schedule_date: string;
+            set_warehouse?: string;
+            items: { item_code: string; qty: number; uom: string; project?: string }[];
+          };
+          const r = await getRepo();
+          const out = await r.createMaterialRequest({
+            company: doc.company,
+            requiredBy: doc.schedule_date,
+            warehouse: doc.set_warehouse,
+            project: doc.items[0]?.project,
+            lines: doc.items.map((i) => ({ itemCode: i.item_code, qty: i.qty, uom: i.uom })),
+          });
+          return send(res, 200, { message: { name: out.name, workflow_state: out.state } });
         }
 
         const method = url.pathname.replace('/api/method/pmc_3d_progress.', '');

@@ -8,7 +8,9 @@ import { checkQuantity, findPossibleDuplicate, permissions, validateDate } from 
 import { elementsFromModel, modelKeyOf } from './elements';
 import {
   RepositoryError,
+  type ErpItem,
   type ErpProject,
+  type MaterialRequestInput,
   type ImportModelInput,
   type ImportModelOutcome,
   type PmcRepository,
@@ -696,6 +698,42 @@ export class LocalRepository implements PmcRepository {
         line('MAT-PRE-DEMO-1', '2026-10-25', '20 mm Metal', 1.2, 'Cum'),
         line('MAT-STE-DEMO-3', '2026-10-28', 'Diesel', 40, 'Litre'),
       ].filter((l) => (!fromDate || l.date >= fromDate) && (!toDate || l.date <= toDate));
+    });
+  }
+
+  listErpItems(): Promise<ErpItem[]> {
+    return this.op(() =>
+      [
+        ['TMT-08', 'TMT Bar 8 mm', 'Kg'],
+        ['TMT-10', 'TMT Bar 10 mm', 'Kg'],
+        ['TMT-12', 'TMT Bar 12 mm', 'Kg'],
+        ['TMT-16', 'TMT Bar 16 mm', 'MT'],
+        ['OPC-53', 'OPC 53 Cement', 'Bag'],
+        ['SAND-R', 'River Sand', 'Cft'],
+        ['AGG-20', '20 mm Metal', 'Cum'],
+        ['BRICK-R', 'Red Bricks', 'Nos'],
+        ['DIESEL', 'Diesel', 'Litre'],
+      ].map(([code, name, uom]) => ({ code, name, uom })),
+    );
+  }
+
+  listErpCompanies(): Promise<string[]> {
+    return this.op(() => ['Demo Company']);
+  }
+
+  listErpWarehouses(company: string): Promise<string[]> {
+    return this.op(() => (company === 'Demo Company' ? ['Site Store - DC', 'Main Store - DC'] : []));
+  }
+
+  // Demo: the requests are kept in this browser, numbered like ERPNext's.
+  createMaterialRequest(input: MaterialRequestInput): Promise<{ name: string; state: string }> {
+    return this.op(() => {
+      if (!input.lines.length) throw new RepositoryError('validation', 'Add at least one item.');
+      const key = `${STORAGE_PREFIX}demoMaterialRequests`;
+      const list = JSON.parse(this.storage.getItem(key) ?? '[]') as unknown[];
+      const name = `MAT-MR-DEMO-${String(list.length + 1).padStart(5, '0')}`;
+      this.storage.setItem(key, JSON.stringify([...list, { name, ...input, createdAt: this.nowIso() }]));
+      return { name, state: 'L1 Approval Pending' };
     });
   }
 }

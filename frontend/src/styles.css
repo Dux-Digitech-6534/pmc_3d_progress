@@ -2480,3 +2480,29 @@ details.advanced[open] > summary {
   overflow: auto;
   padding-left: 18px;
 }
+
+/* ERPNext Material Request from the material required */
+.mr-card {
+  background: var(--surface-2);
+}
+.mr-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.mr-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.mr-fields select,
+.mr-fields input {
+  min-width: 0;
+}
+.mr-lines select {
+  width: 100%;
+  min-width: 0;
+}

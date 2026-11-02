@@ -4,6 +4,7 @@ import { materialRequired, type RequiredBasis } from '../domain/materialRequired
 import { formatQty } from '../domain/progress';
 import type { ElementRecord, ProgressEntry } from '../domain/types';
 import { useApp } from '../state/AppContext';
+import { MaterialRequestCard } from './MaterialRequestCard';
 import { EmptyState } from './ui';
 
 /** Right panel in "Material required" mode: what the ticked elements need, steel by bar size, concrete by grade. */
@@ -12,12 +13,15 @@ export function MaterialRequiredPanel({
   entries,
   shown,
   onTickShown,
+  withRequest = true,
 }: {
   selected: ElementRecord[];
   entries: ProgressEntry[];
   /** Elements shown in the list (for "tick all shown"). */
   shown: number;
   onTickShown: () => void;
+  /** Offer an ERPNext Material Request for the material (not in the one-element details card). */
+  withRequest?: boolean;
 }) {
   const { data } = useApp();
   const norms = normsOf(data?.model?.document);
@@ -164,6 +168,7 @@ export function MaterialRequiredPanel({
           {mats.some((m) => m.key === 'cement') && <p className="hint">Cement, sand and gitti with the concrete mix {norms.concreteGrade} of the model planning.</p>}
         </div>
       )}
+      {withRequest && <MaterialRequestCard req={req} elementIds={selected.map((e) => e.id).join(',')} bagKg={norms.bagKg} />}
     </div>
   );
 }

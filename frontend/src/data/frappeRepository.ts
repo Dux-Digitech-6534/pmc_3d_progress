@@ -5,7 +5,9 @@ import { call, callMethod } from './frappeApi';
 import {
   RepositoryError,
   type ImportModelInput,
+  type ErpItem,
   type ErpProject,
+  type MaterialRequestInput,
   type ImportModelOutcome,
   type PmcRepository,
   type SaveBatchInput,
@@ -142,6 +144,53 @@ export class FrappeRepository implements PmcRepository {
       qty: Number(l.qty) || 0,
       uom: l.uom || '',
     }));
+  }
+
+  async listErpItems(): Promise<ErpItem[]> {
+    const rows = await callMethod<{ name: string; item_name: string; stock_uom: string }[]>(
+      'frappe.client.get_list',
+      { doctype: 'Item', fields: ['name', 'item_name', 'stock_uom'], filters: [['Item', 'disabled', '=', 0]], order_by: 'item_name asc', limit_page_length: 5000 },
+      'GET',
+    );
+    return rows.map((i) => ({ code: i.name, name: i.item_name || i.name, uom: i.stock_uom }));
+  }
+
+  async listErpCompanies(): Promise<string[]> {
+    const rows = await callMethod<{ name: string }[]>('frappe.client.get_list', { doctype: 'Company', fields: ['name'], limit_page_length: 500 }, 'GET');
+    return rows.map((c) => c.name);
+  }
+
+  async listErpWarehouses(company: string): Promise<string[]> {
+    const rows = await callMethod<{ name: string }[]>(
+      'frappe.client.get_list',
+      { doctype: 'Warehouse', fields: ['name'], filters: [['Warehouse', 'company', '=', company], ['Warehouse', 'is_group', '=', 0], ['Warehouse', 'disabled', '=', 0]], limit_page_length: 1000 },
+      'GET',
+    );
+    return rows.map((w) => w.name);
+  }
+
+  async createMaterialRequest(input: MaterialRequestInput) {
+    const doc = await callMethod<{ name: string; workflow_state?: string; status?: string }>('frappe.client.insert', {
+      doc: {
+        doctype: 'Material Request',
+        material_request_type: 'Purchase',
+        company: input.company,
+        transaction_date: new Date().toISOString().slice(0, 10),
+        schedule_date: input.requiredBy,
+        ...(input.warehouse ? { set_warehouse: input.warehouse } : {}),
+        items: input.lines.map((l) => ({
+          item_code: l.itemCode,
+          qty: l.qty,
+          uom: l.uom,
+          stock_uom: l.uom,
+          conversion_factor: 1,
+          schedule_date: input.requiredBy,
+          ...(input.warehouse ? { warehouse: input.warehouse } : {}),
+          ...(input.project ? { project: input.project } : {}),
+        })),
+      },
+    });
+    return { name: doc.name, state: doc.workflow_state || doc.status || 'Draft' };
   }
 }
 

@@ -50,11 +50,34 @@ export interface PmcRepository {
    * Material Transfer) and Purchase Receipts that carry the project, in the item's stock unit.
    */
   listMaterialSent(erpProjectId: string, fromDate?: string, toDate?: string): Promise<SentLine[]>;
+  /** Enabled ERPNext items (code, name, stock unit), to put on a Material Request. */
+  listErpItems(): Promise<ErpItem[]>;
+  listErpCompanies(): Promise<string[]>;
+  /** Leaf warehouses of a company. */
+  listErpWarehouses(company: string): Promise<string[]>;
+  /** Create an ERPNext Material Request (Purchase); it starts in the ERP's approval workflow. */
+  createMaterialRequest(input: MaterialRequestInput): Promise<{ name: string; state: string }>;
 }
 
 export interface ErpProject {
   id: string;
   name: string;
+}
+
+export interface ErpItem {
+  code: string;
+  name: string;
+  uom: string;
+}
+
+export interface MaterialRequestInput {
+  company: string;
+  /** ERPNext project of every line. */
+  project?: string;
+  warehouse?: string;
+  /** YYYY-MM-DD. */
+  requiredBy: string;
+  lines: { itemCode: string; qty: number; uom: string }[];
 }
 
 export interface ImportModelInput {
