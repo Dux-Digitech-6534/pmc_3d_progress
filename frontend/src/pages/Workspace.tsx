@@ -4,7 +4,7 @@ import { ElementPicker } from '../components/ElementPicker';
 import { MaterialRequiredPanel } from '../components/MaterialRequiredPanel';
 import { ModelViewer } from '../components/ModelViewer';
 import { EmptyState, Spinner } from '../components/ui';
-import { ACTIVITY_STATUS_LABELS, computeActivityProgress, type ActivityStatus } from '../domain/progress';
+import { ACTIVITY_STATUS_LABELS, computeActivityProgress, type ActivityProgress, type ActivityStatus } from '../domain/progress';
 import { ELEMENT_TYPES, VIEW_GROUPS, viewGroupOf, type ElementType, type ViewGroup } from '../domain/types';
 import { AWAITING_COLOR, STATUS_COLORS, TYPE_COLORS, TYPE_LABELS, SELECTION_COLOR } from '../lib/colors';
 import { useApp } from '../state/AppContext';
@@ -19,6 +19,20 @@ type ViewStatus = ActivityStatus | 'awaiting';
 const STATUS_ORDER: ViewStatus[] = ['not-started', 'awaiting', 'in-progress', 'complete', 'not-configured', 'not-applicable'];
 const VIEW_LABELS: Record<ViewStatus, string> = { ...ACTIVITY_STATUS_LABELS, awaiting: 'Awaiting approval' };
 const VIEW_COLORS: Record<ViewStatus, string> = { ...STATUS_COLORS, awaiting: AWAITING_COLOR };
+const OVERALL = '__all__';
+
+/**
+ * One status for an element over the activities that apply to it (a wall has no concreting):
+ * complete when all are complete, awaiting approval when work waits for the PMC, in progress
+ * once any work is approved.
+ */
+function combinedStatus(progress: ActivityProgress[], showAwaiting: boolean): ViewStatus {
+  const used = progress.filter((p) => p.status !== 'not-applicable' && p.status !== 'not-configured');
+  if (!used.length) return progress.some((p) => p.status === 'not-configured') ? 'not-configured' : 'not-applicable';
+  if (used.every((p) => p.status === 'complete')) return 'complete';
+  if (showAwaiting && used.some((p) => p.pendingReview > 0)) return 'awaiting';
+  return used.some((p) => p.status !== 'not-started') ? 'in-progress' : 'not-started';
+}
 
 /**
  * The 3D screen. Two screens use it: "work" (tick elements and record the work done) and "material"
@@ -32,7 +46,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | ElementType>('all');
   const [levelFilter, setLevelFilter] = useState('all');
-  const [view, setView] = useState<string>('CONC'); // 'type' or an activity code
+  const [view, setView] = useState<string>(OVERALL); // OVERALL, 'type' or an activity code
   const [statusFilter, setStatusFilter] = useState<'all' | ViewStatus>('all');
   const [showLabels, setShowLabels] = useState(true);
   const [resetSignal, setResetSignal] = useState(0);
@@ -51,21 +65,24 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
   const activities = useMemo(() => data?.model?.document?.activities ?? [], [data?.model]);
   const entries = useMemo(() => data?.entries ?? [], [data?.entries]);
   // the material screen shows no work progress: elements are coloured by type
-  const viewActivity = mode === 'material' ? null : (activities.find((a) => a.code === view) ?? null);
+  const viewActivity =
+    mode === 'material'
+      ? null
+      : view === OVERALL
+        ? activities.length
+          ? { name: 'Overall', activities }
+          : null
+        : ((a) => (a ? { name: a.name, activities: [a] } : null))(activities.find((a) => a.code === view));
 
   // Fall back to a valid view if the model's activities differ.
   useEffect(() => {
-    if (view !== 'type' && activities.length && !activities.some((a) => a.code === view)) setView(activities[0].code);
+    if (view !== 'type' && view !== OVERALL && activities.length && !activities.some((a) => a.code === view)) setView(OVERALL);
   }, [activities, view]);
 
   const statusById = useMemo(() => {
     const m = new Map<string, ViewStatus>();
     if (viewActivity) {
-      for (const el of elements) {
-        const p = computeActivityProgress(el, viewActivity, entries);
-        const awaiting = role !== 'owner' && p.pendingReview > 0 && (p.status === 'not-started' || p.status === 'in-progress');
-        m.set(el.id, awaiting ? 'awaiting' : p.status);
-      }
+      for (const el of elements) m.set(el.id, combinedStatus(viewActivity.activities.map((a) => computeActivityProgress(el, a, entries)), role !== 'owner'));
     }
     return m;
   }, [elements, entries, viewActivity, role]);
@@ -193,6 +210,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
             <label className="inline">
               Colour by
               <select value={view} onChange={(e) => setView(e.target.value)} aria-label="Colour by">
+                <option value={OVERALL}>Overall progress (all work)</option>
                 {activities.map((a) => (
                   <option key={a.code} value={a.code}>
                     {a.name} progress
