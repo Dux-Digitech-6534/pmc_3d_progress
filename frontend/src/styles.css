@@ -2462,3 +2462,13 @@ details.advanced[open] > summary {
     grid-template-columns: 1fr 1fr;
   }
 }
+.detail-card {
+  border-bottom: 3px solid var(--teal);
+  background: var(--surface);
+}
+.detail-card .focus-bar {
+  gap: 10px;
+}
+.detail-card .focus-bar b {
+  flex: 1;
+}

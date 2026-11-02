@@ -22,6 +22,7 @@ export function ElementPanel({
   projectName,
   modelKey,
   onOpen,
+  detailsOnly,
 }: {
   selected: ElementRecord[];
   activities: ActivityDef[];
@@ -30,6 +31,8 @@ export function ElementPanel({
   projectName: string;
   modelKey: string;
   onOpen: (id: string) => void;
+  /** One element's details and history only — the work done form is for the ticked elements. */
+  detailsOnly?: boolean;
 }) {
   const { role } = useApp();
   const [editing, setEditing] = useState<ProgressEntry | null>(null);
@@ -38,8 +41,8 @@ export function ElementPanel({
   if (selected.length === 0) {
     return (
       <EmptyState title="No element ticked">
-        Open a type above (Footing, Column …) and tick the elements, or <kbd>Ctrl</kbd>/<kbd>⌘</kbd>-click them in the 3D view — then tick the work that
-        is done. Click an element for its details.
+        Open a type above (Footing, Column …) and tick the elements, or click them in the 3D view (click again to untick) — then tick the
+        work that is done.
       </EmptyState>
     );
   }
@@ -81,6 +84,7 @@ export function ElementPanel({
         onView={setViewing}
         onEdit={setEditing}
       />
+      {(!detailsOnly || editing) && (
       <div className="panel-section">
         <h3 className="section-title">{editing ? `Edit ${editing.id} (${editing.status})` : 'Work done'}</h3>
         {permissions.canCreate(role) ? (
@@ -97,6 +101,7 @@ export function ElementPanel({
           </p>
         )}
       </div>
+      )}
       {viewing && (
         <EntryDetailsModal
           entry={viewing}

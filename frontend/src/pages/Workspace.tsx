@@ -102,18 +102,22 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
     [selection, setSelection],
   );
 
-  // Click in 3D: show that element's details; Ctrl/⌘-click ticks it.
+  // Click in 3D ticks the element (click again to untick) and shows its details.
   const onPick = useCallback(
-    (id: string | null, additive: boolean) => {
-      if (!id) return; // clicking empty space keeps the selection; use Clear or Esc
-      if (additive) toggle(id);
-      else setFocusId(id);
+    (id: string | null) => {
+      if (!id) return; // clicking empty space keeps the ticks; use Clear or Esc
+      const ticking = !selection.has(id);
+      toggle(id);
+      setFocusId((f) => (ticking ? id : f === id ? null : f));
     },
-    [toggle],
+    [toggle, selection],
   );
   const focusEl = focusId ? (elements.find((e) => e.id === focusId) ?? null) : null;
-  // the 3D highlights the ticked elements and the one whose details are open
-  const highlighted = useMemo(() => (focusId ? new Set([...selection, focusId]) : selection), [selection, focusId]);
+  // the details card is not needed when that element is the only one ticked (the panel below shows it)
+  const showCard = !!focusEl && !(selection.size === 1 && selection.has(focusEl.id));
+  useEffect(() => {
+    if (focusId) document.querySelector('.ws-right-body')?.scrollTo({ top: 0 });
+  }, [focusId]);
 
   // Esc closes the details, then clears the ticks (unless typing in a field).
   useEffect(() => {
@@ -266,7 +270,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
             elements={elements}
             colors={colors}
             visibleIds={visibleIds}
-            selectedIds={highlighted}
+            selectedIds={selection}
             hiddenIds={hiddenAll}
             showLabels={showLabels}
             onPick={onPick}
@@ -302,22 +306,23 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
               Selected
             </div>
           </div>
-          <div className="viewer-help">Drag: rotate · Right-drag / Shift: pan · Wheel: zoom · Click: details · Ctrl/⌘-click: tick · Esc: close / clear</div>
+          <div className="viewer-help">Drag: rotate · Right-drag / Shift: pan · Wheel: zoom · Click: tick / untick · Esc: close details / clear ticks</div>
         </div>
       </section>
 
       <aside className="ws-right" aria-label="Selected element">
         <div className="ws-right-title">{mode === 'work' ? 'Work done' : 'Material required'}</div>
         <div className="ws-right-body">
-          {focusEl ? (
-            <div className="focus-view">
+          {showCard && focusEl && (
+            <div className="detail-card">
               <div className="focus-bar">
-                <button className="btn btn-small" onClick={() => setFocusId(null)}>
-                  ← Back to list
-                </button>
+                <b>Details of {focusEl.code}</b>
                 <label className="check focus-tick">
                   <input type="checkbox" checked={selection.has(focusEl.id)} onChange={() => toggle(focusEl.id)} /> Ticked
                 </label>
+                <button className="btn btn-small" onClick={() => setFocusId(null)} aria-label="Close details">
+                  ✕ Close
+                </button>
               </div>
               {mode === 'work' ? (
                 <ElementPanel
@@ -328,48 +333,46 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
                   projectName={data.project.name}
                   modelKey={data.model.key}
                   onOpen={setFocusId}
+                  detailsOnly
                 />
               ) : (
                 <MaterialRequiredPanel selected={[focusEl]} entries={entries} shown={0} onTickShown={() => undefined} />
               )}
             </div>
+          )}
+          <ElementPicker
+            elements={elements}
+            listed={visible}
+            selection={selection}
+            onChange={setSelection}
+            onOpen={setFocusId}
+            type={typeFilter}
+            onType={setTypeFilter}
+            search={search}
+            onSearch={setSearch}
+            filters={filters}
+            statusOf={(id) => {
+              const st = statusById.get(id);
+              return st ? { label: VIEW_LABELS[st], color: VIEW_COLORS[st] } : undefined;
+            }}
+          />
+          {mode === 'work' ? (
+            <ElementPanel
+              selected={selectedEls}
+              activities={activities}
+              entries={entries}
+              allEntries={data.allEntries}
+              projectName={data.project.name}
+              modelKey={data.model.key}
+              onOpen={setFocusId}
+            />
           ) : (
-            <>
-              <ElementPicker
-                elements={elements}
-                listed={visible}
-                selection={selection}
-                onChange={setSelection}
-                onOpen={setFocusId}
-                type={typeFilter}
-                onType={setTypeFilter}
-                search={search}
-                onSearch={setSearch}
-                filters={filters}
-                statusOf={(id) => {
-                  const st = statusById.get(id);
-                  return st ? { label: VIEW_LABELS[st], color: VIEW_COLORS[st] } : undefined;
-                }}
-              />
-              {mode === 'work' ? (
-                <ElementPanel
-                  selected={selectedEls}
-                  activities={activities}
-                  entries={entries}
-                  allEntries={data.allEntries}
-                  projectName={data.project.name}
-                  modelKey={data.model.key}
-                  onOpen={setFocusId}
-                />
-              ) : (
-                <MaterialRequiredPanel
-                  selected={selectedEls}
-                  entries={entries}
-                  shown={visible.length}
-                  onTickShown={() => setSelection(new Set([...selection, ...visible.map((e) => e.id)]))}
-                />
-              )}
-            </>
+            <MaterialRequiredPanel
+              selected={selectedEls}
+              entries={entries}
+              shown={visible.length}
+              onTickShown={() => setSelection(new Set([...selection, ...visible.map((e) => e.id)]))}
+            />
           )}
         </div>
       </aside>
