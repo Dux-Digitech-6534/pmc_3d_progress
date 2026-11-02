@@ -2,11 +2,13 @@ import { resolveBatchQuantities } from '../domain/allocation';
 import { validateModelDocument } from '../domain/modelValidation';
 import type { ActivityDef, ElementRecord, HistoryItem, ModelRecord, ProgressEntry, Project, Role, Unit } from '../domain/types';
 import { PLANNING_STATUSES, ROLE_LABELS } from '../domain/types';
+import type { SentLine } from '../domain/materialVariation';
 import { inModelFamily } from '../domain/progress';
 import { checkQuantity, findPossibleDuplicate, permissions, validateDate } from '../domain/workflow';
 import { elementsFromModel, modelKeyOf } from './elements';
 import {
   RepositoryError,
+  type ErpProject,
   type ImportModelInput,
   type ImportModelOutcome,
   type PmcRepository,
@@ -674,6 +676,27 @@ export class LocalRepository implements PmcRepository {
     if (this.onReset) await this.onReset();
     this.ready = null;
     await this.init();
+  }
+
+  // No ERPNext in the browser: one demo ERP project with a few material issues, to try the variation report.
+  listErpProjects(): Promise<ErpProject[]> {
+    return this.op(() => [{ id: 'ERP-DEMO', name: 'Demo ERP project (sample issues)' }]);
+  }
+
+  listMaterialSent(erpProjectId: string, fromDate?: string, toDate?: string): Promise<SentLine[]> {
+    return this.op(() => {
+      if (erpProjectId !== 'ERP-DEMO') return [];
+      const line = (voucher: string, date: string, itemName: string, qty: number, uom: string): SentLine => ({ voucher, date, itemCode: itemName.toUpperCase().replace(/\W+/g, '-'), itemName, qty, uom });
+      return [
+        line('MAT-STE-DEMO-1', '2026-10-20', 'TMT Bar 8 mm', 60, 'Kg'),
+        line('MAT-STE-DEMO-1', '2026-10-20', 'TMT Bar 12 mm', 0.15, 'MT'),
+        line('MAT-STE-DEMO-2', '2026-10-24', 'TMT Bar 16 mm', 90, 'Kg'),
+        line('MAT-STE-DEMO-2', '2026-10-24', 'OPC 53 Cement', 30, 'Bag'),
+        line('MAT-PRE-DEMO-1', '2026-10-25', 'River Sand', 60, 'Cft'),
+        line('MAT-PRE-DEMO-1', '2026-10-25', '20 mm Metal', 1.2, 'Cum'),
+        line('MAT-STE-DEMO-3', '2026-10-28', 'Diesel', 40, 'Litre'),
+      ].filter((l) => (!fromDate || l.date >= fromDate) && (!toDate || l.date <= toDate));
+    });
   }
 }
 

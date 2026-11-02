@@ -7,6 +7,7 @@ import { PLANNING_STATUSES, type ModelRecord, type ModelSourceType } from '../do
 import { downloadText } from '../lib/download';
 import { useApp } from '../state/AppContext';
 import { IS_FRAPPE } from '../config';
+import { parseAndValidateModel } from '../domain/modelValidation';
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 /** The sample offered for download next to the upload: it has the BBS bar sizes and grades. */
@@ -86,8 +87,15 @@ export function ModelRegister() {
     setBusy(true);
     setResult(null);
     try {
+      // the same checks as the server, run here first: a file the server would take with wrong BBS or
+      // sizes is stopped, and the warnings (BOQ vs 3D …) show even before the server has the newest checks
+      const pre = parseAndValidateModel(text);
+      if (!pre.ok) {
+        setResult({ ok: false, errors: pre.errors, warnings: pre.warnings, sourceName });
+        return;
+      }
       const out = await repo.importModel({ text, sourceName, sourceType, targetProjectId: target === '__file__' ? undefined : target });
-      setResult({ ...out, sourceName });
+      setResult({ ...out, warnings: [...new Set([...out.warnings, ...pre.warnings])], sourceName });
       if (out.ok && out.record) {
         notify(`Imported ${out.record.name} ${out.record.revision} — ${out.record.elementCount} elements.`);
         if (out.record.projectId !== projectId) setProjectId(out.record.projectId);

@@ -2417,3 +2417,48 @@ details.advanced[open] > summary {
   border-bottom: 1px solid var(--border);
   flex: none;
 }
+
+/* Material variation report */
+.variation-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(120px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+.variation-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 600;
+}
+.variation-table tr.sub td:first-child {
+  padding-left: 28px;
+  color: var(--muted);
+}
+.var-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.var-ok {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.var-excess {
+  background: var(--red-soft);
+  color: var(--red);
+}
+.var-short,
+.var-not-sent {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+@media (max-width: 760px) {
+  .variation-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}

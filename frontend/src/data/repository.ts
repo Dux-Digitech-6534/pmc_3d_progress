@@ -1,4 +1,5 @@
 import type { QuantityMode } from '../domain/allocation';
+import type { SentLine } from '../domain/materialVariation';
 import type {
   ElementRecord,
   ModelRecord,
@@ -41,6 +42,19 @@ export interface PmcRepository {
   deleteDraftEntry(entryId: string, role: Role): Promise<void>;
 
   resetDemoData(): Promise<void>;
+
+  /** ERPNext projects, to pick the one whose material movements belong to a PMC project. */
+  listErpProjects(): Promise<ErpProject[]>;
+  /**
+   * Material sent to an ERPNext project: item lines of submitted Stock Entries (Material Issue /
+   * Material Transfer) and Purchase Receipts that carry the project, in the item's stock unit.
+   */
+  listMaterialSent(erpProjectId: string, fromDate?: string, toDate?: string): Promise<SentLine[]>;
+}
+
+export interface ErpProject {
+  id: string;
+  name: string;
 }
 
 export interface ImportModelInput {

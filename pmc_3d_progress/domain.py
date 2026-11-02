@@ -305,6 +305,27 @@ def validate_model_document(doc):
 							f"{label}: planned {activities[c]['name']} quantity, but that activity does not apply to type "
 							f'"{e.get("type")}".'
 						)
+				# the BOQ should match the 3D: concrete of a box = its volume; brickwork never more than the wall
+				g = e.get("geometry")
+				size = g.get("size") if _is_obj(g) else None
+				if isinstance(size, list) and len(size) == 3 and all(_is_num(n) for n in size) and _is_str(eid):
+					vol = size[0] * size[1] * size[2]
+
+					def qty(c):
+						q = pq.get(c)
+						return q["quantity"] if _is_obj(q) and _is_num(q.get("quantity")) else None
+
+					conc, brick = qty("CONC"), qty("BRICK")
+					if g.get("shape") == "box" and conc is not None and conc > 0 and abs(conc - vol) > max(0.01, vol * 0.15):
+						warnings.append(
+							f'Element "{eid}": planned concrete {js_num(conc)} m³ does not match its 3D size '
+							f"({js_num(round(vol, 3))} m³) — check the BOQ or the model."
+						)
+					if g.get("shape") == "wall" and brick is not None and brick > vol * 1.1 + 0.01:
+						warnings.append(
+							f'Element "{eid}": planned brickwork {js_num(brick)} m³ is more than the wall\'s 3D volume '
+							f"({js_num(round(vol, 3))} m³) — check the BOQ or the model."
+						)
 				missing = [
 					c
 					for c in activities

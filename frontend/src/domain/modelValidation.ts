@@ -199,6 +199,21 @@ export function validateModelDocument(input: unknown): ModelValidationResult {
           }
         }
         if (e.concreteGrade !== undefined && (!isStr(e.concreteGrade) || e.concreteGrade.length > 20)) err(`${label}: "concreteGrade" must be a short text such as "M25".`);
+        // the BOQ should match the 3D: concrete of a box = its volume; brickwork never more than the wall
+        const g = e.geometry;
+        if (isObj(g) && Array.isArray(g.size) && g.size.length === 3 && g.size.every(isNum) && isStr(e.id)) {
+          const vol = (g.size as number[]).reduce((a, n) => a * n, 1);
+          const qty = (c: string) => (isObj(pq[c]) && isNum(pq[c].quantity) ? pq[c].quantity : null);
+          const conc = qty('CONC');
+          const brick = qty('BRICK');
+          const m3 = (n: number) => Math.round(n * 1000) / 1000;
+          if (g.shape === 'box' && conc !== null && conc > 0 && Math.abs(conc - vol) > Math.max(0.01, vol * 0.15)) {
+            warnings.push(`Element "${e.id}": planned concrete ${conc} m³ does not match its 3D size (${m3(vol)} m³) — check the BOQ or the model.`);
+          }
+          if (g.shape === 'wall' && brick !== null && brick > vol * 1.1 + 0.01) {
+            warnings.push(`Element "${e.id}": planned brickwork ${brick} m³ is more than the wall's 3D volume (${m3(vol)} m³) — check the BOQ or the model.`);
+          }
+        }
         const missing = [...activities.keys()].filter((c) => applies(c) && (!configured.includes(c) || (isObj(pq[c]) && pq[c].quantity === 0)));
         if (missing.length && isStr(e.id)) {
           warnings.push(`Element "${e.id}" has no planned quantity for ${missing.map((c) => activities.get(c)?.name ?? c).join(', ')} — shown as "Not configured".`);

@@ -36,3 +36,16 @@ describe('model upload: BBS steel by bar size and concrete grade per element', (
     expect(errs).toMatch(/concreteGrade/);
   });
 });
+
+describe('model upload: the BOQ must match the 3D', () => {
+  it('the bundled samples match', () => {
+    expect(validateModelDocument(cabinA).warnings.filter((w) => /3D/.test(w))).toEqual([]);
+  });
+  it('warns when the concrete of an element does not match its size', () => {
+    const { doc, col } = withColumn({});
+    (col.plannedQuantities.CONC as { quantity: number }).quantity = 2;
+    const v = validateModelDocument(doc);
+    expect(v.ok).toBe(true);
+    expect(v.warnings.some((w) => w.includes(`"${col.id}": planned concrete 2 m³ does not match its 3D size`))).toBe(true);
+  });
+});

@@ -54,8 +54,13 @@ async function toError(res: Response): Promise<RepositoryError> {
   return new RepositoryError(code, messages);
 }
 
-export async function call<T>(method: string, args: Record<string, unknown> = {}, httpMethod: 'GET' | 'POST' = 'POST'): Promise<T> {
-  const url = `/api/method/pmc_3d_progress.${method}`;
+export function call<T>(method: string, args: Record<string, unknown> = {}, httpMethod: 'GET' | 'POST' = 'POST'): Promise<T> {
+  return callMethod<T>(`pmc_3d_progress.${method}`, args, httpMethod);
+}
+
+/** Any whitelisted Frappe method by its full path, e.g. "frappe.client.get_list". */
+export async function callMethod<T>(method: string, args: Record<string, unknown> = {}, httpMethod: 'GET' | 'POST' = 'POST'): Promise<T> {
+  const url = `/api/method/${method}`;
   let res: Response;
   try {
     res =

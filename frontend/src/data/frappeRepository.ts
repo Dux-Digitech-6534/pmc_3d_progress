@@ -1,9 +1,11 @@
 import type { ElementRecord, ModelRecord, ProgressEntry, Project, Role } from '../domain/types';
 import { elementsFromModel } from './elements';
-import { call } from './frappeApi';
+import type { SentLine } from '../domain/materialVariation';
+import { call, callMethod } from './frappeApi';
 import {
   RepositoryError,
   type ImportModelInput,
+  type ErpProject,
   type ImportModelOutcome,
   type PmcRepository,
   type SaveBatchInput,
@@ -95,6 +97,51 @@ export class FrappeRepository implements PmcRepository {
   async resetDemoData(): Promise<void> {
     // Shared server data is never wiped from the page; administrators delete records in Frappe Desk.
     throw new RepositoryError('forbidden', 'Clearing all data is not available on the server.');
+  }
+
+  // ERPNext data is read with Frappe's standard list API, so the user's own ERP permissions apply.
+  async listErpProjects(): Promise<ErpProject[]> {
+    const rows = await callMethod<{ name: string; project_name: string }[]>(
+      'frappe.client.get_list',
+      { doctype: 'Project', fields: ['name', 'project_name'], order_by: 'modified desc', limit_page_length: 500 },
+      'GET',
+    );
+    return rows.map((p) => ({ id: p.name, name: p.project_name || p.name }));
+  }
+
+  async listMaterialSent(erpProjectId: string, fromDate?: string, toDate?: string): Promise<SentLine[]> {
+    const dates = (dt: string) => [
+      ...(fromDate ? [[dt, 'posting_date', '>=', fromDate]] : []),
+      ...(toDate ? [[dt, 'posting_date', '<=', toDate]] : []),
+    ];
+    // the project may be on the document or on its item line
+    const lines = (doctype: string, child: string, qtyField: string, extra: unknown[][]) =>
+      callMethod<{ name: string; posting_date: string; item_code: string; item_name: string; qty: number; uom: string }[]>(
+        'frappe.client.get_list',
+        {
+          doctype,
+          fields: ['name', 'posting_date', ...['item_code', 'item_name', `${qtyField} as qty`, 'stock_uom as uom'].map((f) => '`tab' + child + '`.' + f)],
+          filters: [[doctype, 'docstatus', '=', 1], ...extra, ...dates(doctype)],
+          or_filters: [
+            [doctype, 'project', '=', erpProjectId],
+            [child, 'project', '=', erpProjectId],
+          ],
+          limit_page_length: 0,
+        },
+        'GET',
+      );
+    const [issues, receipts] = await Promise.all([
+      lines('Stock Entry', 'Stock Entry Detail', 'transfer_qty', [['Stock Entry', 'purpose', 'in', ['Material Issue', 'Material Transfer']]]),
+      lines('Purchase Receipt', 'Purchase Receipt Item', 'stock_qty', []),
+    ]);
+    return [...issues, ...receipts].map((l) => ({
+      voucher: l.name,
+      date: l.posting_date,
+      itemCode: l.item_code,
+      itemName: l.item_name || l.item_code,
+      qty: Number(l.qty) || 0,
+      uom: l.uom || '',
+    }));
   }
 }
 

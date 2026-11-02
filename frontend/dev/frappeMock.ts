@@ -65,6 +65,19 @@ export function frappeMock(): Plugin {
           return send(res, 200, { message: { file_url: fileUrl, file_name: file.name, name: fileUrl, file_size: file.size } });
         }
 
+        // ERPNext lists for the material variation report: the local repository's demo ERP data, in get_list shape
+        if (url.pathname === '/api/method/frappe.client.get_list') {
+          const q = Object.fromEntries(url.searchParams);
+          const r = await getRepo();
+          if (q.doctype === 'Project') return send(res, 200, { message: (await r.listErpProjects()).map((p) => ({ name: p.id, project_name: p.name })) });
+          const orf = JSON.parse(q.or_filters || '[]') as unknown[][];
+          const flt = JSON.parse(q.filters || '[]') as unknown[][];
+          const date = (op: string) => flt.find((f) => f[1] === 'posting_date' && f[2] === op)?.[3] as string | undefined;
+          const lines = await r.listMaterialSent(String(orf[0]?.[3] ?? ''), date('>='), date('<='));
+          const ours = lines.filter((l) => (q.doctype === 'Purchase Receipt') === l.voucher.startsWith('MAT-PRE'));
+          return send(res, 200, { message: ours.map((l) => ({ name: l.voucher, posting_date: l.date, item_code: l.itemCode, item_name: l.itemName, qty: l.qty, uom: l.uom })) });
+        }
+
         const method = url.pathname.replace('/api/method/pmc_3d_progress.', '');
         const args: Json = req.method === 'POST' ? JSON.parse(raw.toString('utf8') || '{}') : Object.fromEntries(url.searchParams);
         const r = await getRepo();

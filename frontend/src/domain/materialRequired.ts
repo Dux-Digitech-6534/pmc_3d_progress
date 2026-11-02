@@ -5,9 +5,10 @@ import type { ElementRecord, ProgressEntry } from './types';
 /**
  * Material required for a set of elements: concrete by grade, steel by bar diameter and the
  * other materials. "balance" = only the work not yet approved (what still has to be bought),
- * "planned" = the whole planned work of the elements.
+ * "planned" = the whole planned work of the elements, "done" = the approved work only (what should
+ * have gone in so far — compared with what was sent in the material variation report).
  */
-export type RequiredBasis = 'balance' | 'planned';
+export type RequiredBasis = 'balance' | 'planned' | 'done';
 
 export interface MaterialRequired {
   elementCount: number;
@@ -44,7 +45,7 @@ export function materialRequired(elements: ElementRecord[], entries: ProgressEnt
   let fromBbs = 0;
   let fromTypical = 0;
   for (const el of elements) {
-    const q = basis === 'planned' ? plannedOf(el) : balanceOf(el, entries);
+    const q = basis === 'planned' ? plannedOf(el) : basis === 'done' ? approvedOf(el, entries) : balanceOf(el, entries);
     materials = addMaterials(materials, materialsFor(q, norms));
     shut += q.SHUT ?? 0;
     brick += q.BRICK ?? 0;

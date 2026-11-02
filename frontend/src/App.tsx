@@ -7,6 +7,7 @@ import { ROLE_LABELS, type Role } from './domain/types';
 import { Dashboard } from './pages/Dashboard';
 import { DprList } from './pages/DprList';
 import { ModelBuilder } from './pages/ModelBuilder';
+import { MaterialVariation } from './pages/MaterialVariation';
 import { ModelRegister } from './pages/ModelRegister';
 import { Projects } from './pages/Projects';
 import { Workspace } from './pages/Workspace';
@@ -17,6 +18,7 @@ const NAV: { page: Page; label: string; icon: string }[] = [
   { page: 'projects', label: 'Projects', icon: '▤' },
   { page: 'workspace', label: 'Work Done', icon: '◈' },
   { page: 'material', label: 'Material Required', icon: '▥' },
+  { page: 'variation', label: 'Material Variation', icon: '±' },
   { page: 'dpr', label: 'Daily Progress Reports', icon: '☰' },
   { page: 'models', label: '3D + BOQ Upload', icon: '⬚' },
   // drawing → model with AI: only for local work; on the server the 3D + BOQ is uploaded
@@ -176,6 +178,7 @@ function Shell() {
           {!noAccess && !empty && page === 'projects' && <Projects />}
           {!noAccess && !empty && page === 'workspace' && <Workspace key="work" mode="work" />}
           {!noAccess && !empty && page === 'material' && <Workspace key="material" mode="material" />}
+          {!noAccess && !empty && page === 'variation' && <MaterialVariation />}
           {!noAccess && !empty && page === 'dpr' && <DprList />}
           {!noAccess && page === 'builder' && !IS_FRAPPE && <ModelBuilder />}
           {!noAccess && page === 'models' && <ModelRegister />}

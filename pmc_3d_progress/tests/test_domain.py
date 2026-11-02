@@ -92,6 +92,16 @@ class ModelValidation(unittest.TestCase):
 		self.assertIn("concreteGrade", errs)
 
 
+	def test_boq_matches_3d(self):
+		doc = sample("security-cabin-a.json")
+		self.assertFalse(any("3D" in w for w in d.validate_model_document(doc)["warnings"]))
+		col = next(e for e in doc["elements"] if e["type"] == "column")
+		col["plannedQuantities"]["CONC"]["quantity"] = 2
+		v = d.validate_model_document(doc)
+		self.assertTrue(v["ok"])
+		self.assertTrue(any(f'"{col["id"]}": planned concrete 2 m³ does not match its 3D size' in w for w in v["warnings"]))
+
+
 class Quantities(unittest.TestCase):
 	def test_over_plan_message_matches_frontend(self):
 		errs = d.check_quantity(C01, CONC, 5, "m3", [], "claim")
