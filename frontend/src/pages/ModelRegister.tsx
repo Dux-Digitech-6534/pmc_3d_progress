@@ -8,6 +8,9 @@ import { downloadText } from '../lib/download';
 import { useApp } from '../state/AppContext';
 import { IS_FRAPPE } from '../config';
 import { parseAndValidateModel } from '../domain/modelValidation';
+import { workbookToModel } from '../domain/excelModel';
+import { readXlsx, XlsxError } from '../data/xlsxReader';
+import excelTemplateUrl from '../assets/PMC-3D-BOQ-Template.xlsx?url';
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 /** The sample offered for download next to the upload: it has the BBS bar sizes and grades. */
@@ -17,6 +20,7 @@ const FORMAT_SAMPLE = SAMPLE_MODELS.find((s) => s.id === 'b') ?? SAMPLE_MODELS[0
 const HOW_MADE: Record<string, string> = {
   'Model Builder (from drawing)': 'Made from drawing',
   'Uploaded JSON file': 'Imported JSON file',
+  'Uploaded Excel file': 'Imported Excel file',
   'Bundled sample (procedural JSON)': 'Sample model',
 };
 
@@ -116,13 +120,29 @@ export function ModelRegister() {
       setResult({ ok: false, errors: [`${file.name} is ${(file.size / 1024 / 1024).toFixed(1)} MB; the prototype accepts model JSON files up to 5 MB.`], warnings: [], sourceName: file.name });
       return;
     }
+    if (/\.xlsx$/i.test(file.name)) {
+      try {
+        const res = workbookToModel(await readXlsx(await file.arrayBuffer()));
+        if (!res.ok) {
+          setResult({ ok: false, errors: res.errors, warnings: [], sourceName: file.name });
+          return;
+        }
+        await runImport(res.text, file.name, 'Uploaded Excel file');
+      } catch (e) {
+        const msg = e instanceof XlsxError ? e.message : `could not be read (${String(e)})`;
+        setResult({ ok: false, errors: [`${file.name}: ${msg}`], warnings: [], sourceName: file.name });
+      }
+      return;
+    }
     if (!/\.json$/i.test(file.name)) {
       setResult({
         ok: false,
         errors: [
           /\.(pdf|jpe?g|png|webp)$/i.test(file.name)
             ? `${file.name} is a drawing, not a 3D + BOQ file.${IS_FRAPPE ? ' Upload the JSON file of the model (see "File format").' : ' Build the model from it in Model Builder, or upload the JSON file of the model.'}`
-            : `${file.name} is not a .json file. Upload the 3D + BOQ JSON file (see "File format").`,
+            : /\.xls$/i.test(file.name)
+              ? `${file.name} is an old Excel (.xls) file. Open it in Excel, save it as .xlsx and upload that.`
+              : `${file.name} is not an Excel (.xlsx) or .json file. Upload the 3D + BOQ Excel file made from the template (see "File format").`,
         ],
         warnings: [],
         sourceName: file.name,
@@ -194,8 +214,9 @@ export function ModelRegister() {
         <section className="card upload-card">
           <h2 className="card-title">Upload 3D + BOQ</h2>
           <p className="muted small">
-            One JSON file with the elements (footings, columns, beams, slabs, walls …), their size and position, and the BOQ quantities of each — concrete,
-            steel (with the BBS bar sizes), shuttering, brickwork, plaster. It becomes the Active model of the project straight away.
+            One Excel file (made from the template) with the elements (footings, columns, beams, slabs, walls …), their size and position, and the BOQ
+            quantities of each — concrete, steel (with the BBS bar sizes), shuttering, brickwork, plaster. The 3D is built from it, and it becomes the Active
+            model of the project straight away. A model JSON file is accepted too.
           </p>
           <div className="import-row">
             <label>
@@ -213,7 +234,7 @@ export function ModelRegister() {
               {busy ? 'Uploading…' : 'Choose file…'}
               <input
                 type="file"
-                accept=".json,application/json"
+                accept=".xlsx,.json,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 hidden
                 disabled={busy}
                 onChange={(e) => {
@@ -224,8 +245,11 @@ export function ModelRegister() {
               />
             </label>
             <button className="link" onClick={() => downloadText(FORMAT_SAMPLE.fileName, sampleText(FORMAT_SAMPLE.json), 'application/json')}>
-              Download a sample file
+              Sample JSON file
             </button>
+            <a className="link" href={excelTemplateUrl} download="PMC-3D-BOQ-Template.xlsx">
+              Download the Excel template
+            </a>
           </div>
           {result && (
             <div className="import-result">
@@ -260,6 +284,25 @@ export function ModelRegister() {
           <details className="format-ref">
             <summary>File format</summary>
             <p className="small">
+              <b>Excel (.xlsx)</b> — the sheets of the template, each sheet and column named as in the template; lengths in metres.
+            </p>
+            <table className="table compact">
+              <thead>
+                <tr>
+                  <th>Sheet</th>
+                  <th>One row per</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Project</td><td>Field / Value: Project ID, Project Name, Location, Client, Model Name, Revision (R01, R02 …), Length Unit (m).</td></tr>
+                <tr><td>Levels</td><td>Level: Level ID, Level Name, Building, Elevation (m).</td></tr>
+                <tr><td>Elements</td><td>Element: Element Code (unique, kept across revisions), Type, Level ID, X and Y (plan centre), Bottom, Length (X), Width (Y), Height, Concrete Grade, and its BOQ — Concrete (m3), Steel (kg), Shuttering (m2), Brickwork (m3), Plaster (m2), Fixing (nos). Blank = not in this element.</td></tr>
+                <tr><td>BBS</td><td>Bar size of an element: Element Code, Bar Dia (mm), Steel (kg); adds up to the element's Steel (kg).</td></tr>
+                <tr><td>Openings</td><td>Door or window in a wall: Wall Code, Offset (m) from the wall centre, Sill (m), Width (m), Height (m).</td></tr>
+              </tbody>
+            </table>
+            <p className="small">
+              <b>JSON</b> —
               Format <code>pmc-procedural-model</code> version 1 (full reference: <code>docs/MODEL_FORMAT.md</code>). Lengths in metres, Y up.
             </p>
             <table className="table compact">

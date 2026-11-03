@@ -1,0 +1,1548 @@
+{
+  "format": "pmc-procedural-model",
+  "formatVersion": 1,
+  "project": {
+    "id": "PMC-TEST-PH1",
+    "name": "Test Pump House",
+    "location": "Test site (dummy data)",
+    "client": "Testing"
+  },
+  "model": {
+    "id": "TEST-PUMP-HOUSE",
+    "name": "Test Pump House — Structure",
+    "revision": "R01",
+    "lengthUnit": "m",
+    "upAxis": "y",
+    "source": {
+      "type": "procedural",
+      "disclaimer": "Test data for trying the upload — not a real design."
+    }
+  },
+  "buildings": [
+    {
+      "id": "BLD-PH",
+      "name": "Pump House"
+    }
+  ],
+  "levels": [
+    {
+      "id": "FDN",
+      "name": "Foundation",
+      "buildingId": "BLD-PH",
+      "elevation": -1
+    },
+    {
+      "id": "GF",
+      "name": "Ground Floor",
+      "buildingId": "BLD-PH",
+      "elevation": 0
+    },
+    {
+      "id": "RF",
+      "name": "Roof",
+      "buildingId": "BLD-PH",
+      "elevation": 3.2
+    }
+  ],
+  "activities": [
+    {
+      "code": "REINF",
+      "name": "Reinforcement",
+      "unit": "kg",
+      "appliesTo": [
+        "footing",
+        "column",
+        "beam",
+        "slab",
+        "lintel"
+      ]
+    },
+    {
+      "code": "SHUT",
+      "name": "Shuttering",
+      "unit": "m2",
+      "appliesTo": [
+        "footing",
+        "column",
+        "beam",
+        "slab",
+        "lintel"
+      ]
+    },
+    {
+      "code": "CONC",
+      "name": "Concreting",
+      "unit": "m3",
+      "appliesTo": [
+        "footing",
+        "column",
+        "beam",
+        "slab",
+        "lintel"
+      ]
+    },
+    {
+      "code": "BRICK",
+      "name": "Brickwork",
+      "unit": "m3",
+      "appliesTo": [
+        "wall"
+      ]
+    },
+    {
+      "code": "PLAST",
+      "name": "Plaster",
+      "unit": "m2",
+      "appliesTo": [
+        "wall"
+      ]
+    },
+    {
+      "code": "FIX",
+      "name": "Fixing",
+      "unit": "nos",
+      "appliesTo": [
+        "door",
+        "window"
+      ]
+    }
+  ],
+  "elements": [
+    {
+      "id": "PH-F-X1Y1",
+      "code": "F-X1Y1",
+      "type": "footing",
+      "buildingId": "BLD-PH",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -3,
+          -0.825,
+          -2
+        ],
+        "size": [
+          1.2,
+          0.45,
+          1.2
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 51.8,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.16,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.648,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M20",
+      "steelByDia": {
+        "10": 20.7,
+        "12": 31.1
+      }
+    },
+    {
+      "id": "PH-F-X2Y1",
+      "code": "F-X2Y1",
+      "type": "footing",
+      "buildingId": "BLD-PH",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0,
+          -0.825,
+          -2
+        ],
+        "size": [
+          1.2,
+          0.45,
+          1.2
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 51.8,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.16,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.648,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M20",
+      "steelByDia": {
+        "10": 20.7,
+        "12": 31.1
+      }
+    },
+    {
+      "id": "PH-F-X3Y1",
+      "code": "F-X3Y1",
+      "type": "footing",
+      "buildingId": "BLD-PH",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3,
+          -0.825,
+          -2
+        ],
+        "size": [
+          1.2,
+          0.45,
+          1.2
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 51.8,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.16,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.648,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M20",
+      "steelByDia": {
+        "10": 20.7,
+        "12": 31.1
+      }
+    },
+    {
+      "id": "PH-F-X1Y2",
+      "code": "F-X1Y2",
+      "type": "footing",
+      "buildingId": "BLD-PH",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -3,
+          -0.825,
+          2
+        ],
+        "size": [
+          1.2,
+          0.45,
+          1.2
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 51.8,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.16,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.648,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M20",
+      "steelByDia": {
+        "10": 20.7,
+        "12": 31.1
+      }
+    },
+    {
+      "id": "PH-F-X2Y2",
+      "code": "F-X2Y2",
+      "type": "footing",
+      "buildingId": "BLD-PH",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0,
+          -0.825,
+          2
+        ],
+        "size": [
+          1.2,
+          0.45,
+          1.2
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 51.8,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.16,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.648,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M20",
+      "steelByDia": {
+        "10": 20.7,
+        "12": 31.1
+      }
+    },
+    {
+      "id": "PH-F-X3Y2",
+      "code": "F-X3Y2",
+      "type": "footing",
+      "buildingId": "BLD-PH",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3,
+          -0.825,
+          2
+        ],
+        "size": [
+          1.2,
+          0.45,
+          1.2
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 51.8,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.16,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.648,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M20",
+      "steelByDia": {
+        "10": 20.7,
+        "12": 31.1
+      }
+    },
+    {
+      "id": "PH-C-X1Y1",
+      "code": "C-X1Y1",
+      "type": "column",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -3,
+          1.3,
+          -2
+        ],
+        "size": [
+          0.3,
+          3.8,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 61.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 4.56,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.342,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 12.3,
+        "12": 24.6,
+        "16": 24.7
+      }
+    },
+    {
+      "id": "PH-C-X2Y1",
+      "code": "C-X2Y1",
+      "type": "column",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0,
+          1.3,
+          -2
+        ],
+        "size": [
+          0.3,
+          3.8,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 61.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 4.56,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.342,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 12.3,
+        "12": 24.6,
+        "16": 24.7
+      }
+    },
+    {
+      "id": "PH-C-X3Y1",
+      "code": "C-X3Y1",
+      "type": "column",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3,
+          1.3,
+          -2
+        ],
+        "size": [
+          0.3,
+          3.8,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 61.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 4.56,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.342,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 12.3,
+        "12": 24.6,
+        "16": 24.7
+      }
+    },
+    {
+      "id": "PH-C-X1Y2",
+      "code": "C-X1Y2",
+      "type": "column",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -3,
+          1.3,
+          2
+        ],
+        "size": [
+          0.3,
+          3.8,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 61.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 4.56,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.342,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 12.3,
+        "12": 24.6,
+        "16": 24.7
+      }
+    },
+    {
+      "id": "PH-C-X2Y2",
+      "code": "C-X2Y2",
+      "type": "column",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0,
+          1.3,
+          2
+        ],
+        "size": [
+          0.3,
+          3.8,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 61.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 4.56,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.342,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 12.3,
+        "12": 24.6,
+        "16": 24.7
+      }
+    },
+    {
+      "id": "PH-C-X3Y2",
+      "code": "C-X3Y2",
+      "type": "column",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3,
+          1.3,
+          2
+        ],
+        "size": [
+          0.3,
+          3.8,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 61.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 4.56,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.342,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 12.3,
+        "12": 24.6,
+        "16": 24.7
+      }
+    },
+    {
+      "id": "PH-PB-X1Y1-X2Y1",
+      "code": "PB-X1Y1-X2Y1",
+      "type": "beam",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          0,
+          -2
+        ],
+        "size": [
+          2.7,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 27.9,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.24,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.186,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 7,
+        "12": 12.6,
+        "16": 8.3
+      }
+    },
+    {
+      "id": "PH-PB-X2Y1-X3Y1",
+      "code": "PB-X2Y1-X3Y1",
+      "type": "beam",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          1.5,
+          0,
+          -2
+        ],
+        "size": [
+          2.7,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 27.9,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.24,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.186,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 7,
+        "12": 12.6,
+        "16": 8.3
+      }
+    },
+    {
+      "id": "PH-PB-X1Y2-X2Y2",
+      "code": "PB-X1Y2-X2Y2",
+      "type": "beam",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          0,
+          2
+        ],
+        "size": [
+          2.7,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 27.9,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.24,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.186,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 7,
+        "12": 12.6,
+        "16": 8.3
+      }
+    },
+    {
+      "id": "PH-PB-X2Y2-X3Y2",
+      "code": "PB-X2Y2-X3Y2",
+      "type": "beam",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          1.5,
+          0,
+          2
+        ],
+        "size": [
+          2.7,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 27.9,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.24,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.186,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 7,
+        "12": 12.6,
+        "16": 8.3
+      }
+    },
+    {
+      "id": "PH-PB-X1Y1-X1Y2",
+      "code": "PB-X1Y1-X1Y2",
+      "type": "beam",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -3,
+          0,
+          0
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.7
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 38.3,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 3.07,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.255,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 9.6,
+        "12": 17.2,
+        "16": 11.5
+      }
+    },
+    {
+      "id": "PH-PB-X2Y1-X2Y2",
+      "code": "PB-X2Y1-X2Y2",
+      "type": "beam",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.7
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 38.3,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 3.07,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.255,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 9.6,
+        "12": 17.2,
+        "16": 11.5
+      }
+    },
+    {
+      "id": "PH-PB-X3Y1-X3Y2",
+      "code": "PB-X3Y1-X3Y2",
+      "type": "beam",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3,
+          0,
+          0
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.7
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 38.3,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 3.07,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.255,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 9.6,
+        "12": 17.2,
+        "16": 11.5
+      }
+    },
+    {
+      "id": "PH-RB-X1Y1-X2Y1",
+      "code": "RB-X1Y1-X2Y1",
+      "type": "beam",
+      "buildingId": "BLD-PH",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          3.05,
+          -2
+        ],
+        "size": [
+          2.7,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 27.9,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.24,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.186,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 7,
+        "12": 12.6,
+        "16": 8.3
+      }
+    },
+    {
+      "id": "PH-RB-X2Y1-X3Y1",
+      "code": "RB-X2Y1-X3Y1",
+      "type": "beam",
+      "buildingId": "BLD-PH",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          1.5,
+          3.05,
+          -2
+        ],
+        "size": [
+          2.7,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 27.9,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.24,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.186,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 7,
+        "12": 12.6,
+        "16": 8.3
+      }
+    },
+    {
+      "id": "PH-RB-X1Y2-X2Y2",
+      "code": "RB-X1Y2-X2Y2",
+      "type": "beam",
+      "buildingId": "BLD-PH",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          3.05,
+          2
+        ],
+        "size": [
+          2.7,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 27.9,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.24,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.186,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 7,
+        "12": 12.6,
+        "16": 8.3
+      }
+    },
+    {
+      "id": "PH-RB-X2Y2-X3Y2",
+      "code": "RB-X2Y2-X3Y2",
+      "type": "beam",
+      "buildingId": "BLD-PH",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          1.5,
+          3.05,
+          2
+        ],
+        "size": [
+          2.7,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 27.9,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 2.24,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.186,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 7,
+        "12": 12.6,
+        "16": 8.3
+      }
+    },
+    {
+      "id": "PH-RB-X1Y1-X1Y2",
+      "code": "RB-X1Y1-X1Y2",
+      "type": "beam",
+      "buildingId": "BLD-PH",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -3,
+          3.05,
+          0
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.7
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 38.3,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 3.07,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.255,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 9.6,
+        "12": 17.2,
+        "16": 11.5
+      }
+    },
+    {
+      "id": "PH-RB-X2Y1-X2Y2",
+      "code": "RB-X2Y1-X2Y2",
+      "type": "beam",
+      "buildingId": "BLD-PH",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0,
+          3.05,
+          0
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.7
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 38.3,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 3.07,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.255,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 9.6,
+        "12": 17.2,
+        "16": 11.5
+      }
+    },
+    {
+      "id": "PH-RB-X3Y1-X3Y2",
+      "code": "RB-X3Y1-X3Y2",
+      "type": "beam",
+      "buildingId": "BLD-PH",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3,
+          3.05,
+          0
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.7
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 38.3,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 3.07,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.255,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 9.6,
+        "12": 17.2,
+        "16": 11.5
+      }
+    },
+    {
+      "id": "PH-S-ROOF",
+      "code": "SL-ROOF",
+      "type": "slab",
+      "buildingId": "BLD-PH",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0,
+          3.263,
+          0
+        ],
+        "size": [
+          6.3,
+          0.125,
+          4.3
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 338.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 27.09,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 3.386,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M25",
+      "steelByDia": {
+        "8": 152.4,
+        "10": 186.2
+      }
+    },
+    {
+      "id": "PH-W-X1Y1-X2Y1",
+      "code": "W-X1Y1-X2Y1",
+      "type": "wall",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          -1.5,
+          1.525,
+          -2
+        ],
+        "size": [
+          2.7,
+          2.75,
+          0.23
+        ],
+        "openings": [
+          {
+            "center": 0,
+            "bottom": 0,
+            "width": 1,
+            "height": 2.1
+          }
+        ]
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 1.225,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 10.65,
+          "unit": "m2"
+        }
+      }
+    },
+    {
+      "id": "PH-W-X2Y1-X3Y1",
+      "code": "W-X2Y1-X3Y1",
+      "type": "wall",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          1.5,
+          1.525,
+          -2
+        ],
+        "size": [
+          2.7,
+          2.75,
+          0.23
+        ],
+        "openings": []
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 1.708,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 14.85,
+          "unit": "m2"
+        }
+      }
+    },
+    {
+      "id": "PH-W-X1Y2-X2Y2",
+      "code": "W-X1Y2-X2Y2",
+      "type": "wall",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          -1.5,
+          1.525,
+          2
+        ],
+        "size": [
+          2.7,
+          2.75,
+          0.23
+        ],
+        "openings": []
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 1.708,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 14.85,
+          "unit": "m2"
+        }
+      }
+    },
+    {
+      "id": "PH-W-X2Y2-X3Y2",
+      "code": "W-X2Y2-X3Y2",
+      "type": "wall",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          1.5,
+          1.525,
+          2
+        ],
+        "size": [
+          2.7,
+          2.75,
+          0.23
+        ],
+        "openings": [
+          {
+            "center": 0,
+            "bottom": 0.9,
+            "width": 1.2,
+            "height": 1.2
+          }
+        ]
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 1.377,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 11.97,
+          "unit": "m2"
+        }
+      }
+    },
+    {
+      "id": "PH-W-X1Y1-X1Y2",
+      "code": "W-X1Y1-X1Y2",
+      "type": "wall",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          -3,
+          1.525,
+          0
+        ],
+        "size": [
+          0.23,
+          2.75,
+          3.7
+        ],
+        "openings": []
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 2.34,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 20.35,
+          "unit": "m2"
+        }
+      }
+    },
+    {
+      "id": "PH-W-X3Y1-X3Y2",
+      "code": "W-X3Y1-X3Y2",
+      "type": "wall",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          3,
+          1.525,
+          0
+        ],
+        "size": [
+          0.23,
+          2.75,
+          3.7
+        ],
+        "openings": [
+          {
+            "center": 0,
+            "bottom": 0.9,
+            "width": 1,
+            "height": 1
+          }
+        ]
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 2.11,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 18.35,
+          "unit": "m2"
+        }
+      }
+    },
+    {
+      "id": "PH-D-01",
+      "code": "D-01",
+      "type": "door",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          1.2,
+          -2
+        ],
+        "size": [
+          1,
+          2.1,
+          0.05
+        ]
+      },
+      "plannedQuantities": {
+        "FIX": {
+          "quantity": 1,
+          "unit": "nos"
+        }
+      }
+    },
+    {
+      "id": "PH-WN-01",
+      "code": "WN-01",
+      "type": "window",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          1.5,
+          1.65,
+          2
+        ],
+        "size": [
+          1.2,
+          1.2,
+          0.05
+        ]
+      },
+      "plannedQuantities": {
+        "FIX": {
+          "quantity": 1,
+          "unit": "nos"
+        }
+      }
+    },
+    {
+      "id": "PH-WN-02",
+      "code": "WN-02",
+      "type": "window",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3,
+          1.55,
+          0
+        ],
+        "size": [
+          0.05,
+          1,
+          1
+        ]
+      },
+      "plannedQuantities": {
+        "FIX": {
+          "quantity": 1,
+          "unit": "nos"
+        }
+      }
+    },
+    {
+      "id": "PH-L-D01",
+      "code": "L-D01",
+      "type": "lintel",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          2.4,
+          -2
+        ],
+        "size": [
+          1.4,
+          0.15,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 5.8,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 0.74,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.048,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M20",
+      "steelByDia": {
+        "8": 2.3,
+        "10": 3.5
+      }
+    },
+    {
+      "id": "PH-L-WN01",
+      "code": "L-WN01",
+      "type": "lintel",
+      "buildingId": "BLD-PH",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          1.5,
+          2.4,
+          2
+        ],
+        "size": [
+          1.6,
+          0.15,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "REINF": {
+          "quantity": 6.6,
+          "unit": "kg"
+        },
+        "SHUT": {
+          "quantity": 0.85,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.055,
+          "unit": "m3"
+        }
+      },
+      "concreteGrade": "M20",
+      "steelByDia": {
+        "8": 2.6,
+        "10": 4
+      }
+    }
+  ]
+}

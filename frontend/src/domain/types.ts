@@ -144,7 +144,7 @@ export interface Project {
   createdAt: string;
 }
 
-export type ModelSourceType = 'Bundled sample (procedural JSON)' | 'Uploaded JSON file' | 'Model Builder (from drawing)';
+export type ModelSourceType = 'Bundled sample (procedural JSON)' | 'Uploaded JSON file' | 'Uploaded Excel file' | 'Model Builder (from drawing)';
 /**
  * Active = shown in 3D and used for progress. Pending Approval = planning submitted by a site
  * engineer, waiting for the PMC reviewer; Returned = sent back with remarks. Neither is used for
