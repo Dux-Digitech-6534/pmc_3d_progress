@@ -25,7 +25,7 @@ describe('Excel 3D + BOQ upload', () => {
     expect(v.errors).toEqual([]);
     expect(v.warnings).toEqual([]);
     const doc = JSON.parse(res.text);
-    expect(doc.project).toMatchObject({ id: 'PMC-TEST-PH1', name: 'Test Pump House' });
+    expect(doc.project).toMatchObject({ id: 'PMC-PH-001', name: 'Pump House' });
     expect(doc.elements).toHaveLength(38);
     const col = doc.elements.find((e: { code: string }) => e.code === 'C-X1Y1');
     expect(col.geometry).toEqual({ shape: 'box', position: [-3, 1.3, -2], size: [0.3, 3.8, 0.3] });
