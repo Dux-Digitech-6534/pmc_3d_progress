@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { MATERIALS, normsOf, roundMaterial } from '../domain/materials';
 import { materialRequired } from '../domain/materialRequired';
-import { formatQty } from '../domain/progress';
+import { computeActivityProgress, formatQty } from '../domain/progress';
 import type { ElementRecord, ProgressEntry } from '../domain/types';
 import { useApp } from '../state/AppContext';
 import { MaterialRequestCard } from './MaterialRequestCard';
@@ -26,6 +26,14 @@ export function MaterialRequiredPanel({
   const { data } = useApp();
   const norms = normsOf(data?.model?.document);
   const req = useMemo(() => materialRequired(selected, entries, norms, 'balance'), [selected, entries, norms]);
+  // elements whose planned work is all approved: nothing more to bring for them
+  const done = useMemo(() => {
+    const acts = data?.model?.document?.activities ?? [];
+    return selected.filter((el) => {
+      const used = acts.map((a) => computeActivityProgress(el, a, entries)).filter((p) => p.planned !== null);
+      return used.length > 0 && used.every((p) => p.status === 'complete');
+    });
+  }, [data?.model, selected, entries]);
 
   if (!selected.length) {
     return (
@@ -67,11 +75,31 @@ export function MaterialRequiredPanel({
         {norms.wastagePct ? <p className="hint">Includes {norms.wastagePct}% wastage.</p> : null}
       </div>
 
-      {nothing && (
+      {nothing && done.length === selected.length ? (
         <div className="panel-section">
-          <p className="muted">No material is required for these elements.</p>
+          <div className="alert alert-success">
+            <b>Work already done.</b> All the work of {selected.length === 1 ? 'this element' : `these ${selected.length} elements`} is approved (100%), so no
+            more material is needed.
+          </div>
         </div>
-      )}
+      ) : nothing ? (
+        <div className="panel-section">
+          <p className="muted">
+            No material is needed for these elements
+            {done.length
+              ? ` — ${done.map((e) => e.code).join(', ')} already done; the others have no concrete, steel or masonry in their BOQ`
+              : ' — their BOQ has no concrete, steel or masonry'}
+            .
+          </p>
+        </div>
+      ) : done.length > 0 ? (
+        <div className="panel-section">
+          <p className="hint">
+            Already done, not counted below: {done.slice(0, 12).map((e) => e.code).join(', ')}
+            {done.length > 12 ? ` +${done.length - 12} more` : ''}.
+          </p>
+        </div>
+      ) : null}
 
       {req.steel.length > 0 && (
         <div className="panel-section">
