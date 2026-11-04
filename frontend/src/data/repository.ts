@@ -50,8 +50,6 @@ export interface PmcRepository {
    * Material Transfer) and Purchase Receipts that carry the project, in the item's stock unit.
    */
   listMaterialSent(erpProjectId: string, fromDate?: string, toDate?: string): Promise<SentLine[]>;
-  /** ERPNext stock ledger lines that carry a project (in +, out −), up to a date. */
-  listStockMoves(toDate?: string): Promise<StockMove[]>;
   /** Enabled ERPNext items (code, name, stock unit), to put on a Material Request. */
   listErpItems(): Promise<ErpItem[]>;
   listErpCompanies(): Promise<string[]>;
@@ -61,16 +59,6 @@ export interface PmcRepository {
   createMaterialRequest(input: MaterialRequestInput): Promise<{ name: string; state: string }>;
   /** Send a saved (draft) Material Request on: its ERPNext workflow's first step, or a plain submit without a workflow. */
   submitMaterialRequest(name: string): Promise<{ name: string; state: string }>;
-}
-
-export interface StockMove {
-  project: string;
-  warehouse: string;
-  itemCode: string;
-  /** + received into the warehouse, − issued / consumed from it (stock unit). */
-  qty: number;
-  uom: string;
-  date: string;
 }
 
 export interface ErpProject {

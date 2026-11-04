@@ -7,7 +7,6 @@ import {
   type ImportModelInput,
   type ErpItem,
   type ErpProject,
-  type StockMove,
   type MaterialRequestInput,
   type ImportModelOutcome,
   type PmcRepository,
@@ -145,24 +144,6 @@ export class FrappeRepository implements PmcRepository {
       qty: Number(l.qty) || 0,
       uom: l.uom || '',
     }));
-  }
-
-  async listStockMoves(toDate?: string): Promise<StockMove[]> {
-    const rows = await callMethod<{ project: string; warehouse: string; item_code: string; actual_qty: number; stock_uom: string; posting_date: string }[]>(
-      'frappe.client.get_list',
-      {
-        doctype: 'Stock Ledger Entry',
-        fields: ['project', 'warehouse', 'item_code', 'actual_qty', 'stock_uom', 'posting_date'],
-        filters: [
-          ['Stock Ledger Entry', 'is_cancelled', '=', 0],
-          ['Stock Ledger Entry', 'project', 'is', 'set'],
-          ...(toDate ? [['Stock Ledger Entry', 'posting_date', '<=', toDate]] : []),
-        ],
-        limit_page_length: 0,
-      },
-      'GET',
-    );
-    return rows.map((r) => ({ project: r.project, warehouse: r.warehouse, itemCode: r.item_code, qty: Number(r.actual_qty) || 0, uom: r.stock_uom || '', date: r.posting_date }));
   }
 
   async listErpItems(): Promise<ErpItem[]> {

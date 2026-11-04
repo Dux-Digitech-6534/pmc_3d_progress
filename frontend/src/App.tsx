@@ -9,7 +9,6 @@ import { DprList } from './pages/DprList';
 import { ModelBuilder } from './pages/ModelBuilder';
 import { MaterialVariation } from './pages/MaterialVariation';
 import { ModelRegister } from './pages/ModelRegister';
-import { ProjectStock } from './pages/ProjectStock';
 import { Projects } from './pages/Projects';
 import { Workspace } from './pages/Workspace';
 import { AppProvider, useApp, type Page } from './state/AppContext';
@@ -20,7 +19,6 @@ const NAV: { page: Page; label: string; icon: string }[] = [
   { page: 'workspace', label: 'Work Done', icon: '◈' },
   { page: 'material', label: 'Material Required', icon: '▥' },
   { page: 'variation', label: 'Material Variation', icon: '±' },
-  { page: 'stock', label: 'Project Stock', icon: '▣' },
   { page: 'dpr', label: 'Daily Progress Reports', icon: '☰' },
   { page: 'models', label: '3D + BOQ Upload', icon: '⬚' },
   // drawing → model with AI: only for local work; on the server the 3D + BOQ is uploaded
@@ -44,7 +42,7 @@ function Shell() {
   const [resetting, setResetting] = useState(false);
   const [demoBusy, setDemoBusy] = useState(false);
   // No project yet: every page except the ones that create a model shows the welcome screen.
-  const empty = !loading && projects.length === 0 && page !== 'builder' && page !== 'models' && page !== 'stock';
+  const empty = !loading && projects.length === 0 && page !== 'builder' && page !== 'models';
 
   return (
     <div className="app">
@@ -184,7 +182,6 @@ function Shell() {
           {!noAccess && !empty && page === 'dpr' && <DprList />}
           {!noAccess && page === 'builder' && !IS_FRAPPE && <ModelBuilder />}
           {!noAccess && page === 'models' && <ModelRegister />}
-          {!noAccess && page === 'stock' && <ProjectStock />}
         </main>
       </div>
 

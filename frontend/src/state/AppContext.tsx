@@ -6,7 +6,7 @@ import { getSession, type SessionInfo } from '../data/frappeRepository';
 import { errorMessages, type PmcRepository } from '../data/repository';
 import type { ElementRecord, ModelRecord, ProgressEntry, Project, Role } from '../domain/types';
 
-export type Page = 'dashboard' | 'projects' | 'workspace' | 'material' | 'variation' | 'stock' | 'dpr' | 'models' | 'builder';
+export type Page = 'dashboard' | 'projects' | 'workspace' | 'material' | 'variation' | 'dpr' | 'models' | 'builder';
 
 export interface ProjectData {
   project: Project;

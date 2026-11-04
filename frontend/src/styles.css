@@ -2557,8 +2557,3 @@ details.advanced[open] > summary {
   margin-top: 8px;
   font-size: 13px;
 }
-
-/* project stock: a balance below zero means more was issued than received with the project */
-.stock-table td.neg {
-  color: var(--danger, #b42318);
-}
