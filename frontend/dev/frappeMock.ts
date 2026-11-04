@@ -76,6 +76,19 @@ export function frappeMock(): Plugin {
             const company = (JSON.parse(q.filters || '[]') as unknown[][]).find((f) => f[1] === 'company')?.[3] as string;
             return send(res, 200, { message: (await r.listErpWarehouses(company)).map((name) => ({ name })) });
           }
+          if (q.doctype === 'Stock Ledger Entry') {
+            const to = (JSON.parse(q.filters || '[]') as unknown[][]).find((f) => f[1] === 'posting_date')?.[3] as string | undefined;
+            return send(res, 200, {
+              message: (await r.listStockMoves(to)).map((m: { project: string; warehouse: string; itemCode: string; qty: number; uom: string; date: string }) => ({
+                project: m.project,
+                warehouse: m.warehouse,
+                item_code: m.itemCode,
+                actual_qty: m.qty,
+                stock_uom: m.uom,
+                posting_date: m.date,
+              })),
+            });
+          }
           const orf = JSON.parse(q.or_filters || '[]') as unknown[][];
           const flt = JSON.parse(q.filters || '[]') as unknown[][];
           const date = (op: string) => flt.find((f) => f[1] === 'posting_date' && f[2] === op)?.[3] as string | undefined;

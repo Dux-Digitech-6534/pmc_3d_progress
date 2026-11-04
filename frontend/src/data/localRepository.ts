@@ -10,6 +10,7 @@ import {
   RepositoryError,
   type ErpItem,
   type ErpProject,
+  type StockMove,
   type MaterialRequestInput,
   type ImportModelInput,
   type ImportModelOutcome,
@@ -682,7 +683,10 @@ export class LocalRepository implements PmcRepository {
 
   // No ERPNext in the browser: one demo ERP project with a few material issues, to try the variation report.
   listErpProjects(): Promise<ErpProject[]> {
-    return this.op(() => [{ id: 'ERP-DEMO', name: 'Demo ERP project (sample issues)' }]);
+    return this.op(() => [
+      { id: 'ERP-DEMO', name: 'Demo ERP project (sample issues)' },
+      { id: 'ERP-DEMO-2', name: 'Demo ERP project 2' },
+    ]);
   }
 
   listMaterialSent(erpProjectId: string, fromDate?: string, toDate?: string): Promise<SentLine[]> {
@@ -698,6 +702,24 @@ export class LocalRepository implements PmcRepository {
         line('MAT-PRE-DEMO-1', '2026-10-25', '20 mm Metal', 1.2, 'Cum'),
         line('MAT-STE-DEMO-3', '2026-10-28', 'Diesel', 40, 'Litre'),
       ].filter((l) => (!fromDate || l.date >= fromDate) && (!toDate || l.date <= toDate));
+    });
+  }
+
+  listStockMoves(toDate?: string): Promise<StockMove[]> {
+    return this.op(() => {
+      const m = (project: string, warehouse: string, itemCode: string, qty: number, uom: string, date: string): StockMove => ({ project, warehouse, itemCode, qty, uom, date });
+      return [
+        m('ERP-DEMO', 'Site Store - Demo', 'TMT-08', 120, 'Kg', '2026-10-20'),
+        m('ERP-DEMO', 'Site Store - Demo', 'TMT-08', -60, 'Kg', '2026-10-22'),
+        m('ERP-DEMO', 'Site Store - Demo', 'TMT-12', 300, 'Kg', '2026-10-20'),
+        m('ERP-DEMO', 'Site Store - Demo', 'TMT-16', 0.25, 'MT', '2026-10-24'),
+        m('ERP-DEMO', 'Site Store - Demo', 'OPC-53', 80, 'Bag', '2026-10-24'),
+        m('ERP-DEMO', 'Site Store - Demo', 'OPC-53', -30, 'Bag', '2026-10-26'),
+        m('ERP-DEMO', 'Site Store - Demo', 'SAND-R', 200, 'Cft', '2026-10-25'),
+        m('ERP-DEMO', 'Site Store - Demo', 'AGG-20', 3, 'Cum', '2026-10-25'),
+        m('ERP-DEMO-2', 'Main Store - Demo', 'BRICK-R', 5000, 'Nos', '2026-10-27'),
+        m('ERP-DEMO-2', 'Main Store - Demo', 'DIESEL', 40, 'Litre', '2026-10-28'),
+      ].filter((l) => !toDate || l.date <= toDate);
     });
   }
 
