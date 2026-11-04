@@ -8,6 +8,9 @@ import { variationReport, type SentLine, type VariationStatus } from '../domain/
 import { formatQty } from '../domain/progress';
 import { useApp } from '../state/AppContext';
 
+/** Variation still counted as OK: 2–4 % over is normal on site (laps, wastage), per the PMC. */
+const TOLERANCE_PCT = 5;
+
 const STATUS_TEXT: Record<VariationStatus, string> = {
   ok: 'OK',
   excess: 'More sent',
@@ -37,7 +40,6 @@ export function MaterialVariation() {
   const [erpProject, setErpProject] = useState(() => remembered(projectId));
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const [tolerance, setTolerance] = useState('5');
   const [lines, setLines] = useState<SentLine[] | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -67,7 +69,7 @@ export function MaterialVariation() {
   }, [repo, erpProject, from, to]);
 
   const norms = normsOf(data?.model?.document);
-  const tol = Number(tolerance) >= 0 ? Number(tolerance) : 5;
+  const tol = TOLERANCE_PCT;
   // what the approved work done (in the dates) should have used
   const needed = useMemo(() => {
     const approved = (data?.entries ?? []).filter((e) => e.status === 'Approved' && (!from || e.date >= from) && (!to || e.date <= to));
@@ -100,7 +102,7 @@ export function MaterialVariation() {
       <section className="card">
         <div className="variation-filters">
           <label>
-            ERPNext project
+            Project
             <select
               value={erpProject}
               onChange={(e) => {
@@ -131,7 +133,7 @@ export function MaterialVariation() {
           <label>
             OK within ±
             <span className="inline">
-              <input type="number" min={0} max={50} step="any" value={tolerance} onChange={(e) => setTolerance(e.target.value)} style={{ width: 70 }} /> %
+              <input type="text" value={TOLERANCE_PCT} readOnly aria-readonly="true" title="Fixed: a few % over is normal on site (laps, wastage)" style={{ width: 70 }} /> %
             </span>
           </label>
         </div>
@@ -144,7 +146,7 @@ export function MaterialVariation() {
 
       <ErrorList errors={errors} title="Could not read the ERP" />
       {!erpProject ? (
-        <EmptyState title="Choose the ERPNext project">Pick the ERPNext project whose material issues and receipts belong to {data.project.name}.</EmptyState>
+        <EmptyState title="Choose the project">Pick the ERPNext project whose material issues and receipts belong to {data.project.name}.</EmptyState>
       ) : loading || !report ? (
         <Spinner label="Reading ERPNext…" />
       ) : (
