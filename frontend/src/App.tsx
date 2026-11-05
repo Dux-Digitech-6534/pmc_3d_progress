@@ -13,16 +13,17 @@ import { Projects } from './pages/Projects';
 import { Workspace } from './pages/Workspace';
 import { AppProvider, useApp, type Page } from './state/AppContext';
 
+// icon = SVG path (24×24, stroked)
 const NAV: { page: Page; label: string; icon: string }[] = [
-  { page: 'dashboard', label: 'Dashboard', icon: '▦' },
-  { page: 'projects', label: 'Projects', icon: '▤' },
-  { page: 'workspace', label: 'Work Done', icon: '◈' },
-  { page: 'material', label: 'Material Required', icon: '▥' },
-  { page: 'variation', label: 'Material Variation', icon: '±' },
-  { page: 'dpr', label: 'Daily Progress Reports', icon: '☰' },
-  { page: 'models', label: '3D + BOQ Upload', icon: '⬚' },
+  { page: 'dashboard', label: 'Dashboard', icon: 'M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z' },
+  { page: 'projects', label: 'Projects', icon: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
+  { page: 'workspace', label: 'Work Done', icon: 'M12 2 3 7v10l9 5 9-5V7zM12 12l9-5M12 12 3 7M12 12v10' },
+  { page: 'material', label: 'Material Required', icon: 'M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6' },
+  { page: 'variation', label: 'Material Variation', icon: 'M4 19V5M4 19h16M8 15l3-4 3 2 5-6' },
+  { page: 'dpr', label: 'Daily Progress Reports', icon: 'M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6' },
+  { page: 'models', label: '3D + BOQ Upload', icon: 'M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3' },
   // drawing → model with AI: only for local work; on the server the 3D + BOQ is uploaded
-  ...(IS_FRAPPE ? [] : [{ page: 'builder' as Page, label: 'Model Builder', icon: '✎' }]),
+  ...(IS_FRAPPE ? [] : [{ page: 'builder' as Page, label: 'Model Builder', icon: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4' }]),
 ];
 
 export default function App() {
@@ -61,9 +62,11 @@ function Shell() {
             <li key={n.page}>
               <button className={page === n.page ? 'active' : ''} onClick={() => go(n.page)} aria-current={page === n.page ? 'page' : undefined}>
                 <span className="nav-icon" aria-hidden>
-                  {n.icon}
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                    <path d={n.icon} />
+                  </svg>
                 </span>
-                {n.label}
+                <span className="nav-label">{n.label}</span>
               </button>
             </li>
           ))}

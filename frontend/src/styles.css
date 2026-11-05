@@ -3070,3 +3070,354 @@ details.advanced[open] > summary {
     transition: none;
   }
 }
+
+/* ================= theme v2: the dashboard look on every page ================= */
+:root {
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(15, 39, 71, 0.05), 0 4px 14px rgba(15, 39, 71, 0.05);
+  --shadow-hover: 0 12px 26px rgba(15, 39, 71, 0.12);
+}
+
+/* ---- sidebar menu ---- */
+.sidebar {
+  background: radial-gradient(circle at 0% 0%, rgba(45, 212, 191, 0.14), transparent 40%), linear-gradient(180deg, #0f2747 0%, #0c2140 60%, #0a1b35 100%);
+  box-shadow: 2px 0 18px rgba(10, 27, 53, 0.25);
+  z-index: 2;
+}
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 16px;
+  color: #fff;
+  background: linear-gradient(135deg, #2dd4bf, #0f766e);
+  box-shadow: 0 4px 14px rgba(45, 212, 191, 0.35);
+}
+.sidebar li + li {
+  margin-top: 3px;
+}
+.sidebar li button {
+  position: relative;
+  border-radius: 10px;
+  color: #c5d6ea;
+  transition: background 0.2s var(--ease), color 0.2s, transform 0.2s var(--ease);
+}
+.sidebar li button .nav-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #5eead4;
+  background: rgba(255, 255, 255, 0.06);
+  transition: background 0.2s, color 0.2s, transform 0.2s var(--ease);
+}
+.sidebar li button:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  transform: translateX(3px);
+}
+.sidebar li button:hover .nav-icon {
+  background: rgba(45, 212, 191, 0.18);
+  transform: scale(1.06);
+}
+.sidebar li button.active {
+  color: #fff;
+  background: linear-gradient(90deg, rgba(45, 212, 191, 0.24), rgba(45, 212, 191, 0.06));
+  box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.25);
+  transform: none;
+}
+.sidebar li button.active .nav-icon {
+  color: #fff;
+  background: linear-gradient(135deg, #2dd4bf, #0f766e);
+  box-shadow: 0 4px 12px rgba(45, 212, 191, 0.35);
+}
+@media (min-width: 1081px) {
+  .sidebar li button.active::before {
+    content: '';
+    position: absolute;
+    left: -10px;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: #2dd4bf;
+  }
+}
+
+/* ---- top bar ---- */
+.topbar {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 10px rgba(15, 39, 71, 0.05);
+  position: relative;
+  z-index: 1;
+}
+.topbar select {
+  border-radius: 8px;
+}
+
+/* ---- pages: full width, soft entrance ---- */
+.page {
+  max-width: none;
+}
+.page > * {
+  animation: dash-in 0.4s var(--ease) both;
+}
+.page > *:nth-child(2) {
+  animation-delay: 0.05s;
+}
+.page > *:nth-child(3) {
+  animation-delay: 0.1s;
+}
+.page > *:nth-child(n + 4) {
+  animation-delay: 0.15s;
+}
+
+/* ---- page header = compact banner (like the dashboard hero) ---- */
+.page-head {
+  position: relative;
+  overflow: hidden;
+  align-items: center;
+  padding: 20px 24px;
+  margin-bottom: 18px;
+  border-radius: 14px;
+  color: #fff;
+  background: radial-gradient(circle at 90% -30%, rgba(45, 212, 191, 0.32), transparent 45%), linear-gradient(120deg, #0f2747 0%, #1b3a63 60%, #0f766e 140%);
+  box-shadow: 0 10px 26px rgba(15, 39, 71, 0.16);
+}
+.page-head::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 26px 26px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 40%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 40%, #000 100%);
+  pointer-events: none;
+}
+.page-head > * {
+  position: relative;
+  z-index: 1;
+}
+.page-head h1 {
+  color: #fff;
+  font-size: 24px;
+  letter-spacing: -0.01em;
+}
+.page-head p,
+.page-head .muted {
+  color: rgba(255, 255, 255, 0.8);
+  max-width: 900px;
+}
+.page-head b {
+  color: #fff;
+}
+.page-head .btn {
+  background: #fff;
+  color: var(--navy);
+  border-color: #fff;
+}
+.page-head .btn-primary {
+  background: linear-gradient(135deg, #2dd4bf, #0f766e);
+  border-color: transparent;
+  color: #fff;
+}
+.page-head .btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #fff;
+}
+.page-head .btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #34e0cb, #0b5f58);
+}
+
+/* ---- cards ---- */
+.card {
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 18px;
+  transition: box-shadow 0.25s var(--ease), border-color 0.25s;
+}
+.card:hover {
+  box-shadow: 0 8px 22px rgba(15, 39, 71, 0.08);
+}
+.card-title {
+  font-size: 17px;
+  margin-bottom: 10px;
+}
+.table-card {
+  padding: 0;
+}
+
+/* ---- tables ---- */
+.table th {
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  padding: 10px 12px;
+}
+.table td {
+  padding: 10px 12px;
+}
+.table tbody tr {
+  transition: background 0.15s;
+}
+.table tbody tr:hover {
+  background: #f1f8f7;
+}
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ---- buttons ---- */
+.btn {
+  border-radius: 8px;
+  transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease), background 0.18s, border-color 0.18s, color 0.18s;
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 39, 71, 0.1);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #14b8a6, #0f766e);
+  border-color: #0f766e;
+  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.25);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0d9488, #0b5f58);
+  box-shadow: 0 6px 16px rgba(15, 118, 110, 0.3);
+}
+.btn-ghost:hover:not(:disabled) {
+  box-shadow: none;
+}
+.link {
+  transition: color 0.15s;
+}
+
+/* ---- form controls ---- */
+input,
+select,
+textarea {
+  border-radius: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input:hover:not(:disabled):not([readonly]),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) {
+  border-color: #94a7bc;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.18);
+}
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--teal);
+  box-shadow: none;
+}
+
+/* ---- badges, alerts, empty states, modals ---- */
+.badge {
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.alert {
+  border-radius: 10px;
+}
+.empty {
+  border-radius: var(--radius);
+}
+.modal {
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(15, 39, 71, 0.3);
+  animation: modal-in 0.22s var(--ease) both;
+}
+.modal-backdrop {
+  backdrop-filter: blur(2px);
+  animation: fade-in 0.2s ease both;
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---- Work Done / Material Required workspace panels ---- */
+.ws-left,
+.ws-right {
+  box-shadow: 0 0 18px rgba(15, 39, 71, 0.05);
+}
+.ws-right-title {
+  font-size: 16px;
+  padding: 14px 16px;
+  background: linear-gradient(90deg, #f0faf8, #fff);
+}
+.ws-tabs button {
+  transition: color 0.18s, border-color 0.18s, background 0.18s;
+}
+.ws-tabs button:hover {
+  background: var(--surface-2);
+  color: var(--navy);
+}
+.panel-section {
+  transition: background 0.2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page > *,
+  .modal,
+  .modal-backdrop {
+    animation: none;
+  }
+  .btn,
+  .sidebar li button,
+  .card {
+    transition: none;
+  }
+}
+
+/* ---- projects + element picker hover ---- */
+.project-grid {
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+}
+.project-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+}
+.project-card {
+  transition: transform 0.22s var(--ease), box-shadow 0.22s var(--ease), border-color 0.22s;
+}
+.picker-tile {
+  border-radius: 10px;
+  transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease), border-color 0.18s, background 0.18s;
+}
+.picker-tile:hover {
+  transform: translateY(-2px);
+  border-color: var(--teal);
+  box-shadow: 0 6px 14px rgba(15, 39, 71, 0.1);
+}
+.picker-list {
+  border-radius: 10px;
+}
+.picker-list li {
+  transition: background 0.15s;
+}
+.picker-list li:hover {
+  background: #f1f8f7;
+}
