@@ -812,13 +812,31 @@ def review_progress_entry(entry_id, decision, remarks, role):
 	if not frappe.db.exists("PMC DPR", entry_id):
 		_throw(f"Entry {entry_id} was not found.", frappe.DoesNotExistError)
 	doc = frappe.get_doc("PMC DPR", entry_id)
+	note = (remarks or "").strip()
+	if decision == "reopen":
+		# approval given by mistake: back to the site engineer as Returned, with the reason
+		if doc.status != "Approved":
+			_throw(f"Entry {entry_id} is {doc.status}; only an Approved entry can be taken back.", PMCConflictError)
+		if role != "pmc-reviewer":
+			_throw(f"{domain.ROLE_LABELS[role]} cannot take back an approval.", frappe.PermissionError)
+		if not note:
+			_throw("Enter the reason for taking the approval back.")
+		history = _json(doc.history, [])
+		history.append(_history(role, "Approval withdrawn", note))
+		doc.status = "Returned"
+		doc.review_remarks = note
+		doc.history = json.dumps(history)
+		doc.save(ignore_permissions=True)
+		return _entry(doc.name)
 	if doc.status != "Submitted":
 		_throw(f"Entry {entry_id} is {doc.status}; only Submitted entries can be reviewed.", PMCConflictError)
 	if not domain.can_review(role, doc.status):
 		_throw(f"{domain.ROLE_LABELS[role]} cannot review entries.", frappe.PermissionError)
 	if decision not in ("approve", "return"):
-		_throw("Decision must be approve or return.")
-	note = (remarks or "").strip()
+		_throw("Decision must be approve, return or reopen.")
+	# the person who reported the work does not approve it (administrators may, for testing)
+	if decision == "approve" and doc.owner == frappe.session.user and "System Manager" not in frappe.get_roles():
+		_throw("You reported this work yourself, so another PMC Reviewer has to approve it.", frappe.PermissionError)
 	if decision == "return" and not note:
 		_throw("Enter a reason so the site engineer knows what to correct.")
 	if decision == "approve":
@@ -931,3 +949,43 @@ def reassign_drawings(from_project_id, to_project_id):
 		return
 	for name in frappe.get_all("PMC Drawing", filters={"project_code": from_project_id}, pluck="name"):
 		frappe.db.set_value("PMC Drawing", name, "project_code", to_project_id)
+
+
+# ---------------------------------------------------------------- material variation settings (kept on the server)
+# Stored as global defaults, so no new DocType field (and no migrate) is needed:
+#   pmc3d_erp_project::<PMC project>  -> the ERPNext Project whose issues / receipts belong to it
+#   pmc3d_item_map                    -> {item_code: {"kind": ..., "dia": ..., "grade": ...} | "ignore"}
+
+_ITEM_KINDS = ("steel", "cement", "sand", "aggregate", "concrete", "bricks")
+
+
+def _erp_key(project_id):
+	return f"pmc3d_erp_project::{project_id}"
+
+
+@frappe.whitelist()
+def get_variation_settings(project_id):
+	_require_reader()
+	raw = frappe.defaults.get_global_default("pmc3d_item_map")
+	return {"erpProject": frappe.defaults.get_global_default(_erp_key(project_id)) or "", "itemMap": _json(raw, {}) or {}}
+
+
+@frappe.whitelist(methods=["POST"])
+def save_variation_settings(project_id, erp_project=None, item_map=None):
+	_require_reader()
+	if not frappe.db.exists("PMC Project", project_id):
+		_throw(f"Project {project_id} was not found.", frappe.DoesNotExistError)
+	if erp_project is not None:
+		if erp_project and not frappe.db.exists("Project", erp_project):
+			_throw(f"ERPNext project {erp_project} was not found.")
+		frappe.defaults.set_global_default(_erp_key(project_id), erp_project or "")
+	if item_map is not None:
+		data = _parse(item_map) or {}
+		clean = {}
+		for code, m in data.items():
+			if m == "ignore":
+				clean[str(code)] = "ignore"
+			elif isinstance(m, dict) and m.get("kind") in _ITEM_KINDS:
+				clean[str(code)] = {k: m[k] for k in ("kind", "dia", "grade") if m.get(k) not in (None, "")}
+		frappe.defaults.set_global_default("pmc3d_item_map", json.dumps(clean))
+	return get_variation_settings(project_id)

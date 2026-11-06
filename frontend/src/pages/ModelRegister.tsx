@@ -139,7 +139,7 @@ export function ModelRegister() {
         ok: false,
         errors: [
           /\.(pdf|jpe?g|png|webp)$/i.test(file.name)
-            ? `${file.name} is a drawing, not a 3D + BOQ file.${IS_FRAPPE ? ' Upload the JSON file of the model (see "File format").' : ' Build the model from it in Model Builder, or upload the JSON file of the model.'}`
+            ? `${file.name} is a drawing, not a 3D + BOQ file.${IS_FRAPPE ? ' Upload the 3D + BOQ Excel file made from the template (see "File format").' : ' Build the model from it in Model Builder, or upload the JSON file of the model.'}`
             : /\.xls$/i.test(file.name)
               ? `${file.name} is an old Excel (.xls) file. Open it in Excel, save it as .xlsx and upload that.`
               : `${file.name} is not an Excel (.xlsx) or .json file. Upload the 3D + BOQ Excel file made from the template (see "File format").`,
@@ -149,7 +149,26 @@ export function ModelRegister() {
       });
       return;
     }
-    await runImport(await file.text(), file.name, 'Uploaded JSON file');
+    const text = await file.text();
+    // a JSON that is not a model at all gets one plain message instead of a list of field errors
+    let format: unknown;
+    try {
+      format = (JSON.parse(text) as { format?: unknown } | null)?.format;
+    } catch {
+      format = null;
+    }
+    if (format !== 'pmc-procedural-model') {
+      setResult({
+        ok: false,
+        errors: [
+          `${file.name} is not a 3D + BOQ file of this application${format === null ? ' (it cannot be read as JSON — it may be damaged)' : ''}. Upload the 3D + BOQ Excel file made from the template ("Download the Excel template"), or a model JSON saved from this application.`,
+        ],
+        warnings: [],
+        sourceName: file.name,
+      });
+      return;
+    }
+    await runImport(text, file.name, 'Uploaded JSON file');
   }
 
   return (

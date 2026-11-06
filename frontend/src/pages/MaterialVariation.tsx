@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState, ErrorList, PageHeader, Spinner } from '../components/ui';
 import { IS_FRAPPE } from '../config';
-import { errorMessages, type ErpProject } from '../data/repository';
+import { errorMessages, type ErpProject, type ItemMap } from '../data/repository';
 import { materialRequired } from '../domain/materialRequired';
 import { normsOf } from '../domain/materials';
-import { variationReport, type SentLine, type VariationStatus } from '../domain/materialVariation';
+import { variationReport, type ItemMatch, type SentLine, type VariationStatus } from '../domain/materialVariation';
 import { formatQty } from '../domain/progress';
 import { useApp } from '../state/AppContext';
 
@@ -18,6 +18,42 @@ const STATUS_TEXT: Record<VariationStatus, string> = {
   'no-work': 'Sent, no work yet',
   'not-sent': 'Not sent',
 };
+
+const BAR_SIZES = [8, 10, 12, 16, 20, 25, 28, 32];
+const KIND_OPTIONS: [string, string][] = [
+  ['ignore', 'Not a building material'],
+  ...BAR_SIZES.map((d): [string, string] => [`steel:${d}`, `Steel ${d} mm`]),
+  ['steel:0', 'Steel (size not known)'],
+  ['cement', 'Cement'],
+  ['sand', 'Sand'],
+  ['aggregate', 'Aggregate (gitti)'],
+  ['bricks', 'Bricks'],
+  ['concrete', 'Ready-mix concrete'],
+];
+
+function parseKind(value: string): ItemMatch | 'ignore' {
+  if (value === 'ignore') return 'ignore';
+  const [kind, extra] = value.split(':');
+  return kind === 'steel' ? { kind: 'steel', dia: Number(extra) || 0 } : ({ kind } as ItemMatch);
+}
+
+function kindValue(m: ItemMatch | 'ignore'): string {
+  if (m === 'ignore') return 'ignore';
+  return m.kind === 'steel' ? `steel:${m.dia ?? 0}` : m.kind;
+}
+
+function KindSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} aria-label="Which material is this item">
+      {!value && <option value="">Choose…</option>}
+      {KIND_OPTIONS.map(([v, label]) => (
+        <option key={v} value={v}>
+          {label}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 /** The ERP project picked for a PMC project, remembered in this browser only. */
 const erpKey = (projectId: string) => `pmc3d.erpProject.${projectId}`;
@@ -37,14 +73,44 @@ export function MaterialVariation() {
   const { data, repo, go } = useApp();
   const projectId = data?.project.id ?? '';
   const [erpProjects, setErpProjects] = useState<ErpProject[] | null>(null);
-  const [erpProject, setErpProject] = useState(() => remembered(projectId));
+  const [erpProject, setErpProject] = useState('');
+  const [itemMap, setItemMap] = useState<ItemMap>({});
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [lines, setLines] = useState<SentLine[] | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => setErpProject(remembered(projectId)), [projectId]);
+  // the ERPNext project and the items set by hand are kept on the server, the same for every user and device
+  useEffect(() => {
+    if (!projectId) return;
+    let alive = true;
+    repo.getVariationSettings(projectId).then(
+      (s) => {
+        if (!alive) return;
+        setItemMap(s.itemMap);
+        // a choice made earlier in this browser only moves to the server once
+        const old = remembered(projectId);
+        if (!s.erpProject && old) void repo.saveVariationSettings(projectId, { erpProject: old }).catch(() => undefined);
+        setErpProject(s.erpProject || old);
+      },
+      () => alive && setErpProject(remembered(projectId)),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [repo, projectId]);
+
+  const saveItem = (code: string, value: string) => {
+    const next: ItemMap = { ...itemMap };
+    if (!value) delete next[code];
+    else next[code] = parseKind(value);
+    setItemMap(next);
+    repo.saveVariationSettings(projectId, { itemMap: next }).then(
+      (s) => setItemMap(s.itemMap),
+      (e) => setErrors(errorMessages(e)),
+    );
+  };
   useEffect(() => {
     repo.listErpProjects().then(setErpProjects, (e) => {
       setErpProjects([]);
@@ -75,7 +141,14 @@ export function MaterialVariation() {
     const approved = (data?.entries ?? []).filter((e) => e.status === 'Approved' && (!from || e.date >= from) && (!to || e.date <= to));
     return materialRequired(data?.elements ?? [], approved, norms, 'done');
   }, [data?.elements, data?.entries, norms, from, to]);
-  const report = useMemo(() => (lines ? variationReport(lines, needed, norms, tol) : null), [lines, needed, norms, tol]);
+  const report = useMemo(() => (lines ? variationReport(lines, needed, norms, tol, itemMap) : null), [lines, needed, norms, tol, itemMap]);
+  // items set by hand that appear in this project's lines
+  const handSet = useMemo(() => {
+    const seen = new Map((lines ?? []).map((l) => [l.itemCode, l.itemName]));
+    return Object.entries(itemMap)
+      .filter(([code]) => seen.has(code))
+      .map(([code, m]) => ({ code, name: seen.get(code)!, value: kindValue(m) }));
+  }, [lines, itemMap]);
 
   if (!data) return <Spinner label="Loading project…" />;
   if (!data.model) {
@@ -106,12 +179,14 @@ export function MaterialVariation() {
             <select
               value={erpProject}
               onChange={(e) => {
-                setErpProject(e.target.value);
+                const value = e.target.value;
+                setErpProject(value);
                 try {
-                  localStorage.setItem(erpKey(projectId), e.target.value);
+                  localStorage.setItem(erpKey(projectId), value);
                 } catch {
-                  /* remembered only when the browser allows it */
+                  /* the server copy is the one that counts */
                 }
+                repo.saveVariationSettings(projectId, { erpProject: value }).catch((err) => setErrors(errorMessages(err)));
               }}
             >
               <option value="">{erpProjects === null ? 'Loading…' : 'Choose…'}</option>
@@ -204,17 +279,51 @@ export function MaterialVariation() {
               )}
               {report.unmatched.length > 0 && (
                 <>
-                  <p className="small">Not a building material this report knows (by the item name):</p>
-                  <ul className="small muted">
-                    {report.unmatched.map((u) => (
-                      <li key={u.itemCode}>
-                        {u.itemName} — {formatQty(u.qty, u.uom)}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="hint">Items are recognised by name: TMT / sariya with the size in mm, cement / OPC / PPC, sand, aggregate / gitti / 20 mm metal, RMC M25, bricks.</p>
+                  <p className="small">
+                    Not recognised by the item name — if one of them <b>is</b> a building material, choose which one (saved for everyone):
+                  </p>
+                  <table className="table compact var-map">
+                    <tbody>
+                      {report.unmatched.map((u) => (
+                        <tr key={u.itemCode}>
+                          <td>
+                            {u.itemName} <span className="muted small">({u.itemCode})</span>
+                          </td>
+                          <td className="num nowrap">{formatQty(u.qty, u.uom)}</td>
+                          <td>
+                            <KindSelect value="" onChange={(v) => saveItem(u.itemCode, v)} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="hint">Recognised by name: TMT / sariya with the size in mm, cement / OPC / PPC, sand, aggregate / gitti / 20 mm metal, RMC M25, bricks.</p>
                 </>
               )}
+            </section>
+          )}
+          {handSet.length > 0 && (
+            <section className="card">
+              <h2 className="card-title">Items set by hand</h2>
+              <table className="table compact var-map">
+                <tbody>
+                  {handSet.map((h) => (
+                    <tr key={h.code}>
+                      <td>
+                        {h.name} <span className="muted small">({h.code})</span>
+                      </td>
+                      <td>
+                        <KindSelect value={h.value} onChange={(v) => saveItem(h.code, v)} />
+                      </td>
+                      <td className="num">
+                        <button className="link" onClick={() => saveItem(h.code, '')}>
+                          Use the name again
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </section>
           )}
         </>

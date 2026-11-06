@@ -1,5 +1,6 @@
+import type { ReviewDecision } from '../domain/workflow';
 import type { QuantityMode } from '../domain/allocation';
-import type { SentLine } from '../domain/materialVariation';
+import type { ItemMatch, SentLine } from '../domain/materialVariation';
 import type {
   ElementRecord,
   ModelRecord,
@@ -38,7 +39,7 @@ export interface PmcRepository {
   saveProgressEntry(input: SaveEntryInput, role: Role): Promise<ProgressEntry>;
   saveBatchEntries(input: SaveBatchInput, role: Role): Promise<ProgressEntry[]>;
   submitProgressEntry(entryId: string, role: Role): Promise<ProgressEntry>;
-  reviewProgressEntry(entryId: string, decision: 'approve' | 'return', remarks: string, role: Role): Promise<ProgressEntry>;
+  reviewProgressEntry(entryId: string, decision: ReviewDecision, remarks: string, role: Role): Promise<ProgressEntry>;
   deleteDraftEntry(entryId: string, role: Role): Promise<void>;
 
   resetDemoData(): Promise<void>;
@@ -59,6 +60,17 @@ export interface PmcRepository {
   createMaterialRequest(input: MaterialRequestInput): Promise<{ name: string; state: string }>;
   /** Send a saved (draft) Material Request on: its ERPNext workflow's first step, or a plain submit without a workflow. */
   submitMaterialRequest(name: string): Promise<{ name: string; state: string }>;
+  /** Material variation settings kept for everyone: the ERPNext project of a PMC project, and items set by hand. */
+  getVariationSettings(projectId: string): Promise<VariationSettings>;
+  saveVariationSettings(projectId: string, change: { erpProject?: string; itemMap?: ItemMap }): Promise<VariationSettings>;
+}
+
+/** ERP item code → what material it is (set by hand), or 'ignore' = not a building material. */
+export type ItemMap = Record<string, ItemMatch | 'ignore'>;
+
+export interface VariationSettings {
+  erpProject: string;
+  itemMap: ItemMap;
 }
 
 export interface ErpProject {

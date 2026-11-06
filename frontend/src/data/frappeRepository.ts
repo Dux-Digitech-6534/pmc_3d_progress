@@ -1,3 +1,4 @@
+import type { ReviewDecision } from '../domain/workflow';
 import type { ElementRecord, ModelRecord, ProgressEntry, Project, Role } from '../domain/types';
 import { elementsFromModel } from './elements';
 import type { SentLine } from '../domain/materialVariation';
@@ -8,6 +9,8 @@ import {
   type ErpItem,
   type ErpProject,
   type MaterialRequestInput,
+  type ItemMap,
+  type VariationSettings,
   type ImportModelOutcome,
   type PmcRepository,
   type SaveBatchInput,
@@ -88,7 +91,7 @@ export class FrappeRepository implements PmcRepository {
     return clean(await call<ProgressEntry>(`${M}submit_progress_entry`, { entry_id: entryId, role }));
   }
 
-  async reviewProgressEntry(entryId: string, decision: 'approve' | 'return', remarks: string, role: Role) {
+  async reviewProgressEntry(entryId: string, decision: ReviewDecision, remarks: string, role: Role) {
     return clean(await call<ProgressEntry>(`${M}review_progress_entry`, { entry_id: entryId, decision, remarks, role }));
   }
 
@@ -203,6 +206,18 @@ export class FrappeRepository implements PmcRepository {
       ? await callMethod<MrDoc>('frappe.model.workflow.apply_workflow', { doc, action: forward.action })
       : await callMethod<MrDoc>('frappe.client.submit', { doc });
     return { name: out.name, state: out.workflow_state || out.status || 'Submitted' };
+  }
+
+  getVariationSettings(projectId: string) {
+    return call<VariationSettings>(`${M}get_variation_settings`, { project_id: projectId }, 'GET');
+  }
+
+  saveVariationSettings(projectId: string, change: { erpProject?: string; itemMap?: ItemMap }) {
+    return call<VariationSettings>(`${M}save_variation_settings`, {
+      project_id: projectId,
+      ...(change.erpProject !== undefined ? { erp_project: change.erpProject } : {}),
+      ...(change.itemMap !== undefined ? { item_map: JSON.stringify(change.itemMap) } : {}),
+    });
   }
 }
 

@@ -16,7 +16,11 @@ export const permissions = {
   canSubmit: (role: Role, e: Pick<ProgressEntry, 'status'>) => role === 'site-engineer' && e.status === 'Draft',
   canDelete: (role: Role, e: Pick<ProgressEntry, 'status'>) => role === 'site-engineer' && e.status === 'Draft',
   canReview: (role: Role, e: Pick<ProgressEntry, 'status'>) => role === 'pmc-reviewer' && e.status === 'Submitted',
+  /** PMC Reviewer: take back an approval given by mistake (it goes back to the site engineer as Returned). */
+  canReopen: (role: Role, e: Pick<ProgressEntry, 'status'>) => role === 'pmc-reviewer' && e.status === 'Approved',
 };
+
+export type ReviewDecision = 'approve' | 'return' | 'reopen';
 
 export const STATUS_DESCRIPTIONS: Record<EntryStatus, string> = {
   Draft: 'Saved by the site engineer, not yet sent for review. Does not count as progress.',

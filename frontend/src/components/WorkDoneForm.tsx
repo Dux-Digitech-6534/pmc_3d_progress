@@ -4,6 +4,7 @@ import { savePhoto } from '../data/photoStore';
 import { errorMessages } from '../data/repository';
 import { formatQty } from '../domain/progress';
 import { activityApplies, UNIT_LABELS, type ActivityDef, type ElementRecord, type PhotoMeta, type ProgressEntry } from '../domain/types';
+import { missingPriorWork } from '../domain/sequence';
 import { markedPercent, planWorkDone } from '../domain/workDone';
 import { todayISO, validateDate } from '../domain/workflow';
 import { newRequestId, useApp } from '../state/AppContext';
@@ -65,14 +66,35 @@ export function WorkDoneForm({
     [activities, ticked, elements, entries, pct, pctOk],
   );
 
+  // work normally done before the ticked work (steel before concrete …) that is not reported yet;
+  // earlier work ticked in the same go counts as reported
+  const [orderOk, setOrderOk] = useState(false);
+  const outOfOrder = useMemo(
+    () =>
+      plans
+        .map((p) => {
+          const missing = missingPriorWork(
+            p.recording.map((r) => r.element),
+            p.activity,
+            allActivities.filter((a) => !ticked.has(a.code)),
+            entries,
+          );
+          return { activity: p.activity, missing };
+        })
+        .filter((x) => x.missing.length),
+    [plans, allActivities, ticked, entries],
+  );
+  useEffect(() => setOrderOk(false), [ticked, ids]);
+
   const liveErrors = useMemo(() => {
     const errs = [...validateDate(date)];
+    if (outOfOrder.length && !orderOk) errs.push('Earlier work is not reported yet — confirm it is done on site, or report it first.');
     if (!ticked.size) errs.push('Select at least one activity.');
     if (!pctOk) errs.push('Work done must be between 1 and 100 %.');
     else if (ticked.size && !plans.some((p) => p.recording.length)) errs.push(`Nothing new to record — the selected work is already marked ${pct}% or more.`);
     if (remarks.length > 500) errs.push('Remarks must be 500 characters or fewer.');
     return errs;
-  }, [date, ticked, pctOk, pct, plans, remarks]);
+  }, [date, ticked, pctOk, pct, plans, remarks, outOfOrder, orderOk]);
 
   function toggle(code: string) {
     setTicked((t) => {
@@ -226,6 +248,24 @@ export function WorkDoneForm({
 
           {plans.some((p) => p.rows.some((r) => r.skip === 'already-done')) && pctOk && (
             <p className="hint">Elements already marked {pct}% or more for a selected activity are skipped.</p>
+          )}
+
+          {outOfOrder.length > 0 && (
+            <div className="alert alert-warn small wd-order">
+              {outOfOrder.map(({ activity, missing }) => {
+                const before = [...new Set(missing.flatMap((m) => m.activities.map((a) => a.name)))];
+                const codes = missing.map((m) => m.element.code);
+                return (
+                  <p key={activity.code}>
+                    <b>{activity.name}</b> normally comes after <b>{before.join(' and ')}</b>, which is not reported yet on {codes.slice(0, 8).join(', ')}
+                    {codes.length > 8 ? ` +${codes.length - 8} more` : ''}.
+                  </p>
+                );
+              })}
+              <label className="check">
+                <input type="checkbox" checked={orderOk} onChange={(e) => setOrderOk(e.target.checked)} /> Yes, the earlier work is done on site — continue
+              </label>
+            </div>
           )}
 
           <details className="wd-more">

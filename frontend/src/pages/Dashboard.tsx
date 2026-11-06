@@ -1,3 +1,4 @@
+import { inWorkOrder } from '../domain/sequence';
 import { useMemo, useState, type ReactNode } from 'react';
 import { EntryDetailsModal } from '../components/EntryDetailsModal';
 import { EmptyState, Spinner, StatusBadge } from '../components/ui';
@@ -25,11 +26,11 @@ const ICONS = {
 };
 
 export function Dashboard() {
-  const { data, loadError, go, role, session } = useApp();
+  const { data, loadError, go, role, session, setSelection } = useApp();
   const [viewing, setViewing] = useState<ProgressEntry | null>(null);
 
   const summaries = useMemo(() => {
-    const acts = data?.model?.document?.activities ?? [];
+    const acts = inWorkOrder(data?.model?.document?.activities ?? []);
     return acts.map((a) => summarizeActivity(data!.elements, a, data!.entries));
   }, [data]);
 
@@ -52,7 +53,12 @@ export function Dashboard() {
   const pending = entries.filter((e) => e.status === 'Submitted');
   const todays = entries.filter((e) => e.date === today).sort((a, b) => a.elementCode.localeCompare(b.elementCode));
   const drafts = entries.filter((e) => e.status === 'Draft').length;
-  const returned = entries.filter((e) => e.status === 'Returned').length;
+  const returnedList = entries.filter((e) => e.status === 'Returned').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const returned = returnedList.length;
+  const openElement = (id: string) => {
+    setSelection(new Set([id]));
+    go('workspace');
+  };
   const counts = ELEMENT_TYPES.map((t) => ({ t, n: elements.filter((e) => e.type === t).length })).filter((c) => c.n);
   const donePct = elements.length ? Math.round((doneElements / elements.length) * 100) : 0;
 
@@ -114,6 +120,56 @@ export function Dashboard() {
               Not counted as progress
             </Kpi>
           </div>
+
+          {returned > 0 && (
+            <section className="dash-card dash-returned">
+              <div className="dash-card-head">
+                <div>
+                  <h2>
+                    Returned by PMC — needs correction <span className="dash-count dash-count-rose">{returned}</span>
+                  </h2>
+                  <p>{role === 'site-engineer' ? 'Correct each entry and send it again — Fix opens the element with its Edit button.' : 'Waiting for the site engineer to correct and send again.'}</p>
+                </div>
+              </div>
+              <div className="dash-table-wrap">
+                <table className="dash-table">
+                  <thead>
+                    <tr>
+                      <th>Element</th>
+                      <th>Activity</th>
+                      <th className="num">Qty</th>
+                      <th>PMC remark</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {returnedList.map((e) => (
+                      <tr key={e.id} onClick={() => openElement(e.elementId)}>
+                        <td>
+                          <b>{e.elementCode}</b>
+                          <div className="muted small">{e.id}</div>
+                        </td>
+                        <td>{e.activityName}</td>
+                        <td className="num">{formatQty(e.quantity, UNIT_LABELS[e.unit])}</td>
+                        <td className="dash-remark">{e.reviewRemarks || '—'}</td>
+                        <td className="num">
+                          <button
+                            className="dash-view"
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              openElement(e.elementId);
+                            }}
+                          >
+                            {role === 'site-engineer' ? 'Fix' : 'Open'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           <section className="dash-card">
             <div className="dash-card-head">

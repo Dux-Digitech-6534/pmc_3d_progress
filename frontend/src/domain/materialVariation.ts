@@ -106,14 +106,23 @@ export interface VariationReport {
  * Sent (ERP) against needed (approved work, with the model's norms) per material, steel also per
  * bar size and ready-mix concrete per grade. Within ±tolerance % is OK.
  */
-export function variationReport(lines: SentLine[], needed: MaterialRequired, norms: MaterialNorms, tolerancePct: number): VariationReport {
+export function variationReport(
+  lines: SentLine[],
+  needed: MaterialRequired,
+  norms: MaterialNorms,
+  tolerancePct: number,
+  /** Items set by hand (item code → material, or 'ignore'); they win over the name match. */
+  itemMap: Record<string, ItemMatch | 'ignore'> = {},
+): VariationReport {
   const bagKg = norms.bagKg;
   const sent = new Map<string, number>();
   const add = (k: string, q: number) => sent.set(k, (sent.get(k) ?? 0) + q);
   const unmatched = new Map<string, { itemCode: string; itemName: string; qty: number; uom: string }>();
   const unconvertible = new Map<string, { itemCode: string; itemName: string; qty: number; uom: string; unit: string }>();
   for (const l of lines) {
-    const m = matchItem(l.itemName, l.itemCode);
+    const set = itemMap[l.itemCode];
+    if (set === 'ignore') continue;
+    const m = set ?? matchItem(l.itemName, l.itemCode);
     if (!m) {
       const u = unmatched.get(l.itemCode) ?? { itemCode: l.itemCode, itemName: l.itemName, qty: 0, uom: l.uom };
       u.qty += l.qty;

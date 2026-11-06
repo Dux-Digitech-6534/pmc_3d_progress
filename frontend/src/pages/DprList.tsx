@@ -177,7 +177,7 @@ export function DprList() {
                   </td>
                   <td>
                     <b>{e.elementCode}</b>
-                    <div className="muted small">{e.elementId}</div>
+                    {e.elementId !== e.elementCode && <div className="muted small">{e.elementId}</div>}
                   </td>
                   <td>{e.activityName}</td>
                   <td className="num nowrap">{formatQty(e.quantity, UNIT_LABELS[e.unit])}</td>

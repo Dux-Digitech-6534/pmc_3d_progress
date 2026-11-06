@@ -42,12 +42,21 @@ function Shell() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [demoBusy, setDemoBusy] = useState(false);
+  // phones: the menu folds behind a ≡ button
+  const [menuOpen, setMenuOpen] = useState(false);
+  const current = NAV.find((n) => n.page === page);
   // No project yet: every page except the ones that create a model shows the welcome screen.
   const empty = !loading && projects.length === 0 && page !== 'builder' && page !== 'models';
 
   return (
     <div className="app">
-      <nav className="sidebar" aria-label="Main">
+      <nav className={`sidebar ${menuOpen ? 'menu-open' : ''}`} aria-label="Main">
+        <button className="menu-toggle" aria-expanded={menuOpen} aria-label={menuOpen ? 'Close menu' : 'Open menu'} onClick={() => setMenuOpen((o) => !o)}>
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+            <path d={menuOpen ? 'M6 6l12 12M18 6 6 18' : 'M4 7h16M4 12h16M4 17h16'} />
+          </svg>
+        </button>
+        {!menuOpen && !empty && current && <span className="menu-current">{current.label}</span>}
         <div className="brand">
           <span className="brand-mark" aria-hidden>
             ◆
@@ -60,7 +69,14 @@ function Shell() {
         <ul>
           {NAV.map((n) => (
             <li key={n.page}>
-              <button className={page === n.page ? 'active' : ''} onClick={() => go(n.page)} aria-current={page === n.page ? 'page' : undefined}>
+              <button
+                className={page === n.page && !empty ? 'active' : ''}
+                onClick={() => {
+                  setMenuOpen(false);
+                  go(n.page);
+                }}
+                aria-current={page === n.page && !empty ? 'page' : undefined}
+              >
                 <span className="nav-icon" aria-hidden>
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
                     <path d={n.icon} />

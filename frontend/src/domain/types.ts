@@ -217,7 +217,7 @@ export interface PhotoMeta {
 export interface HistoryItem {
   at: string;
   role: Role;
-  action: 'Created' | 'Edited' | 'Submitted' | 'Approved' | 'Returned';
+  action: 'Created' | 'Edited' | 'Submitted' | 'Approved' | 'Returned' | 'Approval withdrawn';
   note?: string;
 }
 

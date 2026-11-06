@@ -10,6 +10,7 @@ import { useApp } from '../state/AppContext';
 import { EntryDetailsModal } from './EntryDetailsModal';
 import { EntryForm } from './EntryForm';
 import { MaterialTable } from './MaterialTable';
+import { ReturnEntriesButton } from './ReturnEntries';
 import { WorkDoneForm } from './WorkDoneForm';
 import { ConfirmDialog, EmptyState, fmtDate, ProgressBadge, ProgressBar, StatusBadge } from './ui';
 
@@ -159,9 +160,12 @@ function ApproveTicked({ elements, entries }: { elements: ElementRecord[]; entri
         <span>
           <b>{all.length}</b> submitted entr{all.length === 1 ? 'y' : 'ies'} on the selected elements
         </span>
-        <button className="btn btn-small btn-primary" disabled={busy || !submitted.length} onClick={() => setConfirm(true)}>
-          {submitted.length === all.length ? `Approve all submitted (${all.length})` : `Approve selected (${submitted.length})`}
-        </button>
+        <span className="history-btns">
+          <ReturnEntriesButton entries={submitted} onDone={() => setSkipped(new Set())} />
+          <button className="btn btn-small btn-primary" disabled={busy || !submitted.length} onClick={() => setConfirm(true)}>
+            {submitted.length === all.length ? `Approve all submitted (${all.length})` : `Approve selected (${submitted.length})`}
+          </button>
+        </span>
       </div>
       {acts.length > 1 && (
         <div className="approve-acts" role="group" aria-label="Activities to approve">
@@ -197,7 +201,7 @@ function ApproveTicked({ elements, entries }: { elements: ElementRecord[]; entri
                   </li>
                 ))}
               </ul>
-              <p className="muted small">Approve only what you have checked on site. Approved entries count towards progress and cannot be edited.</p>
+              <p className="muted small">Approve only what you have checked on site. Approved entries count towards progress; an approval given by mistake can be taken back from the entry (Withdraw approval, with a reason).</p>
             </>
           }
           confirmLabel={submitted.length === all.length ? 'Approve all' : 'Approve selected'}
@@ -418,12 +422,15 @@ function History({
       <div className="history-head">
         <h3 className="section-title">Progress history ({list.length})</h3>
         {reviewable.length > 0 && (
-          <button className="btn btn-small btn-primary" disabled={busy} onClick={() => setConfirmAll(true)}>
-            {chosen.length ? `Approve selected (${chosen.length})` : `Approve all submitted (${reviewable.length})`}
-          </button>
+          <span className="history-btns">
+            <ReturnEntriesButton entries={submitted} onDone={() => setPicked(new Set())} />
+            <button className="btn btn-small btn-primary" disabled={busy} onClick={() => setConfirmAll(true)}>
+              {chosen.length ? `Approve selected (${chosen.length})` : `Approve all submitted (${reviewable.length})`}
+            </button>
+          </span>
         )}
       </div>
-      {reviewable.length > 1 && <p className="hint">Select entries below to approve only those, or approve all submitted.</p>}
+      {reviewable.length > 1 && <p className="hint">Select entries below to approve or return only those; with none selected the buttons act on all submitted.</p>}
       {confirmAll && (
         <ConfirmDialog
           title={`Approve ${submitted.length} entr${submitted.length === 1 ? 'y' : 'ies'} for ${element.code}?`}
@@ -436,7 +443,7 @@ function History({
                   </li>
                 ))}
               </ul>
-              <p className="muted small">Approve only what you have checked on site. Approved entries count towards progress and cannot be edited.</p>
+              <p className="muted small">Approve only what you have checked on site. Approved entries count towards progress; an approval given by mistake can be taken back from the entry (Withdraw approval, with a reason).</p>
             </>
           }
           confirmLabel={chosen.length ? 'Approve selected' : 'Approve all'}

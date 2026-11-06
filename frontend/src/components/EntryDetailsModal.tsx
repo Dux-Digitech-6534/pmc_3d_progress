@@ -55,6 +55,7 @@ export function EntryDetailsModal({
   }
 
   const canReview = permissions.canReview(role, entry) && !oldRevision;
+  const canReopen = permissions.canReopen(role, entry) && !oldRevision;
 
   return (
     <>
@@ -101,6 +102,15 @@ export function EntryDetailsModal({
                   Approve
                 </button>
               </>
+            )}
+            {canReopen && (
+              <button
+                className="btn btn-warn"
+                disabled={busy}
+                onClick={() => run(`Approval of ${entry.id} taken back — returned to the site engineer.`, () => repo.reviewProgressEntry(entry.id, 'reopen', remarks, role))}
+              >
+                Withdraw approval
+              </button>
             )}
             <button className="btn" onClick={onClose}>
               Close
@@ -168,9 +178,9 @@ export function EntryDetailsModal({
           ))}
         </ol>
 
-        {canReview && (
+        {(canReview || canReopen) && (
           <label className="review-remarks">
-            Review remarks <span className="muted small">(required when returning)</span>
+            Review remarks <span className="muted small">{canReopen ? '(why the approval is taken back — required)' : '(required when returning)'}</span>
             <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} maxLength={500} />
           </label>
         )}

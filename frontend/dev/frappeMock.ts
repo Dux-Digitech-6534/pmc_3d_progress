@@ -152,6 +152,13 @@ export function frappeMock(): Plugin {
                 return r.reviewProgressEntry(args.entry_id, args.decision, args.remarks, args.role);
               case 'api.delete_draft_entry':
                 return r.deleteDraftEntry(args.entry_id, args.role);
+              case 'api.get_variation_settings':
+                return r.getVariationSettings(args.project_id);
+              case 'api.save_variation_settings':
+                return r.saveVariationSettings(args.project_id, {
+                  erpProject: args.erp_project ?? undefined,
+                  itemMap: args.item_map ? JSON.parse(args.item_map) : undefined,
+                });
               case 'api.list_drawings':
                 return drawings.filter((d) => d.projectId === args.project_id);
               case 'api.add_drawing': {

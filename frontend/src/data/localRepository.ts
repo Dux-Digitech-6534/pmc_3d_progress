@@ -4,13 +4,15 @@ import type { ActivityDef, ElementRecord, HistoryItem, ModelRecord, ProgressEntr
 import { PLANNING_STATUSES, ROLE_LABELS } from '../domain/types';
 import type { SentLine } from '../domain/materialVariation';
 import { inModelFamily } from '../domain/progress';
-import { checkQuantity, findPossibleDuplicate, permissions, validateDate } from '../domain/workflow';
+import { checkQuantity, findPossibleDuplicate, permissions, validateDate, type ReviewDecision } from '../domain/workflow';
 import { elementsFromModel, modelKeyOf } from './elements';
 import {
   RepositoryError,
   type ErpItem,
   type ErpProject,
   type MaterialRequestInput,
+  type ItemMap,
+  type VariationSettings,
   type ImportModelInput,
   type ImportModelOutcome,
   type PmcRepository,
@@ -613,18 +615,33 @@ export class LocalRepository implements PmcRepository {
     });
   }
 
-  reviewProgressEntry(entryId: string, decision: 'approve' | 'return', remarks: string, role: Role) {
+  reviewProgressEntry(entryId: string, decision: ReviewDecision, remarks: string, role: Role) {
     return this.op(() => {
       const all = this.entries();
       const entry = all.find((e) => e.id === entryId);
       if (!entry) throw new RepositoryError('not-found', `Entry ${entryId} was not found.`);
+      const note = remarks.trim();
+      if (decision === 'reopen') {
+        // approval taken back: the entry goes back to the site engineer as Returned, with the reason
+        if (entry.status !== 'Approved') throw new RepositoryError('conflict', `Entry ${entryId} is ${entry.status}; only an Approved entry can be taken back.`);
+        if (!permissions.canReopen(role, entry)) throw new RepositoryError('forbidden', `${ROLE_LABELS[role]} cannot take back an approval.`);
+        if (!note) throw new RepositoryError('validation', 'Enter the reason for taking the approval back.');
+        const reopened: ProgressEntry = {
+          ...entry,
+          status: 'Returned',
+          reviewRemarks: note,
+          updatedAt: this.nowIso(),
+          history: [...entry.history, this.hist(role, 'Approval withdrawn', note)],
+        };
+        this.write(K.entries, all.map((e) => (e.id === entryId ? reopened : e)));
+        return reopened;
+      }
       if (entry.status !== 'Submitted') {
         throw new RepositoryError('conflict', `Entry ${entryId} is ${entry.status}; only Submitted entries can be reviewed.`);
       }
       if (!permissions.canReview(role, entry)) {
         throw new RepositoryError('forbidden', `${ROLE_LABELS[role]} cannot review entries (demo role rules).`);
       }
-      const note = remarks.trim();
       if (decision === 'return' && !note) {
         throw new RepositoryError('validation', 'Enter a reason so the site engineer knows what to correct.');
       }
@@ -747,6 +764,24 @@ export class LocalRepository implements PmcRepository {
       mr.state = 'L2 Approval Pending';
       this.storage.setItem(key, JSON.stringify(list));
       return { name, state: mr.state };
+    });
+  }
+
+  getVariationSettings(projectId: string): Promise<VariationSettings> {
+    return this.op(() => {
+      const all = JSON.parse(this.storage.getItem(`${STORAGE_PREFIX}variation`) ?? '{}') as { erp?: Record<string, string>; itemMap?: ItemMap };
+      return { erpProject: all.erp?.[projectId] ?? '', itemMap: all.itemMap ?? {} };
+    });
+  }
+
+  saveVariationSettings(projectId: string, change: { erpProject?: string; itemMap?: ItemMap }): Promise<VariationSettings> {
+    return this.op(() => {
+      const key = `${STORAGE_PREFIX}variation`;
+      const all = JSON.parse(this.storage.getItem(key) ?? '{}') as { erp?: Record<string, string>; itemMap?: ItemMap };
+      if (change.erpProject !== undefined) all.erp = { ...all.erp, [projectId]: change.erpProject };
+      if (change.itemMap !== undefined) all.itemMap = change.itemMap;
+      this.storage.setItem(key, JSON.stringify(all));
+      return { erpProject: all.erp?.[projectId] ?? '', itemMap: all.itemMap ?? {} };
     });
   }
 }

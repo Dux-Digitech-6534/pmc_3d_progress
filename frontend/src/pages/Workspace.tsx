@@ -1,3 +1,4 @@
+import { inWorkOrder } from '../domain/sequence';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ElementPanel } from '../components/ElementPanel';
 import { ElementPicker } from '../components/ElementPicker';
@@ -50,6 +51,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
   const [statusFilter, setStatusFilter] = useState<'all' | ViewStatus>('all');
   const [showLabels, setShowLabels] = useState(true);
   const [resetSignal, setResetSignal] = useState(0);
+  const [mobilePane, setMobilePane] = useState<'list' | '3d'>('list');
   // hidden in the 3D view only (to look inside the building) — nothing changes in the model or progress
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
   const [hiddenTypes, setHiddenTypes] = useState<Set<ViewGroup>>(() => new Set());
@@ -62,7 +64,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
     [hiddenIds, hiddenTypes, elements],
   );
   const typesPresent = useMemo(() => VIEW_GROUPS.filter((t) => elements.some((e) => viewGroupOf(e) === t)), [elements]);
-  const activities = useMemo(() => data?.model?.document?.activities ?? [], [data?.model]);
+  const activities = useMemo(() => inWorkOrder(data?.model?.document?.activities ?? []), [data?.model]);
   const entries = useMemo(() => data?.entries ?? [], [data?.entries]);
   // the material screen shows no work progress: elements are coloured by type
   const viewActivity =
@@ -203,7 +205,17 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
   );
 
   return (
-    <div className="workspace">
+    <div className={`workspace ws-m-${mobilePane}`}>
+      {/* phones: one pane at a time — the element list + form first, the 3D on its own tab */}
+      <div className="ws-mobile-tabs" role="tablist" aria-label="Show">
+        <button role="tab" aria-selected={mobilePane === 'list'} className={mobilePane === 'list' ? 'on' : ''} onClick={() => setMobilePane('list')}>
+          {mode === 'work' ? 'Elements & work done' : 'Elements & material'}
+          {selection.size > 0 && <span className="ws-m-count">{selection.size}</span>}
+        </button>
+        <button role="tab" aria-selected={mobilePane === '3d'} className={mobilePane === '3d' ? 'on' : ''} onClick={() => setMobilePane('3d')}>
+          3D view
+        </button>
+      </div>
       <section className="ws-center">
         <div className="viewer-toolbar">
           {mode === 'work' && (
