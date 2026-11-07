@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { MATERIALS, normsOf, roundMaterial } from '../domain/materials';
+import { normsOf } from '../domain/materials';
 import { materialRequired } from '../domain/materialRequired';
 import { computeActivityProgress, formatQty } from '../domain/progress';
 import type { ElementRecord, ProgressEntry } from '../domain/types';
@@ -51,13 +51,8 @@ export function MaterialRequiredPanel({
     );
   }
 
-  const other = [
-    { label: 'Shuttering', value: req.shutteringM2, unit: 'm²' },
-    { label: 'Brickwork', value: req.brickworkM3, unit: 'm³' },
-    { label: 'Plaster', value: req.plasterM2, unit: 'm²' },
-  ].filter((r) => r.value > 0);
-  const mats = MATERIALS.filter((m) => m.key !== 'steel' && req.materials[m.key] > 0);
-  const nothing = !req.steel.length && !req.concrete.length && !other.length;
+  // the summary the PMC asked for: steel by bar size and concrete by grade (no "Other" list)
+  const nothing = !req.steel.length && !req.concrete.length;
 
   return (
     <div className="panel-scroll">
@@ -85,10 +80,10 @@ export function MaterialRequiredPanel({
       ) : nothing ? (
         <div className="panel-section">
           <p className="muted">
-            No material is needed for these elements
+            No steel or concrete for these elements
             {done.length
-              ? ` — ${done.map((e) => e.code).join(', ')} already done; the others have no concrete, steel or masonry in their BOQ`
-              : ' — their BOQ has no concrete, steel or masonry'}
+              ? ` — ${done.map((e) => e.code).join(', ')} already done; the others have no steel or concrete in their BOQ`
+              : ' — their BOQ has no steel or concrete'}
             .
           </p>
         </div>
@@ -163,33 +158,6 @@ export function MaterialRequiredPanel({
         </div>
       )}
 
-      {(other.length > 0 || mats.length > 0) && (
-        <div className="panel-section">
-          <h3 className="section-title">Other</h3>
-          <table className="table compact mr-table">
-            <tbody>
-              {other.map((r) => (
-                <tr key={r.label}>
-                  <td>{r.label}</td>
-                  <td className="num">{formatQty(r.value, r.unit)}</td>
-                </tr>
-              ))}
-              {mats.map((m) => (
-                <tr key={m.key}>
-                  <td>{m.label}</td>
-                  <td className="num">{formatQty(roundMaterial(m.key, req.materials[m.key]), m.unit)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {req.concrete.length > 0 && (
-            <p className="hint">Cement, sand and gitti with the concrete mix {norms.concreteGrade} of the model planning.</p>
-          )}
-          {(req.brickworkM3 > 0 || req.plasterM2 > 0) && (
-            <p className="hint">Bricks, cement and sand for brickwork and plaster with the mortar norms of the model planning.</p>
-          )}
-        </div>
-      )}
       {withRequest && <MaterialRequestCard req={req} elementIds={selected.map((e) => e.id).join(',')} bagKg={norms.bagKg} />}
     </div>
   );
