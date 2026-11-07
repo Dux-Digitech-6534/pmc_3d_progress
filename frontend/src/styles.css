@@ -3594,3 +3594,40 @@ input[type='radio'] {
   align-self: end;
   padding-bottom: 6px;
 }
+.wd-draft {
+  color: var(--amber);
+  font-weight: 600;
+}
+.drafts-bar {
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+}
+.dash-two > *,
+.dash-card,
+.dash-kpis > * {
+  min-width: 0;
+}
+@media (max-width: 760px) {
+  .variation-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+  .variation-filters label:first-child {
+    grid-column: 1 / -1;
+  }
+  .variation-filters select,
+  .variation-filters input {
+    width: 100%;
+    min-width: 0;
+  }
+  .dash-table th,
+  .dash-table td {
+    padding: 8px;
+  }
+}
+.mr-need .link {
+  margin-left: 4px;
+  font-size: 12px;
+}
+.topbar select[aria-label="Current project"] {
+  max-width: 260px;
+}

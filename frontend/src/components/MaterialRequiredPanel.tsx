@@ -182,8 +182,11 @@ export function MaterialRequiredPanel({
               ))}
             </tbody>
           </table>
-          {mats.some((m) => m.key === 'cement') && (
+          {req.concrete.length > 0 && (
             <p className="hint">Cement, sand and gitti with the concrete mix {norms.concreteGrade} of the model planning.</p>
+          )}
+          {(req.brickworkM3 > 0 || req.plasterM2 > 0) && (
+            <p className="hint">Bricks, cement and sand for brickwork and plaster with the mortar norms of the model planning.</p>
           )}
         </div>
       )}

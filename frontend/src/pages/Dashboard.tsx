@@ -51,7 +51,9 @@ export function Dashboard() {
   const today = todayISO();
   const firstName = (session?.fullName || '').trim().split(/\s+/)[0];
   const pending = entries.filter((e) => e.status === 'Submitted');
-  const todays = entries.filter((e) => e.date === today).sort((a, b) => a.elementCode.localeCompare(b.elementCode));
+  // reported = sent for approval (drafts are not sent yet)
+  const todays = entries.filter((e) => e.date === today && e.status !== 'Draft').sort((a, b) => a.elementCode.localeCompare(b.elementCode));
+  const todaysDrafts = entries.filter((e) => e.date === today && e.status === 'Draft').length;
   const drafts = entries.filter((e) => e.status === 'Draft').length;
   const returnedList = entries.filter((e) => e.status === 'Returned').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const returned = returnedList.length;
@@ -114,7 +116,7 @@ export function Dashboard() {
               {role === 'pmc-reviewer' ? 'Open the DPR list to review' : 'Submitted, not yet counted'}
             </Kpi>
             <Kpi tone="teal" icon={ICONS.today} label="Reported today" value={todays.length} onClick={() => go('dpr')}>
-              Entries dated {now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              Sent today{todaysDrafts ? ` · ${todaysDrafts} more in draft, not sent` : ''}
             </Kpi>
             <Kpi tone="rose" icon={ICONS.draft} label="Drafts / returned" value={`${drafts} / ${returned}`} onClick={() => go('dpr')}>
               Not counted as progress

@@ -86,7 +86,7 @@ describe('workflow totals', () => {
     const base = { projectId: A.projectId, elementId: el('C-01').id, activityCode: 'CONC', date: today, remarks: '', photos: [] };
     await expect(repo.saveProgressEntry({ ...base, clientRequestId: rid(), quantity: -1, unit: 'm3' }, ENG)).rejects.toThrow(/negative/);
     await expect(repo.saveProgressEntry({ ...base, clientRequestId: rid(), quantity: 0.1, unit: 'kg' }, ENG)).rejects.toThrow(/Unit mismatch/);
-    await expect(repo.saveProgressEntry({ ...base, clientRequestId: rid(), quantity: 5, unit: 'm3' }, ENG)).rejects.toThrow(/exceeds the remaining quantity/);
+    await expect(repo.saveProgressEntry({ ...base, clientRequestId: rid(), quantity: 5, unit: 'm3' }, ENG)).rejects.toThrow(/is more than what is left/);
   });
 
   it('counts submitted quantities when checking the remaining plan', async () => {
@@ -96,7 +96,7 @@ describe('workflow totals', () => {
     await repo.saveProgressEntry({ ...base, clientRequestId: rid(), date: today, quantity: 0.15, submit: true }, ENG);
     await expect(
       repo.saveProgressEntry({ ...base, clientRequestId: rid(), date: today, quantity: Math.round((planned - 0.1) * 1000) / 1000 }, ENG),
-    ).rejects.toThrow(/awaiting review/);
+    ).rejects.toThrow(/waiting for approval/);
   });
 
   it('rejects entries for elements with no planned quantity (Not configured)', async () => {

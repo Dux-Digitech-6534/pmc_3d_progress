@@ -84,3 +84,35 @@ describe('material variation settings', () => {
     expect(mapped.rows.find((r) => r.key === 'steel:12')?.sent).toBe(100);
   });
 });
+
+describe('round 3 fixes', () => {
+  it('a draft counts as marked, so the same % is not recorded twice', async () => {
+    const { planWorkDone, markedPercent } = await import('../src/domain/workDone');
+    const wall = { id: 'W1', code: 'W1', type: 'wall', plannedQuantities: { BRICK: { quantity: 1.225, unit: 'm3' } } } as unknown as ElementRecord;
+    const BR = act('BRICK', 'Brickwork');
+    const draft = { elementId: 'W1', activityCode: 'BRICK', unit: 'm3', quantity: 0.613, status: 'Draft' } as ProgressEntry;
+    expect(markedPercent(wall, BR, [draft])).toBe(50);
+    expect(planWorkDone([wall], BR, [draft], 50).recording).toHaveLength(0);
+    expect(planWorkDone([wall], BR, [draft], 100).total).toBeCloseTo(0.612, 6);
+  });
+
+  it('a new revision that drops an element or plans less than reported is listed', async () => {
+    const { revisionConflicts } = await import('../src/domain/revisionCheck');
+    const current = [
+      { id: 'W1', code: 'W1' },
+      { id: 'WN', code: 'WN-01' },
+    ] as unknown as ElementRecord[];
+    const e = (elementId: string, quantity: number, status: ProgressEntry['status'], activityCode = 'BRICK', unit = 'm3') =>
+      ({ elementId, activityCode, activityName: activityCode === 'BRICK' ? 'Brickwork' : 'Fixing', unit, quantity, status, modelId: 'M' }) as ProgressEntry;
+    const next = {
+      model: { id: 'M' },
+      activities: [act('BRICK', 'Brickwork'), act('FIX', 'Fixing', 'nos' as ActivityDef['unit'])],
+      elements: [{ id: 'W1', plannedQuantities: { BRICK: { quantity: 0.49, unit: 'm3' } } }],
+    } as never;
+    const out = revisionConflicts(current, [e('W1', 0.613, 'Submitted'), e('WN', 1, 'Approved', 'FIX', 'nos'), e('W1', 5, 'Returned')], next);
+    expect(out).toHaveLength(2);
+    expect(out[0]).toMatch(/WN-01 is not in the new file/);
+    expect(out[1]).toMatch(/W1 Brickwork: 0\.613 m³ already reported, the new plan is only 0\.49 m³/);
+    expect(revisionConflicts(current, [e('W1', 0.4, 'Approved')], next)).toEqual([]);
+  });
+});

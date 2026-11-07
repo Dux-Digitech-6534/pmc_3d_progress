@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { IS_FRAPPE } from '../config';
 import { errorMessages, type ErpItem, type ErpProject } from '../data/repository';
-import { requestNeeds, suggestItem } from '../domain/materialRequest';
+import { inItemUnit, requestNeeds, suggestItem } from '../domain/materialRequest';
+import { formatQty } from '../domain/progress';
 import type { MaterialRequired } from '../domain/materialRequired';
 import { useApp } from '../state/AppContext';
 import { ErrorList } from './ui';
@@ -163,7 +164,25 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
             <tbody>
               {lines.map(({ need, item, text }) => (
                 <tr key={need.key}>
-                  <td>{need.label}</td>
+                  <td>
+                    {need.label}
+                    {(() => {
+                      // what the selection needs, also in the ERP item's own unit (m³ → Cft, kg → MT …)
+                      const inUnit = item ? inItemUnit(need, item.uom, bagKg) : null;
+                      const same = item && inUnit !== null && item.uom.trim().toLowerCase().replace(/[\s.³]/g, '') === need.unit.toLowerCase().replace(/[\s.³]/g, '');
+                      return (
+                        <div className="muted small mr-need">
+                          Need {formatQty(need.qty, need.unit)}
+                          {item && inUnit !== null && !same && <> = {formatQty(inUnit, item.uom)}</>}
+                          {item && inUnit !== null && !locked && (
+                            <button type="button" className="link" onClick={() => setTyped((t) => ({ ...t, [need.key]: String(inUnit) }))}>
+                              Use
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </td>
                   <td className="num">
                     {item ? (
                       <span className="mr-qty">

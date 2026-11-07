@@ -5,7 +5,7 @@ import { errorMessages } from '../data/repository';
 import { formatQty } from '../domain/progress';
 import { activityApplies, UNIT_LABELS, type ActivityDef, type ElementRecord, type PhotoMeta, type ProgressEntry } from '../domain/types';
 import { missingPriorWork } from '../domain/sequence';
-import { markedPercent, planWorkDone } from '../domain/workDone';
+import { draftQty, markedPercent, planWorkDone } from '../domain/workDone';
 import { todayISO, validateDate } from '../domain/workflow';
 import { newRequestId, useApp } from '../state/AppContext';
 import { PhotoPicker } from './Photos';
@@ -56,7 +56,8 @@ export function WorkDoneForm({
       activities.map((a) => {
         const marks = elements.filter((el) => activityApplies(a, el.type)).map((el) => markedPercent(el, a, entries));
         const configured = marks.filter((m): m is number => m !== null);
-        return { activity: a, applies: marks.length, configured: configured.length, done: configured.filter((m) => m >= 100).length };
+        const drafts = elements.filter((el) => draftQty(el, a, entries) > 0).length;
+        return { activity: a, applies: marks.length, configured: configured.length, done: configured.filter((m) => m >= 100).length, drafts };
       }),
     [activities, elements, entries],
   );
@@ -192,7 +193,7 @@ export function WorkDoneForm({
     >
       <fieldset className="wd-acts">
         <legend>Which work is done?</legend>
-        {status.map(({ activity: a, applies, configured, done }) => {
+        {status.map(({ activity: a, applies, configured, done, drafts }) => {
           const allDone = configured > 0 && done === configured;
           const plan = plans.find((p) => p.activity.code === a.code);
           return (
@@ -206,6 +207,7 @@ export function WorkDoneForm({
                     : allDone
                       ? `✓ Marked done on all ${configured}`
                       : `${done} of ${configured} marked done${applies < elements.length ? ` · applies to ${applies} of ${elements.length}` : ''}`}
+                  {drafts > 0 && <span className="wd-draft"> · {drafts} in draft, not sent</span>}
                 </small>
               </span>
               {plan && (

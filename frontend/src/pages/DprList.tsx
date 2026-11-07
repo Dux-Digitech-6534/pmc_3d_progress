@@ -68,7 +68,7 @@ export function DprList() {
       e.elementType,
       e.activityName,
       e.quantity,
-      e.unit,
+      UNIT_LABELS[e.unit] ?? e.unit,
       e.status,
       e.remarks,
       e.reviewRemarks ?? '',

@@ -8,6 +8,7 @@ import { downloadText } from '../lib/download';
 import { useApp } from '../state/AppContext';
 import { IS_FRAPPE } from '../config';
 import { parseAndValidateModel } from '../domain/modelValidation';
+import { revisionConflicts } from '../domain/revisionCheck';
 import { workbookToModel } from '../domain/excelModel';
 import { readXlsx, XlsxError } from '../data/xlsxReader';
 import excelTemplateUrl from '../assets/PMC-3D-BOQ-Template.xlsx?url';
@@ -73,6 +74,7 @@ export function ModelRegister() {
   const [activate, setActivate] = useState<ModelRecord | null>(null);
   const [errorsFor, setErrorsFor] = useState<ModelRecord | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [conflict, setConflict] = useState<{ text: string; sourceName: string; sourceType: ModelSourceType; issues: string[] } | null>(null);
   // the server lets PMC Site Engineers and Reviewers upload models (not the Owner)
   const canUpload = role !== 'owner';
 
@@ -86,7 +88,7 @@ export function ModelRegister() {
 
   const projectName = (id: string) => projects.find((p) => p.id === id)?.name ?? id;
 
-  async function runImport(text: string, sourceName: string, sourceType: ModelSourceType) {
+  async function runImport(text: string, sourceName: string, sourceType: ModelSourceType, confirmed = false) {
     if (busy) return;
     setBusy(true);
     setResult(null);
@@ -98,7 +100,15 @@ export function ModelRegister() {
         setResult({ ok: false, errors: pre.errors, warnings: pre.warnings, sourceName });
         return;
       }
-      const out = await repo.importModel({ text, sourceName, sourceType, targetProjectId: target === '__file__' ? undefined : target });
+      // a new revision that takes away elements or planned quantity already reported on: say so first
+      if (!confirmed && pre.document && data?.model?.document && data.project.id === pre.document.project.id) {
+        const issues = revisionConflicts(data.elements, data.allEntries, pre.document);
+        if (issues.length) {
+          setConflict({ text, sourceName, sourceType, issues });
+          return;
+        }
+      }
+      const out = await repo.importModel({ text, sourceName, sourceType, targetProjectId: target === '__file__' ? undefined : target, role });
       setResult({ ...out, warnings: [...new Set([...out.warnings, ...pre.warnings])], sourceName });
       if (out.ok && out.record) {
         notify(`Imported ${out.record.name} ${out.record.revision} — ${out.record.elementCount} elements.`);
@@ -173,6 +183,41 @@ export function ModelRegister() {
 
   return (
     <div className="page">
+      {conflict && (
+        <ConfirmDialog
+          title="This version takes away work already reported"
+          message={
+            <>
+              <ul className="approve-list">
+                {conflict.issues.slice(0, 30).map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+                {conflict.issues.length > 30 && <li>… and {conflict.issues.length - 30} more</li>}
+              </ul>
+              <p className="muted small">
+                If you upload it, entries above the new plan cannot be approved (the PMC returns them), and work on removed elements stops counting. Check the
+                file first; upload anyway only if the change is right.
+              </p>
+            </>
+          }
+          confirmLabel="Upload anyway"
+          danger
+          onCancel={() => {
+            setResult({
+              ok: false,
+              errors: [`${conflict.sourceName} was not uploaded — it takes away work already reported:`, ...conflict.issues],
+              warnings: [],
+              sourceName: conflict.sourceName,
+            });
+            setConflict(null);
+          }}
+          onConfirm={() => {
+            const c = conflict;
+            setConflict(null);
+            void runImport(c.text, c.sourceName, c.sourceType, true);
+          }}
+        />
+      )}
       {review && (
         <Modal
           title={`${review.decision === 'approve' ? 'Approve' : 'Return'} planning ${review.model.name} ${review.model.revision}`}
@@ -278,12 +323,21 @@ export function ModelRegister() {
                     Uploaded {result.sourceName}: {result.record.name} {result.record.revision}, {result.record.elementCount} elements.
                   </strong>
                   {result.createdProject && <div>Project {result.record.projectId} was created from the file.</div>}
-                  {result.supersededKey && <div>The previous version is now Superseded; approved work on elements that are still there carries over.</div>}
-                  <div className="card-actions">
-                    <button className="btn btn-small btn-primary" onClick={() => go('workspace')}>
-                      Open in 3D
-                    </button>
-                  </div>
+                  {result.record.status === 'Pending Approval' ? (
+                    <div>
+                      It is <b>waiting for PMC approval</b>. The 3D and the work done keep using the current version until the PMC Reviewer approves this one
+                      (Approve in the list below).
+                    </div>
+                  ) : (
+                    <>
+                      {result.supersededKey && <div>The previous version is now Superseded; approved work on elements that are still there carries over.</div>}
+                      <div className="card-actions">
+                        <button className="btn btn-small btn-primary" onClick={() => go('workspace')}>
+                          Open in 3D
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
                 <ErrorList title={`Upload of ${result.sourceName} failed — nothing was changed`} errors={result.errors} />
@@ -408,7 +462,7 @@ export function ModelRegister() {
                     )}
                     {PLANNING_STATUSES.includes(m.status) && (
                       <span className="row-actions">
-                        {!IS_FRAPPE && (
+                        {!IS_FRAPPE && m.sourceType === 'Model Builder (from drawing)' && (
                           <button className="link" onClick={() => correctInBuilder(m)}>
                             {role === 'pmc-reviewer' ? 'Check / correct' : 'Correct'} in Model Builder
                           </button>

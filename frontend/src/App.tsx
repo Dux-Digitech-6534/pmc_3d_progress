@@ -105,7 +105,7 @@ function Shell() {
               {!projects.length && <option value="">— none —</option>}
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.id}
+                  {p.name} · {p.id}
                 </option>
               ))}
             </select>

@@ -10,6 +10,7 @@ import { useApp } from '../state/AppContext';
 import { EntryDetailsModal } from './EntryDetailsModal';
 import { EntryForm } from './EntryForm';
 import { MaterialTable } from './MaterialTable';
+import { DraftEntries } from './DraftEntries';
 import { ReturnEntriesButton } from './ReturnEntries';
 import { WorkDoneForm } from './WorkDoneForm';
 import { ConfirmDialog, EmptyState, fmtDate, ProgressBadge, ProgressBar, StatusBadge } from './ui';
@@ -62,6 +63,7 @@ export function ElementPanel({
           </div>
         </div>
         <ApproveTicked elements={selected} entries={entries} />
+        <DraftEntries elements={selected} entries={entries} />
         <SelectionTotals elements={selected} activities={activities} entries={entries} />
         <div className="panel-section">
           <h3 className="section-title">Work done</h3>
@@ -79,6 +81,7 @@ export function ElementPanel({
   return (
     <div className="panel-scroll">
       <ElementSummary element={el} activities={activities} entries={entries} projectName={projectName} />
+      <DraftEntries elements={[el]} entries={entries} />
       <History
         element={el}
         entries={entries}

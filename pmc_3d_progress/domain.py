@@ -453,13 +453,14 @@ def check_quantity(element, activity, quantity, unit, entries, mode, exclude_ent
 	available = round_qty(planned["quantity"] - committed)
 
 	if quantity > available + QTY_EPSILON:
-		parts = [f"planned {js_num(planned['quantity'])} {activity['unit']}", f"approved {js_num(approved)}"]
+		u = {"m3": "m³", "m2": "m²"}.get(activity["unit"], activity["unit"])
+		parts = [f"planned {js_num(planned['quantity'])} {u}", f"approved {js_num(approved)} {u}"]
 		if mode == "claim" and pending > 0:
-			parts.append(f"awaiting review {js_num(pending)}")
+			parts.append(f"waiting for approval {js_num(pending)} {u}")
 		errors.append(
-			f"{js_num(quantity)} {activity['unit']} exceeds the remaining quantity for {name} ({', '.join(parts)}; "
-			f"available {js_num(max(available, 0))} {activity['unit']}). "
-			"If the plan is wrong, revise the model quantities instead of over-reporting."
+			f"{js_num(quantity)} {u} is more than what is left of {name} ({', '.join(parts)}; "
+			f"left {js_num(max(available, 0))} {u}). "
+			"If the drawing quantity is wrong, upload a corrected 3D + BOQ file instead of reporting more."
 		)
 	return errors
 

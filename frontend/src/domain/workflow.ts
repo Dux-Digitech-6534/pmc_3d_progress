@@ -1,6 +1,6 @@
 import { roundQty, QTY_EPSILON } from './progress';
 import { QTY_DECIMALS } from './allocation';
-import { activityApplies, type ActivityDef, type ElementRecord, type ElementType, type EntryStatus, type ProgressEntry, type Role, type Unit } from './types';
+import { activityApplies, UNIT_LABELS, type ActivityDef, type ElementRecord, type ElementType, type EntryStatus, type ProgressEntry, type Role, type Unit } from './types';
 
 /**
  * Workflow: Draft → Submitted → Approved | Returned; Returned → (edit) Draft → Submitted.
@@ -97,11 +97,12 @@ export function checkQuantity(input: QuantityCheckInput): string[] {
   const available = roundQty(planned!.quantity - committed);
 
   if (quantity > available + QTY_EPSILON) {
-    const parts = [`planned ${planned!.quantity} ${activity.unit}`, `approved ${approved}`];
-    if (mode === 'claim' && pending > 0) parts.push(`awaiting review ${pending}`);
+    const u = UNIT_LABELS[activity.unit] ?? activity.unit;
+    const parts = [`planned ${planned!.quantity} ${u}`, `approved ${approved} ${u}`];
+    if (mode === 'claim' && pending > 0) parts.push(`waiting for approval ${pending} ${u}`);
     errors.push(
-      `${quantity} ${activity.unit} exceeds the remaining quantity for ${name} (${parts.join(', ')}; available ${Math.max(available, 0)} ${activity.unit}). ` +
-        'If the plan is wrong, revise the model quantities instead of over-reporting.',
+      `${quantity} ${u} is more than what is left of ${name} (${parts.join(', ')}; left ${Math.max(available, 0)} ${u}). ` +
+        'If the drawing quantity is wrong, upload a corrected 3D + BOQ file instead of reporting more.',
     );
   }
   return errors;
