@@ -3590,3 +3590,7 @@ input[type='radio'] {
 .var-map select {
   min-width: 200px;
 }
+.mr-project {
+  align-self: end;
+  padding-bottom: 6px;
+}
