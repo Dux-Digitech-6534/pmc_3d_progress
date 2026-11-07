@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { IS_FRAPPE } from '../config';
-import { errorMessages, type ErpItem, type ErpProject } from '../data/repository';
+import { errorMessages, type ErpItem } from '../data/repository';
 import { inItemUnit, requestNeeds, suggestItem } from '../domain/materialRequest';
+import { toReportUnit } from '../domain/materialVariation';
 import { formatQty } from '../domain/progress';
 import type { MaterialRequired } from '../domain/materialRequired';
 import { useApp } from '../state/AppContext';
@@ -19,10 +20,9 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
   const { repo, role, notify, data } = useApp();
   const projectId = data?.project.id ?? '';
   const [items, setItems] = useState<ErpItem[] | null>(null);
-  // ERPNext project of this PMC project (the one Material Variation uses): it goes on every line, so the
-  // Purchase Order and Purchase Receipt made from the request carry it and the receipt counts as sent to the site
+  // Not asked on the form (not needed for now). When Material Variation already links this PMC project to an
+  // ERPNext project, it still goes on every line, so the order and receipt made from the request carry it.
   const [erpProject, setErpProject] = useState<string | null>(null);
-  const [erpProjects, setErpProjects] = useState<ErpProject[] | null>(null);
   const [company, setCompany] = useState('');
   const [warehouse, setWarehouse] = useState<string | undefined>();
   const [requiredBy, setRequiredBy] = useState(() => inDays(3));
@@ -54,11 +54,6 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
       alive = false;
     };
   }, [repo, projectId]);
-  useEffect(() => {
-    if (erpProject !== '' || erpProjects) return;
-    repo.listErpProjects().then(setErpProjects, () => setErpProjects([]));
-  }, [repo, erpProject, erpProjects]);
-  const projectName = erpProjects?.find((p) => p.id === erpProject)?.name;
   useEffect(() => {
     if (!company) return;
     repo.listErpWarehouses(company).then(
@@ -124,31 +119,6 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
       ) : (
         <>
           <div className="mr-fields">
-            {erpProject === '' ? (
-              <label>
-                Project
-                <select
-                  value=""
-                  disabled={locked}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setErpProject(v);
-                    repo.saveVariationSettings(projectId, { erpProject: v }).catch((err) => setErrors(errorMessages(err)));
-                  }}
-                >
-                  <option value="">{erpProjects === null ? 'Loading…' : 'Choose the ERPNext project…'}</option>
-                  {(erpProjects ?? []).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.id})
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : erpProject ? (
-              <div className="small muted mr-project">
-                Project: <b>{projectName ?? erpProject}</b>
-              </div>
-            ) : null}
             <label>
               Required by
               <input type="date" value={requiredBy} min={inDays(0)} disabled={locked} onChange={(e) => setRequiredBy(e.target.value)} />
@@ -169,7 +139,8 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
                     {(() => {
                       // what the selection needs, also in the ERP item's own unit (m³ → Cft, kg → MT …)
                       const inUnit = item ? inItemUnit(need, item.uom, bagKg) : null;
-                      const same = item && inUnit !== null && item.uom.trim().toLowerCase().replace(/[\s.³]/g, '') === need.unit.toLowerCase().replace(/[\s.³]/g, '');
+                      // "m³ = Cubic Meter" is the same unit: show the second figure only when it is really another unit
+                      const same = item && toReportUnit(need.kind, 1, item.uom, bagKg) === 1;
                       return (
                         <div className="muted small mr-need">
                           Need {formatQty(need.qty, need.unit)}
@@ -222,7 +193,7 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
           {!saved?.submitted && (
             <div className="form-actions">
               {!saved ? (
-                <button className="btn btn-primary" disabled={busy || !ready.length || badQty || !company || !erpProject} onClick={() => void run('draft')}>
+                <button className="btn btn-primary" disabled={busy || !ready.length || badQty || !company} onClick={() => void run('draft')}>
                   {busy ? 'Saving…' : `Save Draft (${ready.length} item${ready.length === 1 ? '' : 's'})`}
                 </button>
               ) : (
@@ -233,7 +204,7 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
             </div>
           )}
           <p className="hint">
-            Materials come from the selected elements; enter the quantity to request. Materials left blank are not requested.{erpProject === '' ? ' Choose the project first — the order and the receipt then carry it, so the material shows as sent to this site.' : ''}
+            Materials come from the selected elements; enter the quantity to request. Materials left blank are not requested.
           </p>
         </>
       )}
