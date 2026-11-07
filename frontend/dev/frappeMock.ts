@@ -152,6 +152,8 @@ export function frappeMock(): Plugin {
                 return r.reviewProgressEntry(args.entry_id, args.decision, args.remarks, args.role);
               case 'api.delete_draft_entry':
                 return r.deleteDraftEntry(args.entry_id, args.role);
+              case 'api.ensure_erp_project':
+                return r.ensureErpProject(args.project_id);
               case 'api.get_variation_settings':
                 return r.getVariationSettings(args.project_id);
               case 'api.save_variation_settings':

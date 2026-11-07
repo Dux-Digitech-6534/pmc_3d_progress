@@ -698,6 +698,14 @@ export class LocalRepository implements PmcRepository {
   }
 
   // No ERPNext in the browser: one demo ERP project with a few material issues, to try the variation report.
+  /** Demo: every PMC project links to the one demo ERP project (the server finds or creates a real one). */
+  async ensureErpProject(projectId: string): Promise<{ erpProject: string; erpProjectName: string }> {
+    const s = await this.getVariationSettings(projectId);
+    if (!s.erpProject) await this.saveVariationSettings(projectId, { erpProject: 'ERP-DEMO' });
+    const id = s.erpProject || 'ERP-DEMO';
+    return { erpProject: id, erpProjectName: id === 'ERP-DEMO' ? 'Demo ERP project (sample issues)' : id };
+  }
+
   listErpProjects(): Promise<ErpProject[]> {
     return this.op(() => [{ id: 'ERP-DEMO', name: 'Demo ERP project (sample issues)' }]);
   }

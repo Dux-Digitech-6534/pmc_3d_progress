@@ -116,3 +116,14 @@ describe('round 3 fixes', () => {
     expect(revisionConflicts(current, [e('W1', 0.4, 'Approved')], next)).toEqual([]);
   });
 });
+
+describe('ERP project follows the PMC project', () => {
+  it('links once and keeps the link', async () => {
+    const repo = new LocalRepository({ storage: new MemoryStorage(), seed: seedDemoData });
+    const a = await repo.ensureErpProject('PMC-SEC-001');
+    expect(a.erpProject).toBe('ERP-DEMO');
+    expect((await repo.getVariationSettings('PMC-SEC-001')).erpProject).toBe('ERP-DEMO');
+    await repo.saveVariationSettings('PMC-SEC-001', { erpProject: 'ERP-X' });
+    expect((await repo.ensureErpProject('PMC-SEC-001')).erpProject).toBe('ERP-X');
+  });
+});

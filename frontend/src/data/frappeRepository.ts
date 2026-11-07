@@ -212,6 +212,10 @@ export class FrappeRepository implements PmcRepository {
     return call<VariationSettings>(`${M}get_variation_settings`, { project_id: projectId }, 'GET');
   }
 
+  ensureErpProject(projectId: string) {
+    return call<{ erpProject: string; erpProjectName: string }>(`${M}ensure_erp_project`, { project_id: projectId });
+  }
+
   saveVariationSettings(projectId: string, change: { erpProject?: string; itemMap?: ItemMap }) {
     return call<VariationSettings>(`${M}save_variation_settings`, {
       project_id: projectId,

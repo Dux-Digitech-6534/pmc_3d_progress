@@ -989,3 +989,34 @@ def save_variation_settings(project_id, erp_project=None, item_map=None):
 				clean[str(code)] = {k: m[k] for k in ("kind", "dia", "grade") if m.get(k) not in (None, "")}
 		frappe.defaults.set_global_default("pmc3d_item_map", json.dumps(clean))
 	return get_variation_settings(project_id)
+
+
+_ERP_COMPANY = "Dux Digitech"
+
+
+@frappe.whitelist(methods=["POST"])
+def ensure_erp_project(project_id):
+	"""The ERPNext Project of a PMC project: the one linked before, else the one with the same name, else a new one.
+
+	Material Variation and Material Requests use it, so the project picked at the top of the page is all a user chooses.
+	"""
+	_require_reader()
+	pmc = frappe.db.get_value("PMC Project", project_id, ["name", "project_name"], as_dict=True)
+	if not pmc:
+		_throw(f"Project {project_id} was not found.", frappe.DoesNotExistError)
+	linked = frappe.defaults.get_global_default(_erp_key(project_id))
+	if linked and frappe.db.exists("Project", linked):
+		name = linked
+	else:
+		title = (pmc.project_name or pmc.name).strip()[:140]
+		name = frappe.db.get_value("Project", {"project_name": title}, "name")
+		if not name:
+			company = _ERP_COMPANY if frappe.db.exists("Company", _ERP_COMPANY) else (
+				frappe.defaults.get_global_default("company") or frappe.db.get_value("Company", {}, "name")
+			)
+			doc = frappe.get_doc({"doctype": "Project", "project_name": title, "company": company, "status": "Open"})
+			doc.flags.ignore_permissions = True
+			doc.insert()
+			name = doc.name
+		frappe.defaults.set_global_default(_erp_key(project_id), name)
+	return {"erpProject": name, "erpProjectName": frappe.db.get_value("Project", name, "project_name") or name}

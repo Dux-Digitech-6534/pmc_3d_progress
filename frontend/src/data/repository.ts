@@ -63,6 +63,8 @@ export interface PmcRepository {
   /** Material variation settings kept for everyone: the ERPNext project of a PMC project, and items set by hand. */
   getVariationSettings(projectId: string): Promise<VariationSettings>;
   saveVariationSettings(projectId: string, change: { erpProject?: string; itemMap?: ItemMap }): Promise<VariationSettings>;
+  /** The ERPNext project of a PMC project — linked before, found by the same name, or created — so nobody has to pick it. */
+  ensureErpProject(projectId: string): Promise<{ erpProject: string; erpProjectName: string }>;
 }
 
 /** ERP item code → what material it is (set by hand), or 'ignore' = not a building material. */

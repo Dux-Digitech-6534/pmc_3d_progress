@@ -20,8 +20,8 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
   const { repo, role, notify, data } = useApp();
   const projectId = data?.project.id ?? '';
   const [items, setItems] = useState<ErpItem[] | null>(null);
-  // Not asked on the form (not needed for now). When Material Variation already links this PMC project to an
-  // ERPNext project, it still goes on every line, so the order and receipt made from the request carry it.
+  // Not asked on the form: the ERPNext project of the project chosen at the top (linked, found or created on
+  // the server) goes on every line, so the order and receipt carry it and Material Variation counts it.
   const [erpProject, setErpProject] = useState<string | null>(null);
   const [company, setCompany] = useState('');
   const [warehouse, setWarehouse] = useState<string | undefined>();
@@ -46,7 +46,7 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
   useEffect(() => {
     if (!projectId) return;
     let alive = true;
-    repo.getVariationSettings(projectId).then(
+    repo.ensureErpProject(projectId).then(
       (s) => alive && setErpProject(s.erpProject),
       () => alive && setErpProject(''),
     );

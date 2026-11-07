@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState, ErrorList, PageHeader, Spinner } from '../components/ui';
 import { IS_FRAPPE } from '../config';
-import { errorMessages, type ErpProject, type ItemMap } from '../data/repository';
+import { errorMessages, type ItemMap } from '../data/repository';
 import { materialRequired } from '../domain/materialRequired';
 import { normsOf } from '../domain/materials';
 import { variationReport, type ItemMatch, type SentLine, type VariationStatus } from '../domain/materialVariation';
@@ -55,7 +55,7 @@ function KindSelect({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
-/** The ERP project picked for a PMC project, remembered in this browser only. */
+/** The ERP project picked earlier in this browser (before the link moved to the server). */
 const erpKey = (projectId: string) => `pmc3d.erpProject.${projectId}`;
 const remembered = (projectId: string) => {
   try {
@@ -72,8 +72,8 @@ const remembered = (projectId: string) => {
 export function MaterialVariation() {
   const { data, repo, go } = useApp();
   const projectId = data?.project.id ?? '';
-  const [erpProjects, setErpProjects] = useState<ErpProject[] | null>(null);
   const [erpProject, setErpProject] = useState('');
+  const [erpProjectName, setErpProjectName] = useState('');
   const [itemMap, setItemMap] = useState<ItemMap>({});
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -81,21 +81,26 @@ export function MaterialVariation() {
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // the ERPNext project and the items set by hand are kept on the server, the same for every user and device
+  // the ERPNext project follows the project chosen at the top of the page: linked once on the server
+  // (found by the same name, or created), the same for every user and device; items set by hand too
   useEffect(() => {
     if (!projectId) return;
     let alive = true;
-    repo.getVariationSettings(projectId).then(
-      (s) => {
-        if (!alive) return;
-        setItemMap(s.itemMap);
-        // a choice made earlier in this browser only moves to the server once
-        const old = remembered(projectId);
-        if (!s.erpProject && old) void repo.saveVariationSettings(projectId, { erpProject: old }).catch(() => undefined);
-        setErpProject(s.erpProject || old);
-      },
-      () => alive && setErpProject(remembered(projectId)),
-    );
+    setErpProject('');
+    setErpProjectName('');
+    setErrors([]);
+    (async () => {
+      const s = await repo.getVariationSettings(projectId);
+      if (!alive) return;
+      setItemMap(s.itemMap);
+      // a choice made earlier in this browser only moves to the server once
+      const old = remembered(projectId);
+      if (!s.erpProject && old) await repo.saveVariationSettings(projectId, { erpProject: old });
+      const p = await repo.ensureErpProject(projectId);
+      if (!alive) return;
+      setErpProject(p.erpProject);
+      setErpProjectName(p.erpProjectName);
+    })().catch((e) => alive && setErrors(errorMessages(e)));
     return () => {
       alive = false;
     };
@@ -111,12 +116,6 @@ export function MaterialVariation() {
       (e) => setErrors(errorMessages(e)),
     );
   };
-  useEffect(() => {
-    repo.listErpProjects().then(setErpProjects, (e) => {
-      setErpProjects([]);
-      setErrors(errorMessages(e));
-    });
-  }, [repo]);
   useEffect(() => {
     if (!erpProject) return setLines(null);
     let alive = true;
@@ -176,26 +175,13 @@ export function MaterialVariation() {
         <div className="variation-filters">
           <label>
             Project
-            <select
-              value={erpProject}
-              onChange={(e) => {
-                const value = e.target.value;
-                setErpProject(value);
-                try {
-                  localStorage.setItem(erpKey(projectId), value);
-                } catch {
-                  /* the server copy is the one that counts */
-                }
-                repo.saveVariationSettings(projectId, { erpProject: value }).catch((err) => setErrors(errorMessages(err)));
-              }}
-            >
-              <option value="">{erpProjects === null ? 'Loading…' : 'Choose…'}</option>
-              {(erpProjects ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.id})
-                </option>
-              ))}
-            </select>
+            <input
+              type="text"
+              readOnly
+              aria-readonly="true"
+              value={erpProject ? `${data.project.name}${erpProjectName && erpProjectName !== data.project.name ? ` — ERPNext: ${erpProjectName}` : ''} (${erpProject})` : 'Linking…'}
+              title="The project chosen at the top of the page; its material in ERPNext is counted"
+            />
           </label>
           <label>
             From
@@ -221,7 +207,7 @@ export function MaterialVariation() {
 
       <ErrorList errors={errors} title="Could not read the ERP" />
       {!erpProject ? (
-        <EmptyState title="Choose the project">Pick the ERPNext project whose material issues and receipts belong to {data.project.name}.</EmptyState>
+        errors.length ? null : <Spinner label="Linking the ERPNext project…" />
       ) : loading || !report ? (
         <Spinner label="Reading ERPNext…" />
       ) : (
