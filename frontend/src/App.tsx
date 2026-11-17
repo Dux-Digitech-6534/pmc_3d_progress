@@ -10,6 +10,7 @@ import { ModelBuilder } from './pages/ModelBuilder';
 import { MaterialVariation } from './pages/MaterialVariation';
 import { ModelRegister } from './pages/ModelRegister';
 import { Projects } from './pages/Projects';
+import { Reports } from './pages/Reports';
 import { Workspace } from './pages/Workspace';
 import { AppProvider, useApp, type Page } from './state/AppContext';
 
@@ -21,6 +22,7 @@ const NAV: { page: Page; label: string; icon: string }[] = [
   { page: 'material', label: 'Material Required', icon: 'M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6' },
   { page: 'variation', label: 'Material Variation', icon: 'M4 19V5M4 19h16M8 15l3-4 3 2 5-6' },
   { page: 'dpr', label: 'Daily Progress Reports', icon: 'M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6' },
+  { page: 'reports', label: 'Reports', icon: 'M5 20V10M10 20V4M15 20v-7M20 20v-4' },
   { page: 'models', label: '3D + BOQ Upload', icon: 'M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3' },
   // drawing → model with AI: only for local work; on the server the 3D + BOQ is uploaded
   ...(IS_FRAPPE ? [] : [{ page: 'builder' as Page, label: 'Model Builder', icon: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4' }]),
@@ -199,6 +201,7 @@ function Shell() {
           {!noAccess && !empty && page === 'material' && <Workspace key="material" mode="material" />}
           {!noAccess && !empty && page === 'variation' && <MaterialVariation />}
           {!noAccess && !empty && page === 'dpr' && <DprList />}
+          {!noAccess && !empty && page === 'reports' && <Reports />}
           {!noAccess && page === 'builder' && !IS_FRAPPE && <ModelBuilder />}
           {!noAccess && page === 'models' && <ModelRegister />}
         </main>
