@@ -7,18 +7,16 @@ import {
   ELEMENT_TYPE_LABELS,
   executiveSummary,
   presetRange,
+  type CategoryStatus,
   type CountMode,
   type RangePreset,
-  type SummaryGroup,
 } from '../domain/reports';
-import { UNIT_LABELS, type ActivityDef, type ElementType } from '../domain/types';
+import { UNIT_LABELS, type ElementType } from '../domain/types';
 import { todayISO } from '../domain/workflow';
 import { downloadText, toCsv } from '../lib/download';
 import { useApp } from '../state/AppContext';
 
-type Tab = 'summary' | 'status';
-
-const PRESETS: { id: RangePreset; label: string }[] = [
+const PERIODS: { id: RangePreset; label: string }[] = [
   { id: 'today', label: 'Today' },
   { id: 'last10', label: 'Last 10 days' },
   { id: 'month', label: 'This month' },
@@ -26,19 +24,23 @@ const PRESETS: { id: RangePreset; label: string }[] = [
   { id: 'custom', label: 'Choose dates' },
 ];
 
-const unit = (a: ActivityDef) => UNIT_LABELS[a.unit] ?? a.unit;
 const fmtDay = (ymd: string) => (ymd ? new Date(`${ymd}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+const tone = (stage: string) => (stage === 'complete' ? 'done' : stage === 'not-started' || stage === 'no-plan' ? 'none' : 'doing');
 
-/** Management reports: read only, they never change any entry. */
+/**
+ * The executive report asked for in the boss meeting, on ONE page:
+ *  1. how much work was done in a period (m³ concrete, kg steel, m² shuttering …);
+ *  2. where each type of element stands ("Footing: 10 complete · 5 steel done · 2 on shuttering · rest not started").
+ * Read only: it never changes any entry.
+ */
 export function Reports() {
   const { data, go, setSelection } = useApp();
-  const [tab, setTab] = useState<Tab>('summary');
   const [mode, setMode] = useState<CountMode>('approved');
   const [buildingId, setBuildingId] = useState('');
   const [preset, setPreset] = useState<RangePreset>('last10');
   const [custom, setCustom] = useState(() => presetRange('last10'));
-  const [type, setType] = useState<ElementType | ''>('');
-  const [openBucket, setOpenBucket] = useState<string | null>(null);
+  const [open, setOpen] = useState<{ type: ElementType; stage: string } | null>(null);
+  const [showFloors, setShowFloors] = useState(false);
 
   const range = preset === 'custom' ? custom : presetRange(preset);
   const elements = useMemo(() => data?.elements ?? [], [data]);
@@ -50,16 +52,13 @@ export function Reports() {
     () => executiveSummary(elements, entries, activities, { from: range.from, to: range.to, buildingId, mode }),
     [elements, entries, activities, range.from, range.to, buildingId, mode],
   );
-
-  const types = useMemo(() => {
-    const present = new Set(elements.map((e) => e.type));
-    return (Object.keys(ELEMENT_TYPE_LABELS) as ElementType[]).filter((t) => present.has(t));
-  }, [elements]);
-  const currentType: ElementType | '' = type && types.includes(type) ? type : (types[0] ?? '');
-  const status = useMemo(
-    () => (currentType ? categoryStatus(elements, entries, activities, currentType, mode, buildingId) : null),
-    [elements, entries, activities, currentType, mode, buildingId],
-  );
+  const statuses = useMemo(() => {
+    const present = new Set(elements.filter((e) => !buildingId || e.buildingId === buildingId).map((e) => e.type));
+    return (Object.keys(ELEMENT_TYPE_LABELS) as ElementType[])
+      .filter((t) => present.has(t))
+      .map((t) => ({ type: t, s: categoryStatus(elements, entries, activities, t, mode, buildingId) }))
+      .filter((x) => x.s.rows.length);
+  }, [elements, entries, activities, mode, buildingId]);
 
   if (!data) return <Spinner />;
   if (!data.model)
@@ -76,274 +75,231 @@ export function Reports() {
   const periodText =
     !range.from && !range.to ? 'All time' : range.from === range.to ? fmtDay(range.from) : `${fmtDay(range.from) || 'Start'} – ${fmtDay(range.to) || 'today'}`;
   const buildingName = buildings.find((b) => b.id === buildingId)?.name ?? 'All buildings';
-  const countText = mode === 'approved' ? 'Approved work only' : 'Approved + waiting for approval';
+  const countText = mode === 'approved' ? 'approved work only' : 'approved + waiting for approval';
 
-  function downloadSummary() {
+  function download() {
     const acts = summary.activities;
-    const head = (first: string[]) => [...first, ...acts.map((a) => `${a.name} (${unit(a)})`)];
-    const line = (g: SummaryGroup) => [...g.label, ...acts.map((a) => g.qty[a.code] ?? 0)];
     const rows: (string | number)[][] = [
-      ['Executive Summary', data!.project.name],
-      ['Period', periodText],
+      ['PMC Report', data!.project.name],
       ['Building', buildingName],
       ['Counted', countText],
       [],
-      head(['Total']),
-      ['All', ...acts.map((a) => summary.totals[a.code] ?? 0)],
+      [`Work done: ${periodText}`],
+      ['Activity', 'Quantity', 'Unit'],
+      ...acts.map((a) => [a.name, summary.totals[a.code] ?? 0, UNIT_LABELS[a.unit] ?? a.unit]),
       [],
-      head(['Building', 'Floor']),
-      ...summary.byFloor.map(line),
+      ['Work done by floor', '', ...acts.map((a) => `${a.name} (${UNIT_LABELS[a.unit] ?? a.unit})`)],
+      ...summary.byFloor.map((g) => [...g.label, ...acts.map((a) => g.qty[a.code] ?? 0)]),
       [],
-      head(['Element type']),
-      ...summary.byType.map(line),
+      ['Where each element type stands (today)'],
+      ['Element type', 'Stage', 'Elements'],
+      ...statuses.flatMap(({ type, s }) => s.buckets.map((b) => [ELEMENT_TYPE_LABELS[type], b.label, b.elements.length])),
+      [],
+      ['Element', 'Stage'],
+      ...statuses.flatMap(({ s }) => s.rows.map((r) => [elementLabel(r.element), r.label])),
     ];
-    downloadText(`executive-summary-${data!.project.id}-${todayISO()}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
+    downloadText(`pmc-report-${data!.project.id}-${todayISO()}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
   }
-
-  function downloadStatus() {
-    if (!status || !currentType) return;
-    const rows: (string | number)[][] = [
-      [`${ELEMENT_TYPE_LABELS[currentType]} status`, data!.project.name],
-      ['Building', buildingName],
-      ['Counted', countText],
-      [],
-      ['Stage', 'Elements'],
-      ...status.buckets.map((b) => [b.label, b.elements.length]),
-      [],
-      ['Element', 'Stage', ...status.activities.map((a) => `${a.name} %`)],
-      ...status.rows.map((r) => [elementLabel(r.element), r.label, ...status.activities.map((a) => r.percent[a.code] ?? '—')]),
-    ];
-    downloadText(`${currentType}-status-${data!.project.id}-${todayISO()}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
-  }
-
-  const groupTable = (title: string, first: string[], groups: SummaryGroup[]) => (
-    <section className="dash-card">
-      <div className="dash-card-head">
-        <div>
-          <h2>{title}</h2>
-        </div>
-      </div>
-      <div className="dash-table-wrap">
-        <table className="dash-table rep-table">
-          <thead>
-            <tr>
-              {first.map((h) => (
-                <th key={h}>{h}</th>
-              ))}
-              {summary.activities.map((a) => (
-                <th key={a.code} className="num">
-                  {a.name}
-                  <div className="muted small">{unit(a)}</div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {groups.map((g) => (
-              <tr key={g.key}>
-                {g.label.map((l, i) => (
-                  <td key={i}>{i === 0 ? <b>{l}</b> : l}</td>
-                ))}
-                {summary.activities.map((a) => (
-                  <td key={a.code} className="num">
-                    {g.qty[a.code] ? formatQty(g.qty[a.code]) : <span className="muted">—</span>}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
 
   return (
-    <div className="page">
+    <div className="page rep-page">
       <PageHeader
         title="Reports"
-        subtitle="Short reports for management — how much work was done, and where each type of element stands. Reports only read data; they change nothing."
+        subtitle="How much work was done, and where each type of element stands — on one page."
         actions={
-          <button className="btn" onClick={tab === 'summary' ? downloadSummary : downloadStatus} disabled={tab === 'summary' ? !summary.entries : !status?.rows.length}>
+          <button className="btn" onClick={download}>
             Download Excel (CSV)
           </button>
         }
       />
 
-      <div className="rep-tabs" role="tablist">
-        <button role="tab" aria-selected={tab === 'summary'} className={tab === 'summary' ? 'on' : ''} onClick={() => setTab('summary')}>
-          Executive Summary
-        </button>
-        <button role="tab" aria-selected={tab === 'status'} className={tab === 'status' ? 'on' : ''} onClick={() => setTab('status')}>
-          Status by Element Type
-        </button>
-      </div>
-
-      <div className="filters card">
-        {buildings.length > 1 && (
-          <label>
-            Building
-            <select value={buildingId} onChange={(e) => setBuildingId(e.target.value)}>
-              <option value="">All buildings</option>
-              {buildings.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {tab === 'summary' && (
-          <label>
-            Period
-            <select value={preset} onChange={(e) => setPreset(e.target.value as RangePreset)}>
-              {PRESETS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {tab === 'summary' && preset === 'custom' && (
-          <>
+      <div className="rep-options">
+          {buildings.length > 1 && (
             <label>
-              From
-              <input type="date" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} />
-            </label>
-            <label>
-              To
-              <input type="date" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} />
-            </label>
-          </>
-        )}
-        {tab === 'status' && (
-          <label>
-            Element type
-            <select value={currentType} onChange={(e) => (setType(e.target.value as ElementType), setOpenBucket(null))}>
-              {types.map((t) => (
-                <option key={t} value={t}>
-                  {ELEMENT_TYPE_LABELS[t]}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <label className="rep-check">
-          <input type="checkbox" checked={mode === 'with-pending'} onChange={(e) => setMode(e.target.checked ? 'with-pending' : 'approved')} />
-          Also count work waiting for PMC approval
-        </label>
-      </div>
-      {dateError && <div className="alert alert-warn">{dateError}</div>}
-
-      {tab === 'summary' ? (
-        <>
-          <p className="rep-period">
-            <b>{periodText}</b> · {buildingName} · {countText}
-            {summary.entries > 0 && (
-              <>
-                {' '}
-                · work on {summary.days} day{summary.days === 1 ? '' : 's'}, {summary.elements} element{summary.elements === 1 ? '' : 's'}
-              </>
-            )}
-          </p>
-          {summary.entries === 0 ? (
-            <EmptyState title="No work in this period">
-              {mode === 'approved' ? 'Nothing approved in these dates. Tick "Also count work waiting for PMC approval", or choose a longer period.' : 'Choose a longer period.'}
-            </EmptyState>
-          ) : (
-            <>
-              <div className="rep-cards">
-                {summary.activities.map((a) => (
-                  <div key={a.code} className="rep-card">
-                    <div className="rep-card-name">{a.name}</div>
-                    <div className="rep-card-value">
-                      {formatQty(summary.totals[a.code])} <span>{unit(a)}</span>
-                    </div>
-                  </div>
+              Building{' '}
+              <select value={buildingId} onChange={(e) => (setBuildingId(e.target.value), setOpen(null))}>
+                <option value="">All buildings</option>
+                {buildings.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
                 ))}
-              </div>
-              {groupTable('By building and floor', ['Building', 'Floor'], summary.byFloor)}
-              {groupTable('By element type', ['Element type'], summary.byType)}
-            </>
+              </select>
+            </label>
           )}
-        </>
-      ) : !status || status.rows.length === 0 ? (
-        <EmptyState title="No elements">This building has no elements of this type.</EmptyState>
-      ) : (
-        <>
-          <p className="rep-period">
-            <b>{status.rows.length} {ELEMENT_TYPE_LABELS[currentType as ElementType].toLowerCase()}{status.rows.length === 1 ? '' : 's'}</b> · {buildingName} · {countText} · click a box to see the elements
-          </p>
-          <div className="rep-buckets">
-            {status.buckets.map((b) => (
-              <button
-                key={b.stage}
-                className={`rep-bucket rep-bucket-${b.stage === 'complete' ? 'done' : b.stage === 'not-started' || b.stage === 'no-plan' ? 'none' : 'doing'} ${openBucket === b.stage ? 'on' : ''}`}
-                onClick={() => setOpenBucket(openBucket === b.stage ? null : b.stage)}
-              >
-                <span className="rep-bucket-n">{b.elements.length}</span>
-                <span className="rep-bucket-label">{b.label}</span>
+          <label className="rep-check">
+            <input type="checkbox" checked={mode === 'with-pending'} onChange={(e) => setMode(e.target.checked ? 'with-pending' : 'approved')} />
+            Also count work waiting for PMC approval
+          </label>
+      </div>
+
+      {/* ---------- 1. work done in the period ---------- */}
+      <section className="dash-card">
+        <div className="dash-card-head rep-head">
+          <div>
+            <h2>1. Work done</h2>
+            <p>
+              {periodText} · {buildingName} · {countText}
+            </p>
+          </div>
+          <div className="rep-periods" role="group" aria-label="Period">
+            {PERIODS.map((p) => (
+              <button key={p.id} className={preset === p.id ? 'on' : ''} onClick={() => setPreset(p.id)}>
+                {p.label}
               </button>
             ))}
           </div>
-          <section className="dash-card">
-            <div className="dash-card-head">
-              <div>
-                <h2>{openBucket ? status.buckets.find((b) => b.stage === openBucket)?.label : 'All elements'}</h2>
-                <p>% of the planned quantity done for each activity.</p>
-              </div>
-              {openBucket && (
-                <button className="link" onClick={() => setOpenBucket(null)}>
-                  Show all
-                </button>
-              )}
+        </div>
+        {preset === 'custom' && (
+          <div className="rep-dates">
+            <label>
+              From <input type="date" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} />
+            </label>
+            <label>
+              To <input type="date" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} />
+            </label>
+          </div>
+        )}
+        {dateError && <div className="alert alert-warn">{dateError}</div>}
+
+        {summary.entries === 0 ? (
+          <p className="rep-empty">
+            No {mode === 'approved' ? 'approved ' : ''}work in this period.
+            {mode === 'approved' ? ' Tick "Also count work waiting for PMC approval" above, or choose a longer period.' : ' Choose a longer period.'}
+          </p>
+        ) : (
+          <>
+            <div className="rep-cards">
+              {summary.activities.map((a) => (
+                <div key={a.code} className="rep-card">
+                  <div className="rep-card-value">
+                    {formatQty(summary.totals[a.code])} <span>{UNIT_LABELS[a.unit] ?? a.unit}</span>
+                  </div>
+                  <div className="rep-card-name">{a.name}</div>
+                </div>
+              ))}
             </div>
-            <div className="dash-table-wrap">
-              <table className="dash-table rep-table">
-                <thead>
-                  <tr>
-                    <th>Element</th>
-                    <th>Stage</th>
-                    {status.activities.map((a) => (
-                      <th key={a.code} className="num">
-                        {a.name}
-                      </th>
-                    ))}
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {status.rows
-                    .filter((r) => !openBucket || r.stage === openBucket)
-                    .map((r) => (
-                      <tr key={r.element.id}>
+            {summary.byFloor.length > 1 && (
+              <button className="link rep-more" onClick={() => setShowFloors(!showFloors)}>
+                {showFloors ? 'Hide floor-wise split' : 'Show floor-wise split'}
+              </button>
+            )}
+            {showFloors && summary.byFloor.length > 1 && (
+              <div className="dash-table-wrap">
+                <table className="dash-table rep-table">
+                  <thead>
+                    <tr>
+                      <th>Building – Floor</th>
+                      {summary.activities.map((a) => (
+                        <th key={a.code} className="num">
+                          {a.name} <span className="rep-unit">{UNIT_LABELS[a.unit] ?? a.unit}</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.byFloor.map((g) => (
+                      <tr key={g.key}>
                         <td>
-                          <b>{elementLabel(r.element)}</b>
+                          <b>{g.label.join(' – ')}</b>
                         </td>
-                        <td>{r.label}</td>
-                        {status.activities.map((a) => (
+                        {summary.activities.map((a) => (
                           <td key={a.code} className="num">
-                            {r.percent[a.code] === null ? <span className="muted">—</span> : `${r.percent[a.code]}%`}
+                            {g.qty[a.code] ? formatQty(g.qty[a.code]) : <span className="muted">—</span>}
                           </td>
                         ))}
-                        <td className="num">
-                          <button
-                            className="dash-view"
-                            onClick={() => {
-                              setSelection(new Set([r.element.id]));
-                              go('workspace');
-                            }}
-                          >
-                            Show in 3D
-                          </button>
-                        </td>
                       </tr>
                     ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* ---------- 2. status of each element type ---------- */}
+      <section className="dash-card">
+        <div className="dash-card-head">
+          <div>
+            <h2>2. Where each element type stands</h2>
+            <p>As of today · click a number to see those elements</p>
+          </div>
+        </div>
+        {statuses.length === 0 ? (
+          <p className="rep-empty">No elements in this building.</p>
+        ) : (
+          <div className="rep-types">
+            {statuses.map(({ type, s }) => (
+              <TypeRow
+                key={type}
+                type={type}
+                s={s}
+                openStage={open?.type === type ? open.stage : null}
+                onOpen={(stage) => setOpen(open?.type === type && open.stage === stage ? null : { type, stage })}
+                onShow={(id) => {
+                  setSelection(new Set([id]));
+                  go('workspace');
+                }}
+              />
+            ))}
+          </div>
+        )}
+        <p className="rep-legend">
+          <span className="rep-dot rep-dot-done" /> Complete <span className="rep-dot rep-dot-doing" /> Work going on <span className="rep-dot rep-dot-none" /> Not started
+        </p>
+      </section>
+    </div>
+  );
+}
+
+function TypeRow({
+  type,
+  s,
+  openStage,
+  onOpen,
+  onShow,
+}: {
+  type: ElementType;
+  s: CategoryStatus;
+  openStage: string | null;
+  onOpen: (stage: string) => void;
+  onShow: (elementId: string) => void;
+}) {
+  const total = s.rows.length;
+  const name = ELEMENT_TYPE_LABELS[type];
+  const opened = s.rows.filter((r) => r.stage === openStage);
+  return (
+    <div className="rep-type">
+      <div className="rep-type-head">
+        <div className="rep-type-name">
+          {name}
+          {total === 1 ? '' : 's'} <span>{total}</span>
+        </div>
+        <div className="rep-bar" aria-hidden>
+          {s.buckets.map((b) => (
+            <div key={b.stage} className={`rep-bar-${tone(b.stage)}`} style={{ flexGrow: b.elements.length }} />
+          ))}
+        </div>
+      </div>
+      <div className="rep-chips">
+        {s.buckets.map((b) => (
+          <button key={b.stage} className={`rep-chip rep-chip-${tone(b.stage)} ${openStage === b.stage ? 'on' : ''}`} onClick={() => onOpen(b.stage)}>
+            <b>{b.elements.length}</b> {b.label}
+          </button>
+        ))}
+      </div>
+      {openStage && opened.length > 0 && (
+        <ul className="rep-list">
+          {opened.map((r) => (
+            <li key={r.element.id}>
+              <span>{elementLabel(r.element)}</span>
+              <button className="link" onClick={() => onShow(r.element.id)}>
+                Show in 3D
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
