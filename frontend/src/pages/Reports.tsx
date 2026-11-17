@@ -1,64 +1,63 @@
 import { useMemo, useState } from 'react';
 import { EmptyState, PageHeader, Spinner } from '../components/ui';
 import { formatQty } from '../domain/progress';
-import {
-  categoryStatus,
-  elementLabel,
-  ELEMENT_TYPE_LABELS,
-  executiveSummary,
-  presetRange,
-  type CategoryStatus,
-  type CountMode,
-  type RangePreset,
-} from '../domain/reports';
+import { categoryStatus, elementLabel, ELEMENT_TYPE_LABELS, executiveSummary, presetRange, type CountMode } from '../domain/reports';
+import { inWorkOrder } from '../domain/sequence';
 import { UNIT_LABELS, type ElementType } from '../domain/types';
 import { todayISO } from '../domain/workflow';
 import { downloadText, toCsv } from '../lib/download';
 import { useApp } from '../state/AppContext';
 
-const PERIODS: { id: RangePreset; label: string }[] = [
-  { id: 'today', label: 'Today' },
-  { id: 'last10', label: 'Last 10 days' },
-  { id: 'month', label: 'This month' },
-  { id: 'all', label: 'All time' },
-  { id: 'custom', label: 'Choose dates' },
-];
-
 const fmtDay = (ymd: string) => (ymd ? new Date(`${ymd}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+const pct = (p: number | null | undefined) => (p === null || p === undefined ? '—' : `${p}%`);
 const tone = (stage: string) => (stage === 'complete' ? 'done' : stage === 'not-started' || stage === 'no-plan' ? 'none' : 'doing');
 
 /**
  * The executive report asked for in the boss meeting, on ONE page:
- *  1. how much work was done in a period (m³ concrete, kg steel, m² shuttering …);
+ *  1. how much work was done between two dates (m³ concrete, kg steel, m² shuttering …);
  *  2. where each type of element stands ("Footing: 10 complete · 5 steel done · 2 on shuttering · rest not started").
- * Read only: it never changes any entry.
+ * Filters: dates, building, element type, one element. Read only: it never changes any entry.
  */
 export function Reports() {
   const { data, go, setSelection } = useApp();
   const [mode, setMode] = useState<CountMode>('approved');
+  const [dates, setDates] = useState(() => presetRange('month'));
   const [buildingId, setBuildingId] = useState('');
-  const [preset, setPreset] = useState<RangePreset>('last10');
-  const [custom, setCustom] = useState(() => presetRange('last10'));
-  const [open, setOpen] = useState<{ type: ElementType; stage: string } | null>(null);
+  const [type, setType] = useState<ElementType | ''>('');
+  const [elementId, setElementId] = useState('');
   const [showFloors, setShowFloors] = useState(false);
 
-  const range = preset === 'custom' ? custom : presetRange(preset);
   const elements = useMemo(() => data?.elements ?? [], [data]);
   const entries = useMemo(() => data?.entries ?? [], [data]);
   const activities = useMemo(() => data?.model?.document?.activities ?? [], [data]);
   const buildings = data?.model?.document?.buildings ?? [];
 
-  const summary = useMemo(
-    () => executiveSummary(elements, entries, activities, { from: range.from, to: range.to, buildingId, mode }),
-    [elements, entries, activities, range.from, range.to, buildingId, mode],
+  // the element list follows the building and type chosen
+  const inScope = useMemo(
+    () => elements.filter((e) => (!buildingId || e.buildingId === buildingId) && (!type || e.type === type)),
+    [elements, buildingId, type],
   );
-  const statuses = useMemo(() => {
+  const types = useMemo(() => {
     const present = new Set(elements.filter((e) => !buildingId || e.buildingId === buildingId).map((e) => e.type));
-    return (Object.keys(ELEMENT_TYPE_LABELS) as ElementType[])
-      .filter((t) => present.has(t))
-      .map((t) => ({ type: t, s: categoryStatus(elements, entries, activities, t, mode, buildingId) }))
-      .filter((x) => x.s.rows.length);
-  }, [elements, entries, activities, mode, buildingId]);
+    return (Object.keys(ELEMENT_TYPE_LABELS) as ElementType[]).filter((t) => present.has(t));
+  }, [elements, buildingId]);
+  const element = inScope.find((e) => e.id === elementId) ?? null;
+  const elementIdOk = element ? element.id : '';
+
+  const summary = useMemo(
+    () => executiveSummary(elements, entries, activities, { from: dates.from, to: dates.to, buildingId, type, elementId: elementIdOk, mode }),
+    [elements, entries, activities, dates.from, dates.to, buildingId, type, elementIdOk, mode],
+  );
+  const statuses = useMemo(
+    () =>
+      types
+        .filter((t) => !type || t === type)
+        .map((t) => ({ type: t, s: categoryStatus(elements, entries, activities, t, mode, buildingId) }))
+        .filter((x) => x.s.rows.length),
+    [types, type, elements, entries, activities, mode, buildingId],
+  );
+  // activity columns of the summary table: those planned for any type shown, in site order
+  const statusActs = inWorkOrder(activities.filter((a) => statuses.some((x) => x.s.activityPercent[a.code] !== null && x.s.activityPercent[a.code] !== undefined)));
 
   if (!data) return <Spinner />;
   if (!data.model)
@@ -71,20 +70,30 @@ export function Reports() {
       </div>
     );
 
-  const dateError = preset === 'custom' && custom.from && custom.to && custom.from > custom.to ? '"From" date is after "To" date.' : null;
+  const dateError = dates.from && dates.to && dates.from > dates.to ? '"From" date is after "To" date.' : null;
   const periodText =
-    !range.from && !range.to ? 'All time' : range.from === range.to ? fmtDay(range.from) : `${fmtDay(range.from) || 'Start'} – ${fmtDay(range.to) || 'today'}`;
-  const buildingName = buildings.find((b) => b.id === buildingId)?.name ?? 'All buildings';
+    !dates.from && !dates.to ? 'All dates' : dates.from === dates.to ? fmtDay(dates.from) : `${fmtDay(dates.from) || 'Start'} – ${fmtDay(dates.to) || 'today'}`;
+  const scopeText = element
+    ? elementLabel(element)
+    : [buildings.find((b) => b.id === buildingId)?.name ?? (buildings.length > 1 ? 'All buildings' : ''), type ? `${ELEMENT_TYPE_LABELS[type]}s` : 'All elements']
+        .filter(Boolean)
+        .join(' · ');
   const countText = mode === 'approved' ? 'approved work only' : 'approved + waiting for approval';
+  const filtered = !!(buildingId || type || elementIdOk);
+  const show = (id: string) => {
+    setSelection(new Set([id]));
+    go('workspace');
+  };
 
   function download() {
     const acts = summary.activities;
     const rows: (string | number)[][] = [
       ['PMC Report', data!.project.name],
-      ['Building', buildingName],
+      ['Dates', periodText],
+      ['Showing', scopeText],
       ['Counted', countText],
       [],
-      [`Work done: ${periodText}`],
+      ['Work done'],
       ['Activity', 'Quantity', 'Unit'],
       ...acts.map((a) => [a.name, summary.totals[a.code] ?? 0, UNIT_LABELS[a.unit] ?? a.unit]),
       [],
@@ -93,10 +102,10 @@ export function Reports() {
       [],
       ['Where each element type stands (today)'],
       ['Element type', 'Stage', 'Elements'],
-      ...statuses.flatMap(({ type, s }) => s.buckets.map((b) => [ELEMENT_TYPE_LABELS[type], b.label, b.elements.length])),
+      ...statuses.flatMap(({ type: t, s }) => s.buckets.map((b) => [ELEMENT_TYPE_LABELS[t], b.label, b.elements.length])),
       [],
       ['Element', 'Stage'],
-      ...statuses.flatMap(({ s }) => s.rows.map((r) => [elementLabel(r.element), r.label])),
+      ...statuses.flatMap(({ s }) => s.rows.filter((r) => !elementIdOk || r.element.id === elementIdOk).map((r) => [elementLabel(r.element), r.label])),
     ];
     downloadText(`pmc-report-${data!.project.id}-${todayISO()}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
   }
@@ -105,7 +114,7 @@ export function Reports() {
     <div className="page rep-page">
       <PageHeader
         title="Reports"
-        subtitle="How much work was done, and where each type of element stands — on one page."
+        subtitle="How much work was done between two dates, and where the elements stand."
         actions={
           <button className="btn" onClick={download}>
             Download Excel (CSV)
@@ -113,59 +122,83 @@ export function Reports() {
         }
       />
 
-      <div className="rep-options">
-          {buildings.length > 1 && (
-            <label>
-              Building{' '}
-              <select value={buildingId} onChange={(e) => (setBuildingId(e.target.value), setOpen(null))}>
-                <option value="">All buildings</option>
-                {buildings.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <label className="rep-check">
-            <input type="checkbox" checked={mode === 'with-pending'} onChange={(e) => setMode(e.target.checked ? 'with-pending' : 'approved')} />
-            Also count work waiting for PMC approval
+      <div className="filters card rep-filters">
+        <label>
+          From
+          <input type="date" value={dates.from} onChange={(e) => setDates({ ...dates, from: e.target.value })} />
+        </label>
+        <label>
+          To
+          <input type="date" value={dates.to} onChange={(e) => setDates({ ...dates, to: e.target.value })} />
+        </label>
+        {buildings.length > 1 && (
+          <label>
+            Building
+            <select value={buildingId} onChange={(e) => (setBuildingId(e.target.value), setElementId(''))}>
+              <option value="">All buildings</option>
+              {buildings.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
           </label>
+        )}
+        <label>
+          Element type
+          <select value={type} onChange={(e) => (setType(e.target.value as ElementType | ''), setElementId(''))}>
+            <option value="">All types</option>
+            {types.map((t) => (
+              <option key={t} value={t}>
+                {ELEMENT_TYPE_LABELS[t]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grow">
+          Element
+          <select value={elementIdOk} onChange={(e) => setElementId(e.target.value)}>
+            <option value="">All {type ? `${ELEMENT_TYPE_LABELS[type].toLowerCase()}s` : 'elements'} ({inScope.length})</option>
+            {inScope.map((e) => (
+              <option key={e.id} value={e.id}>
+                {elementLabel(e)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="rep-check">
+          <input type="checkbox" checked={mode === 'with-pending'} onChange={(e) => setMode(e.target.checked ? 'with-pending' : 'approved')} />
+          Also count work waiting for PMC approval
+        </label>
+        {filtered && (
+          <button
+            className="link"
+            onClick={() => {
+              setBuildingId('');
+              setType('');
+              setElementId('');
+            }}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
+      {dateError && <div className="alert alert-warn">{dateError}</div>}
 
-      {/* ---------- 1. work done in the period ---------- */}
+      {/* ---------- 1. work done between the dates ---------- */}
       <section className="dash-card">
-        <div className="dash-card-head rep-head">
+        <div className="dash-card-head">
           <div>
             <h2>1. Work done</h2>
             <p>
-              {periodText} · {buildingName} · {countText}
+              {periodText} · {scopeText} · {countText}
             </p>
           </div>
-          <div className="rep-periods" role="group" aria-label="Period">
-            {PERIODS.map((p) => (
-              <button key={p.id} className={preset === p.id ? 'on' : ''} onClick={() => setPreset(p.id)}>
-                {p.label}
-              </button>
-            ))}
-          </div>
         </div>
-        {preset === 'custom' && (
-          <div className="rep-dates">
-            <label>
-              From <input type="date" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} />
-            </label>
-            <label>
-              To <input type="date" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} />
-            </label>
-          </div>
-        )}
-        {dateError && <div className="alert alert-warn">{dateError}</div>}
-
         {summary.entries === 0 ? (
           <p className="rep-empty">
-            No {mode === 'approved' ? 'approved ' : ''}work in this period.
-            {mode === 'approved' ? ' Tick "Also count work waiting for PMC approval" above, or choose a longer period.' : ' Choose a longer period.'}
+            No {mode === 'approved' ? 'approved ' : ''}work in these dates.
+            {mode === 'approved' ? ' Tick "Also count work waiting for PMC approval", or choose other dates.' : ' Choose other dates.'}
           </p>
         ) : (
           <>
@@ -179,12 +212,12 @@ export function Reports() {
                 </div>
               ))}
             </div>
-            {summary.byFloor.length > 1 && (
+            {!element && summary.byFloor.length > 1 && (
               <button className="link rep-more" onClick={() => setShowFloors(!showFloors)}>
                 {showFloors ? 'Hide floor-wise split' : 'Show floor-wise split'}
               </button>
             )}
-            {showFloors && summary.byFloor.length > 1 && (
+            {showFloors && !element && summary.byFloor.length > 1 && (
               <div className="dash-table-wrap">
                 <table className="dash-table rep-table">
                   <thead>
@@ -218,89 +251,123 @@ export function Reports() {
         )}
       </section>
 
-      {/* ---------- 2. status of each element type ---------- */}
+
+      {/* ---------- 2. element status, as a report table ---------- */}
       <section className="dash-card">
         <div className="dash-card-head">
           <div>
-            <h2>2. Where each element type stands</h2>
-            <p>As of today · click a number to see those elements</p>
+            <h2>2. Element status</h2>
+            <p>
+              As of today · {scopeText} · {countText} · % = work done ÷ planned quantity
+            </p>
           </div>
         </div>
         {statuses.length === 0 ? (
-          <p className="rep-empty">No elements in this building.</p>
-        ) : (
-          <div className="rep-types">
-            {statuses.map(({ type, s }) => (
-              <TypeRow
-                key={type}
-                type={type}
-                s={s}
-                openStage={open?.type === type ? open.stage : null}
-                onOpen={(stage) => setOpen(open?.type === type && open.stage === stage ? null : { type, stage })}
-                onShow={(id) => {
-                  setSelection(new Set([id]));
-                  go('workspace');
-                }}
-              />
-            ))}
+          <p className="rep-empty">No elements for these filters.</p>
+        ) : !type && !element ? (
+          <div className="dash-table-wrap">
+            <table className="dash-table rep-table rep-status">
+              <thead>
+                <tr>
+                  <th>Element type</th>
+                  <th className="num">Total</th>
+                  <th className="num">Complete</th>
+                  <th className="num">In progress</th>
+                  <th className="num">Not started</th>
+                  {statusActs.map((a) => (
+                    <th key={a.code} className="num">
+                      {a.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {statuses.map(({ type: t, s }) => (
+                  <tr key={t} className="rep-click" onClick={() => (setType(t), setElementId(''))} title="Show these elements one by one">
+                    <td>
+                      <b>{ELEMENT_TYPE_LABELS[t]}</b>
+                    </td>
+                    <td className="num">{s.rows.length}</td>
+                    <td className="num rep-n-done">{s.counts.complete || '—'}</td>
+                    <td className="num rep-n-doing">{s.counts.going || '—'}</td>
+                    <td className="num">{s.counts.notStarted || '—'}</td>
+                    {statusActs.map((a) => (
+                      <td key={a.code} className="num">
+                        {pct(s.activityPercent[a.code])}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>Total</td>
+                  <td className="num">{statuses.reduce((n, x) => n + x.s.rows.length, 0)}</td>
+                  <td className="num">{statuses.reduce((n, x) => n + x.s.counts.complete, 0)}</td>
+                  <td className="num">{statuses.reduce((n, x) => n + x.s.counts.going, 0)}</td>
+                  <td className="num">{statuses.reduce((n, x) => n + x.s.counts.notStarted, 0)}</td>
+                  {statusActs.map((a) => (
+                    <td key={a.code} />
+                  ))}
+                </tr>
+              </tfoot>
+            </table>
           </div>
+        ) : (
+          (() => {
+            const s = statuses[0].s;
+            const rows = element ? s.rows.filter((r) => r.element.id === element.id) : s.rows;
+            return (
+              <>
+                {!element && (
+                  <p className="rep-sum">
+                    {s.rows.length} {ELEMENT_TYPE_LABELS[statuses[0].type].toLowerCase()}
+                    {s.rows.length === 1 ? '' : 's'}: <b className="rep-n-done">{s.counts.complete} complete</b> · <b className="rep-n-doing">{s.counts.going} in progress</b> ·{' '}
+                    <b>{s.counts.notStarted} not started</b>
+                  </p>
+                )}
+                <div className="dash-table-wrap">
+                  <table className="dash-table rep-table rep-status">
+                    <thead>
+                      <tr>
+                        <th>Element</th>
+                        <th>Stage</th>
+                        {s.activities.map((a) => (
+                          <th key={a.code} className="num">
+                            {a.name}
+                          </th>
+                        ))}
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r) => (
+                        <tr key={r.element.id}>
+                          <td>
+                            <b>{elementLabel(r.element)}</b>
+                          </td>
+                          <td className={`rep-stage-${tone(r.stage)}`}>{r.label}</td>
+                          {s.activities.map((a) => (
+                            <td key={a.code} className="num">
+                              {pct(r.percent[a.code])}
+                            </td>
+                          ))}
+                          <td className="num">
+                            <button className="link" onClick={() => show(r.element.id)}>
+                              Show in 3D
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            );
+          })()
         )}
-        <p className="rep-legend">
-          <span className="rep-dot rep-dot-done" /> Complete <span className="rep-dot rep-dot-doing" /> Work going on <span className="rep-dot rep-dot-none" /> Not started
-        </p>
+        {!type && !element && statuses.length > 0 && <p className="rep-note">Click an element type to see its elements one by one.</p>}
       </section>
-    </div>
-  );
-}
-
-function TypeRow({
-  type,
-  s,
-  openStage,
-  onOpen,
-  onShow,
-}: {
-  type: ElementType;
-  s: CategoryStatus;
-  openStage: string | null;
-  onOpen: (stage: string) => void;
-  onShow: (elementId: string) => void;
-}) {
-  const total = s.rows.length;
-  const name = ELEMENT_TYPE_LABELS[type];
-  const opened = s.rows.filter((r) => r.stage === openStage);
-  return (
-    <div className="rep-type">
-      <div className="rep-type-head">
-        <div className="rep-type-name">
-          {name}
-          {total === 1 ? '' : 's'} <span>{total}</span>
-        </div>
-        <div className="rep-bar" aria-hidden>
-          {s.buckets.map((b) => (
-            <div key={b.stage} className={`rep-bar-${tone(b.stage)}`} style={{ flexGrow: b.elements.length }} />
-          ))}
-        </div>
-      </div>
-      <div className="rep-chips">
-        {s.buckets.map((b) => (
-          <button key={b.stage} className={`rep-chip rep-chip-${tone(b.stage)} ${openStage === b.stage ? 'on' : ''}`} onClick={() => onOpen(b.stage)}>
-            <b>{b.elements.length}</b> {b.label}
-          </button>
-        ))}
-      </div>
-      {openStage && opened.length > 0 && (
-        <ul className="rep-list">
-          {opened.map((r) => (
-            <li key={r.element.id}>
-              <span>{elementLabel(r.element)}</span>
-              <button className="link" onClick={() => onShow(r.element.id)}>
-                Show in 3D
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }

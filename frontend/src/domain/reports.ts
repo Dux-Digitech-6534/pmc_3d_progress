@@ -54,6 +54,10 @@ export interface SummaryFilter {
   to?: string;
   /** Only elements of this building; empty = all buildings. */
   buildingId?: string;
+  /** Only this element type (footing, column …); empty = all types. */
+  type?: ElementType | '';
+  /** Only this one element; empty = all elements. */
+  elementId?: string;
   mode: CountMode;
 }
 
@@ -108,6 +112,8 @@ export function executiveSummary(elements: ElementRecord[], entries: ProgressEnt
     const a = acts.get(e.activityCode);
     if (!el || !a || e.unit !== a.unit || !Number.isFinite(e.quantity) || e.quantity <= 0) continue;
     if (f.buildingId && el.buildingId !== f.buildingId) continue;
+    if (f.type && el.type !== f.type) continue;
+    if (f.elementId && el.id !== f.elementId) continue;
     n += 1;
     days.add(e.date);
     touched.add(el.id);
@@ -162,6 +168,10 @@ export interface CategoryStatus {
   rows: ElementStage[];
   /** Furthest stage first: Complete, … , Not started, No planned quantity. Empty buckets left out. */
   buckets: StageBucket[];
+  /** Whole type, per activity: done ÷ planned quantity × 100 (null = not planned for this type). */
+  activityPercent: Record<string, number | null>;
+  /** Elements complete / with some work / with no work yet / without any planned quantity. */
+  counts: { complete: number; going: number; notStarted: number; noPlan: number };
 }
 
 /**
@@ -172,6 +182,8 @@ export interface CategoryStatus {
 export function categoryStatus(elements: ElementRecord[], entries: ProgressEntry[], activities: ActivityDef[], type: ElementType, mode: CountMode, buildingId?: string): CategoryStatus {
   const els = elements.filter((e) => e.type === type && (!buildingId || e.buildingId === buildingId));
   const acts = inWorkOrder(activities.filter((a) => activityApplies(a, type)));
+  const plannedSum: Record<string, number> = {};
+  const doneSum: Record<string, number> = {};
   const rows: ElementStage[] = els.map((el) => {
     const percent: Record<string, number | null> = {};
     let planned = 0;
@@ -185,6 +197,8 @@ export function categoryStatus(elements: ElementRecord[], entries: ProgressEntry
       }
       planned += 1;
       const done = p.approved + (mode === 'with-pending' ? p.pendingReview : 0);
+      plannedSum[a.code] = (plannedSum[a.code] ?? 0) + p.planned;
+      doneSum[a.code] = (doneSum[a.code] ?? 0) + Math.min(done, p.planned);
       const full = done + QTY_EPSILON >= p.planned;
       percent[a.code] = roundQty(Math.min((done / p.planned) * 100, 100), 0);
       if (full) complete += 1;
@@ -213,5 +227,10 @@ export function categoryStatus(elements: ElementRecord[], entries: ProgressEntry
     if (!b) map.set(r.stage, (b = { stage: r.stage, label: r.label, elements: [] }));
     b.elements.push(r.element);
   }
-  return { activities: acts, rows, buckets: [...map.values()].sort((a, b) => rank(a.stage) - rank(b.stage)) };
+  const activityPercent: Record<string, number | null> = {};
+  for (const a of acts) activityPercent[a.code] = plannedSum[a.code] ? roundQty(((doneSum[a.code] ?? 0) / plannedSum[a.code]) * 100, 0) : null;
+  const n = (s: string) => rows.filter((r) => r.stage === s).length;
+  const counts = { complete: n('complete'), notStarted: n('not-started'), noPlan: n('no-plan'), going: 0 };
+  counts.going = rows.length - counts.complete - counts.notStarted - counts.noPlan;
+  return { activities: acts, rows, buckets: [...map.values()].sort((a, b) => rank(a.stage) - rank(b.stage)), activityPercent, counts };
 }

@@ -78,6 +78,11 @@ describe('executive summary', () => {
     expect(executiveSummary(elements, entries, ACTS, { mode: 'approved', buildingId: 'B2' }).totals).toEqual({ BRICK: 2 });
   });
 
+  it('filters by element type and by one element', () => {
+    expect(executiveSummary(elements, entries, ACTS, { mode: 'with-pending', type: 'column' }).totals).toEqual({ REINF: 30 });
+    expect(executiveSummary(elements, entries, ACTS, { mode: 'approved', elementId: 'F2' }).totals).toEqual({ REINF: 20 });
+  });
+
   it('splits by building + floor and by element type', () => {
     const s = executiveSummary(elements, entries, ACTS, { mode: 'with-pending' });
     expect(s.byFloor.map((g) => [g.label.join(' / '), g.qty])).toEqual([
@@ -119,6 +124,9 @@ describe('category-wise status', () => {
       ['Not started', ['F4', 'F5']],
     ]);
     expect(s.rows.find((r) => r.element.id === 'F3')!.percent).toEqual({ REINF: 100, SHUT: 50, CONC: 0 });
+    // whole type: done ÷ planned quantity, and element counts
+    expect(s.activityPercent).toEqual({ REINF: 60, SHUT: 30, CONC: 20 });
+    expect(s.counts).toEqual({ complete: 1, going: 2, notStarted: 2, noPlan: 0 });
   });
 
   it('with pending work counted, F4 moves to "Reinforcement done"', () => {
