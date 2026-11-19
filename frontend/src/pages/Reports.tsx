@@ -7,6 +7,8 @@ import { UNIT_LABELS, type ElementType } from '../domain/types';
 import { todayISO } from '../domain/workflow';
 import { downloadText, toCsv } from '../lib/download';
 import { useApp } from '../state/AppContext';
+import { completeDateOf, countResults, daysTaken, planVsActual, PLAN_RESULT_LABELS } from '../domain/planning';
+import { usePlanning } from '../state/planning';
 
 const fmtDay = (ymd: string) => (ymd ? new Date(`${ymd}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 const pct = (p: number | null | undefined) => (p === null || p === undefined ? '—' : `${p}%`);
@@ -57,6 +59,31 @@ export function Reports() {
     [types, type, elements, entries, activities, mode, buildingId],
   );
   // activity columns of the summary table: those planned for any type shown, in site order
+  // start / complete dates of each element (Work Done "Started" and the entry that made it 100 %)
+  const { data: planning } = usePlanning();
+  const datesOf = (el: (typeof elements)[number], stage: string) => {
+    const starts = (planning?.starts ?? []).filter((s) => s.elementId === el.id).map((s) => s.date);
+    const firstEntry = entries.filter((e) => e.elementId === el.id && (e.status === 'Approved' || e.status === 'Submitted')).map((e) => e.date);
+    const started = [...starts, ...firstEntry].sort()[0];
+    const done =
+      stage === 'complete'
+        ? activities
+            .filter((a) => el.plannedQuantities[a.code]?.quantity)
+            .map((a) => completeDateOf(el, a.code, entries))
+            .filter((d): d is string => !!d)
+            .sort()
+            .at(-1)
+        : undefined;
+    return { started, done, days: daysTaken(started, done) };
+  };
+  // plan vs actual for the same dates and elements
+  const planRows = useMemo(() => {
+    if (!planning) return [];
+    const ok = new Set(elements.filter((e) => (!buildingId || e.buildingId === buildingId) && (!type || e.type === type) && (!elementIdOk || e.id === elementIdOk)).map((e) => e.id));
+    return planVsActual(planning, entries, elements, activities, todayISO(), dates.from, dates.to).filter((r) => ok.has(r.plan.elementId));
+  }, [planning, entries, elements, activities, dates.from, dates.to, buildingId, type, elementIdOk]);
+  const planCounts = countResults(planRows);
+
   const statusActs = inWorkOrder(activities.filter((a) => statuses.some((x) => x.s.activityPercent[a.code] !== null && x.s.activityPercent[a.code] !== undefined)));
 
   if (!data) return <Spinner />;
@@ -104,8 +131,19 @@ export function Reports() {
       ['Element type', 'Stage', 'Elements'],
       ...statuses.flatMap(({ type: t, s }) => s.buckets.map((b) => [ELEMENT_TYPE_LABELS[t], b.label, b.elements.length])),
       [],
-      ['Element', 'Stage'],
-      ...statuses.flatMap(({ s }) => s.rows.filter((r) => !elementIdOk || r.element.id === elementIdOk).map((r) => [elementLabel(r.element), r.label])),
+      ['Element', 'Stage', 'Started', 'Completed', 'Days'],
+      ...statuses.flatMap(({ s }) =>
+        s.rows
+          .filter((r) => !elementIdOk || r.element.id === elementIdOk)
+          .map((r) => {
+            const d = datesOf(r.element, r.stage);
+            return [elementLabel(r.element), r.label, d.started ?? '', d.done ?? '', d.days ?? ''];
+          }),
+      ),
+      [],
+      ['Plan vs actual'],
+      ['Date', 'Element', 'Work', 'Result', 'Detail'],
+      ...planRows.map((r) => [r.plan.date, r.element ? elementLabel(r.element) : r.plan.elementId, r.activity?.name ?? r.plan.activityCode, PLAN_RESULT_LABELS[r.result], r.detail]),
     ];
     downloadText(`pmc-report-${data!.project.id}-${todayISO()}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
   }
@@ -332,6 +370,9 @@ export function Reports() {
                       <tr>
                         <th>Element</th>
                         <th>Stage</th>
+                        <th>Started</th>
+                        <th>Completed</th>
+                        <th className="num">Days</th>
                         {s.activities.map((a) => (
                           <th key={a.code} className="num">
                             {a.name}
@@ -347,6 +388,16 @@ export function Reports() {
                             <b>{elementLabel(r.element)}</b>
                           </td>
                           <td className={`rep-stage-${tone(r.stage)}`}>{r.label}</td>
+                          {(() => {
+                            const d = datesOf(r.element, r.stage);
+                            return (
+                              <>
+                                <td>{d.started ? fmtDay(d.started) : <span className="muted">—</span>}</td>
+                                <td>{d.done ? fmtDay(d.done) : <span className="muted">—</span>}</td>
+                                <td className="num">{d.days ?? <span className="muted">—</span>}</td>
+                              </>
+                            );
+                          })()}
                           {s.activities.map((a) => (
                             <td key={a.code} className="num">
                               {pct(r.percent[a.code])}
@@ -367,6 +418,79 @@ export function Reports() {
           })()
         )}
         {!type && !element && statuses.length > 0 && <p className="rep-note">Click an element type to see its elements one by one.</p>}
+      </section>
+
+      {/* ---------- 3. plan vs actual ---------- */}
+      <section className="dash-card">
+        <div className="dash-card-head">
+          <div>
+            <h2>3. Plan vs actual</h2>
+            <p>
+              {periodText} · {scopeText} · planned in Planning, compared with what was reported
+            </p>
+          </div>
+          <button className="link" onClick={() => go('planning')}>
+            Open Planning
+          </button>
+        </div>
+        {planRows.length === 0 ? (
+          <p className="rep-empty">Nothing planned in these dates.</p>
+        ) : (
+          <>
+            <div className="dash-table-wrap">
+              <table className="dash-table rep-table rep-status">
+                <thead>
+                  <tr>
+                    <th className="num">Planned</th>
+                    <th className="num">Done</th>
+                    <th className="num">Started</th>
+                    <th className="num">No work</th>
+                    <th className="num">Not reported</th>
+                    <th className="num">Still to come</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="num">
+                      <b>{planRows.length}</b>
+                    </td>
+                    <td className="num rep-n-done">{planCounts.done}</td>
+                    <td className="num rep-n-doing">{planCounts.started}</td>
+                    <td className="num">{planCounts['no-work']}</td>
+                    <td className="num rep-n-missed">{planCounts.missed}</td>
+                    <td className="num">{planCounts.pending}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="dash-table-wrap rep-plan-list">
+              <table className="dash-table rep-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Element</th>
+                    <th>Work</th>
+                    <th>Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {planRows.map((r) => (
+                    <tr key={r.plan.id}>
+                      <td className="nowrap">{fmtDay(r.plan.date)}</td>
+                      <td>
+                        <b>{r.element ? elementLabel(r.element) : r.plan.elementId}</b>
+                      </td>
+                      <td>{r.activity?.name ?? r.plan.activityCode}</td>
+                      <td>
+                        <span className={`plan-res plan-res-${r.result}`}>{PLAN_RESULT_LABELS[r.result]}</span> <span className="muted small">{r.detail}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </section>
     </div>
   );

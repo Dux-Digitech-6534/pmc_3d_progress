@@ -49,7 +49,8 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
   const [levelFilter, setLevelFilter] = useState('all');
   const [view, setView] = useState<string>(OVERALL); // OVERALL, 'type' or an activity code
   const [statusFilter, setStatusFilter] = useState<'all' | ViewStatus>('all');
-  const [showLabels, setShowLabels] = useState(true);
+  // labels off at first (meeting 16-11): the 3D stays clean, a ticked element still shows its label
+  const [showLabels, setShowLabels] = useState(false);
   const [resetSignal, setResetSignal] = useState(0);
   const [mobilePane, setMobilePane] = useState<'list' | '3d'>('list');
   // hidden in the 3D view only (to look inside the building) — nothing changes in the model or progress

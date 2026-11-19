@@ -11,6 +11,7 @@ import { MaterialVariation } from './pages/MaterialVariation';
 import { ModelRegister } from './pages/ModelRegister';
 import { Projects } from './pages/Projects';
 import { Reports } from './pages/Reports';
+import { Planning } from './pages/Planning';
 import { Workspace } from './pages/Workspace';
 import { AppProvider, useApp, type Page } from './state/AppContext';
 
@@ -19,6 +20,7 @@ const NAV: { page: Page; label: string; icon: string }[] = [
   { page: 'dashboard', label: 'Dashboard', icon: 'M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z' },
   { page: 'projects', label: 'Projects', icon: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
   { page: 'workspace', label: 'Work Done', icon: 'M12 2 3 7v10l9 5 9-5V7zM12 12l9-5M12 12 3 7M12 12v10' },
+  { page: 'planning', label: 'Planning', icon: 'M4 6h16M4 6v14h16V6M8 3v6M16 3v6M8 13h3M8 17h6' },
   { page: 'material', label: 'Material Required', icon: 'M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6' },
   { page: 'variation', label: 'Material Variation', icon: 'M4 19V5M4 19h16M8 15l3-4 3 2 5-6' },
   { page: 'dpr', label: 'Daily Progress Reports', icon: 'M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6' },
@@ -202,6 +204,7 @@ function Shell() {
           {!noAccess && !empty && page === 'variation' && <MaterialVariation />}
           {!noAccess && !empty && page === 'dpr' && <DprList />}
           {!noAccess && !empty && page === 'reports' && <Reports />}
+          {!noAccess && !empty && page === 'planning' && <Planning />}
           {!noAccess && page === 'builder' && !IS_FRAPPE && <ModelBuilder />}
           {!noAccess && page === 'models' && <ModelRegister />}
         </main>

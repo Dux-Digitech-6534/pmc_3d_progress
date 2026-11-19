@@ -2,6 +2,7 @@ import type { ReviewDecision } from '../domain/workflow';
 import type { ElementRecord, ModelRecord, ProgressEntry, Project, Role } from '../domain/types';
 import { elementsFromModel } from './elements';
 import type { SentLine } from '../domain/materialVariation';
+import type { PlanningData } from '../domain/planning';
 import { call, callMethod } from './frappeApi';
 import {
   RepositoryError,
@@ -214,6 +215,33 @@ export class FrappeRepository implements PmcRepository {
 
   ensureErpProject(projectId: string) {
     return call<{ erpProject: string; erpProjectName: string }>(`${M}ensure_erp_project`, { project_id: projectId });
+  }
+
+  // planning lives in pmc_3d_progress/beta_api.py (reports-mobile branch)
+  getPlanning(projectId: string) {
+    return call<PlanningData>('beta_api.get_planning', { project_id: projectId }, 'GET');
+  }
+  addPlans(projectId: string, input: { date: string; activityCode: string; elementIds: string[]; note?: string }, role: Role) {
+    return call<PlanningData & { added: number; skipped: number }>('beta_api.add_plans', {
+      project_id: projectId,
+      date: input.date,
+      activity_code: input.activityCode,
+      element_ids: JSON.stringify(input.elementIds),
+      note: input.note ?? '',
+      role,
+    });
+  }
+  deletePlans(projectId: string, planIds: string[], role: Role) {
+    return call<PlanningData>('beta_api.delete_plans', { project_id: projectId, plan_ids: JSON.stringify(planIds), role });
+  }
+  setNoWork(projectId: string, planIds: string[], reason: string, role: Role) {
+    return call<PlanningData>('beta_api.set_no_work', { project_id: projectId, plan_ids: JSON.stringify(planIds), reason, role });
+  }
+  markStarted(projectId: string, elementIds: string[], activityCode: string, date: string, role: Role) {
+    return call<PlanningData>('beta_api.mark_started', { project_id: projectId, element_ids: JSON.stringify(elementIds), activity_code: activityCode, date, role });
+  }
+  clearStarted(projectId: string, elementIds: string[], activityCode: string, role: Role) {
+    return call<PlanningData>('beta_api.clear_started', { project_id: projectId, element_ids: JSON.stringify(elementIds), activity_code: activityCode, role });
   }
 
   saveVariationSettings(projectId: string, change: { erpProject?: string; itemMap?: ItemMap }) {

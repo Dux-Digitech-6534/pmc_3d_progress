@@ -3,6 +3,8 @@ import { normsOf } from '../domain/materials';
 import { materialRequired } from '../domain/materialRequired';
 import { computeActivityProgress, formatQty } from '../domain/progress';
 import type { ElementRecord, ProgressEntry } from '../domain/types';
+import { downloadText, toCsv } from '../lib/download';
+import { todayISO } from '../domain/workflow';
 import { useApp } from '../state/AppContext';
 import { MaterialRequestCard } from './MaterialRequestCard';
 import { EmptyState } from './ui';
@@ -54,6 +56,27 @@ export function MaterialRequiredPanel({
   // the summary the PMC asked for: steel by bar size and concrete by grade (no "Other" list)
   const nothing = !req.steel.length && !req.concrete.length;
 
+  // "Download requirement" as an Excel-readable sheet (meeting 16-11)
+  function download() {
+    const rows: (string | number)[][] = [
+      ['Material required', data?.project.name ?? ''],
+      ['Date', todayISO()],
+      ['Elements', selected.length, selected.map((e) => e.code).join(', ')],
+      ...(norms.wastagePct ? [['Wastage included', `${norms.wastagePct}%`]] : []),
+      [],
+      ['Steel (reinforcement)', 'kg', 'MT'],
+      ...req.steel.map((s) => [s.dia ? `${s.dia} mm` : 'Size not set', s.kg, Math.round(s.kg) / 1000]),
+      ['Total steel', req.steelTotal, Math.round(req.steelTotal) / 1000],
+      [],
+      ['Concrete grade', 'Elements', 'm³'],
+      ...req.concrete.map((g) => [g.grade, g.elements, g.m3]),
+      [],
+      ['Element', 'Type', 'Floor'],
+      ...selected.map((e) => [e.code, e.type, `${e.buildingName} – ${e.levelName}`]),
+    ];
+    downloadText(`material-required-${data?.project.id ?? 'project'}-${todayISO()}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
+  }
+
   return (
     <div className="panel-scroll">
       <div className="panel-section">
@@ -68,6 +91,11 @@ export function MaterialRequiredPanel({
           </p>
         )}
         {norms.wastagePct ? <p className="hint">Includes {norms.wastagePct}% wastage.</p> : null}
+        {!nothing && (
+          <button className="btn btn-small" onClick={download}>
+            Download requirement (Excel)
+          </button>
+        )}
       </div>
 
       {nothing && done.length === selected.length ? (

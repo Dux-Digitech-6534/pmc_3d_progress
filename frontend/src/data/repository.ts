@@ -1,4 +1,5 @@
 import type { ReviewDecision } from '../domain/workflow';
+import type { PlanningData } from '../domain/planning';
 import type { QuantityMode } from '../domain/allocation';
 import type { ItemMatch, SentLine } from '../domain/materialVariation';
 import type {
@@ -65,6 +66,17 @@ export interface PmcRepository {
   saveVariationSettings(projectId: string, change: { erpProject?: string; itemMap?: ItemMap }): Promise<VariationSettings>;
   /** The ERPNext project of a PMC project — linked before, found by the same name, or created — so nobody has to pick it. */
   ensureErpProject(projectId: string): Promise<{ erpProject: string; erpProjectName: string }>;
+
+  // ---- planning (reports-mobile branch; on the server in pmc_3d_progress/beta_api.py) ----
+  getPlanning(projectId: string): Promise<PlanningData>;
+  /** Plan one activity on elements for a date; an element already planned for it that day is skipped. */
+  addPlans(projectId: string, input: { date: string; activityCode: string; elementIds: string[]; note?: string }, role: Role): Promise<PlanningData & { added: number; skipped: number }>;
+  deletePlans(projectId: string, planIds: string[], role: Role): Promise<PlanningData>;
+  /** Planned work that did not happen (reason required); an empty reason clears it. */
+  setNoWork(projectId: string, planIds: string[], reason: string, role: Role): Promise<PlanningData>;
+  /** Work Done "Started": the date the activity was started on these elements. */
+  markStarted(projectId: string, elementIds: string[], activityCode: string, date: string, role: Role): Promise<PlanningData>;
+  clearStarted(projectId: string, elementIds: string[], activityCode: string, role: Role): Promise<PlanningData>;
 }
 
 /** ERP item code → what material it is (set by hand), or 'ignore' = not a building material. */

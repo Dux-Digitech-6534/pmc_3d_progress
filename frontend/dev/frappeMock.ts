@@ -154,6 +154,18 @@ export function frappeMock(): Plugin {
                 return r.deleteDraftEntry(args.entry_id, args.role);
               case 'api.ensure_erp_project':
                 return r.ensureErpProject(args.project_id);
+              case 'beta_api.get_planning':
+                return r.getPlanning(args.project_id);
+              case 'beta_api.add_plans':
+                return r.addPlans(args.project_id, { date: args.date, activityCode: args.activity_code, elementIds: JSON.parse(args.element_ids), note: args.note }, args.role);
+              case 'beta_api.delete_plans':
+                return r.deletePlans(args.project_id, JSON.parse(args.plan_ids), args.role);
+              case 'beta_api.set_no_work':
+                return r.setNoWork(args.project_id, JSON.parse(args.plan_ids), args.reason ?? '', args.role);
+              case 'beta_api.mark_started':
+                return r.markStarted(args.project_id, JSON.parse(args.element_ids), args.activity_code, args.date, args.role);
+              case 'beta_api.clear_started':
+                return r.clearStarted(args.project_id, JSON.parse(args.element_ids), args.activity_code, args.role);
               case 'api.get_variation_settings':
                 return r.getVariationSettings(args.project_id);
               case 'api.save_variation_settings':

@@ -2,6 +2,8 @@ import { useMemo, type ReactNode } from 'react';
 import { ELEMENT_TYPES, type ElementRecord, type ElementType } from '../domain/types';
 import { TYPE_COLORS, TYPE_LABELS } from '../lib/colors';
 
+const MAX_CHIPS = 40;
+
 /**
  * Pick elements in the right panel: search / level / status filters, a tile per element type
  * (Footing, Column …) that opens the list of that type. The checkbox ticks an element (the workspace
@@ -42,6 +44,7 @@ export function ElementPicker({
     return ELEMENT_TYPES.filter((t) => m.has(t)).map((t) => ({ type: t, els: m.get(t)! }));
   }, [elements]);
 
+  const chosen = useMemo(() => elements.filter((e) => selection.has(e.id)), [elements, selection]);
   const showList = type !== 'all' || search.trim() !== '';
   const allTicked = listed.length > 0 && listed.every((e) => selection.has(e.id));
   const set = (ids: string[], on: boolean) => {
@@ -72,8 +75,8 @@ export function ElementPicker({
           <div className="picker-list-head">
             <b>{type === 'all' ? 'Search results' : `${TYPE_LABELS[type]}s`}</b>
             {listed.length > 0 && (
-              <button className="link" onClick={() => set(listed.map((e) => e.id), !allTicked)}>
-                {allTicked ? 'Unselect all' : 'Select all'} ({listed.length})
+              <button className={`btn btn-small ${allTicked ? '' : 'btn-primary'}`} onClick={() => set(listed.map((e) => e.id), !allTicked)}>
+                {allTicked ? 'Unselect all' : `Select all ${listed.length}`}
               </button>
             )}
             <button
@@ -115,14 +118,28 @@ export function ElementPicker({
       )}
 
       {selection.size > 0 && (
-        <div className="picker-sel">
-          <span>
-            <b>{selection.size}</b> selected
-          </span>
-          <button className="link" onClick={() => onChange(new Set())}>
-            Clear
-          </button>
-        </div>
+        <>
+          <div className="picker-sel">
+            <span>
+              <b>{selection.size}</b> selected
+            </span>
+            <button className="link" onClick={() => onChange(new Set())}>
+              Clear
+            </button>
+          </div>
+          {/* each selected element with a ✕ to take it out (meeting 16-11) */}
+          <div className="picker-chips">
+            {chosen.slice(0, MAX_CHIPS).map((el) => (
+              <span key={el.id} className="picker-chip">
+                {el.code}
+                <button onClick={() => set([el.id], false)} aria-label={`Remove ${el.code}`} title="Remove from selection">
+                  ✕
+                </button>
+              </span>
+            ))}
+            {chosen.length > MAX_CHIPS && <span className="muted small">+{chosen.length - MAX_CHIPS} more</span>}
+          </div>
+        </>
       )}
     </div>
   );

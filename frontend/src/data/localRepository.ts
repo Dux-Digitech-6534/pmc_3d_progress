@@ -1,7 +1,8 @@
 import { resolveBatchQuantities } from '../domain/allocation';
 import { validateModelDocument } from '../domain/modelValidation';
 import type { ActivityDef, ElementRecord, HistoryItem, ModelRecord, ProgressEntry, Project, Role, Unit } from '../domain/types';
-import { PLANNING_STATUSES, ROLE_LABELS } from '../domain/types';
+import { activityApplies, PLANNING_STATUSES, ROLE_LABELS } from '../domain/types';
+import type { PlanningData } from '../domain/planning';
 import type { SentLine } from '../domain/materialVariation';
 import { inModelFamily } from '../domain/progress';
 import { checkQuantity, findPossibleDuplicate, permissions, validateDate, type ReviewDecision } from '../domain/workflow';
@@ -772,6 +773,97 @@ export class LocalRepository implements PmcRepository {
       mr.state = 'L2 Approval Pending';
       this.storage.setItem(key, JSON.stringify(list));
       return { name, state: mr.state };
+    });
+  }
+
+  // ---------- planning (reports-mobile branch) ----------
+
+  private planKey(projectId: string) {
+    return `${STORAGE_PREFIX}planning.${projectId}`;
+  }
+  private planData(projectId: string): PlanningData {
+    const d = this.read<Partial<PlanningData>>(this.planKey(projectId), {});
+    return { plans: d.plans ?? [], starts: d.starts ?? [] };
+  }
+  private planner(role: Role) {
+    if (role !== 'site-engineer' && role !== 'pmc-reviewer') throw new RepositoryError('forbidden', 'Only a PMC Site Engineer or PMC Reviewer can change the planning.');
+  }
+
+  getPlanning(projectId: string): Promise<PlanningData> {
+    return this.op(() => this.planData(projectId));
+  }
+
+  addPlans(projectId: string, input: { date: string; activityCode: string; elementIds: string[]; note?: string }, role: Role) {
+    return this.op(() => {
+      this.planner(role);
+      const { elements, activities } = this.activeContext(projectId);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new RepositoryError('validation', 'Plan date is not a valid date.');
+      const a = this.findActivity(activities, input.activityCode);
+      if (!input.elementIds.length) throw new RepositoryError('validation', 'Select at least one element.');
+      for (const id of input.elementIds) {
+        const el = this.findElement(elements, id);
+        if (!activityApplies(a, el.type)) throw new RepositoryError('validation', `${a.name} does not apply to ${el.code}.`);
+      }
+      const d = this.planData(projectId);
+      const have = new Set(d.plans.map((p) => `${p.elementId}|${p.activityCode}|${p.date}`));
+      let added = 0;
+      for (const id of [...new Set(input.elementIds)]) {
+        if (have.has(`${id}|${a.code}|${input.date}`)) continue;
+        d.plans.push({ id: this.nextId('PLAN'), elementId: id, activityCode: a.code, date: input.date, note: input.note?.trim() ?? '', createdAt: this.nowIso() });
+        added += 1;
+      }
+      this.write(this.planKey(projectId), d);
+      return { ...d, added, skipped: new Set(input.elementIds).size - added };
+    });
+  }
+
+  deletePlans(projectId: string, planIds: string[], role: Role) {
+    return this.op(() => {
+      this.planner(role);
+      const d = this.planData(projectId);
+      d.plans = d.plans.filter((p) => !planIds.includes(p.id));
+      this.write(this.planKey(projectId), d);
+      return d;
+    });
+  }
+
+  setNoWork(projectId: string, planIds: string[], reason: string, role: Role) {
+    return this.op(() => {
+      this.planner(role);
+      const d = this.planData(projectId);
+      const r = reason.trim();
+      for (const p of d.plans) {
+        if (!planIds.includes(p.id)) continue;
+        if (r) p.noWork = { reason: r, at: this.nowIso() };
+        else delete p.noWork;
+      }
+      this.write(this.planKey(projectId), d);
+      return d;
+    });
+  }
+
+  markStarted(projectId: string, elementIds: string[], activityCode: string, date: string, role: Role) {
+    return this.op(() => {
+      this.planner(role);
+      const { elements, activities } = this.activeContext(projectId);
+      const a = this.findActivity(activities, activityCode);
+      elementIds.forEach((id) => this.findElement(elements, id));
+      if (date > this.nowIso().slice(0, 10)) throw new RepositoryError('validation', 'The start date cannot be in the future.');
+      const d = this.planData(projectId);
+      d.starts = d.starts.filter((s) => !(s.activityCode === a.code && elementIds.includes(s.elementId)));
+      d.starts.push(...elementIds.map((id) => ({ elementId: id, activityCode: a.code, date, at: this.nowIso() })));
+      this.write(this.planKey(projectId), d);
+      return d;
+    });
+  }
+
+  clearStarted(projectId: string, elementIds: string[], activityCode: string, role: Role) {
+    return this.op(() => {
+      this.planner(role);
+      const d = this.planData(projectId);
+      d.starts = d.starts.filter((s) => !(s.activityCode === activityCode && elementIds.includes(s.elementId)));
+      this.write(this.planKey(projectId), d);
+      return d;
     });
   }
 

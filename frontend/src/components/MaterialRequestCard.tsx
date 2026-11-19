@@ -73,13 +73,20 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
     () =>
       needs.map((n) => {
         const item = suggestItem(n, items ?? [], bagKg);
-        const text = typed[n.key] ?? '';
-        return { need: n, item, text, qty: Number(text) };
+        // cement is asked in bags even when the ERP item is kept in kg (meeting 16-11)
+        const perUom = item ? toReportUnit(n.kind, 1, item.uom, bagKg) : null;
+        const bags = !!item && n.kind === 'cement' && !!perUom && !/bag/i.test(item.uom);
+        // the quantity is filled in from the requirement; the user can change it
+        const auto = item ? (bags ? Math.ceil(n.qty - 1e-9) : inItemUnit(n, item.uom, bagKg)) : null;
+        const text = typed[n.key] ?? (auto !== null ? String(auto) : '');
+        const entered = Number(text);
+        const qty = bags && perUom ? Math.round((entered / perUom) * 100) / 100 : entered;
+        return { need: n, item, text, qty, bags, entered };
       }),
     [needs, typed, items, bagKg],
   );
   const ready = lines.filter((l) => l.item && l.text.trim() !== '' && Number.isFinite(l.qty) && l.qty > 0);
-  const badQty = lines.some((l) => l.item && l.text.trim() !== '' && !(Number.isFinite(l.qty) && l.qty >= 0));
+  const badQty = lines.some((l) => l.item && l.text.trim() !== '' && !(Number.isFinite(l.entered) && l.entered >= 0));
 
   if (!needs.length || role === 'owner') return null;
 
@@ -132,7 +139,7 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
               </tr>
             </thead>
             <tbody>
-              {lines.map(({ need, item, text }) => (
+              {lines.map(({ need, item, text, bags, qty }) => (
                 <tr key={need.key}>
                   <td>
                     {need.label}
@@ -144,12 +151,8 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
                       return (
                         <div className="muted small mr-need">
                           Need {formatQty(need.qty, need.unit)}
-                          {item && inUnit !== null && !same && <> = {formatQty(inUnit, item.uom)}</>}
-                          {item && inUnit !== null && !locked && (
-                            <button type="button" className="link" onClick={() => setTyped((t) => ({ ...t, [need.key]: String(inUnit) }))}>
-                              Use
-                            </button>
-                          )}
+                          {item && inUnit !== null && !same && !bags && <> = {formatQty(inUnit, item.uom)}</>}
+                          {bags && item && Number.isFinite(qty) && qty > 0 && <> · goes to ERPNext as {formatQty(qty, item.uom)}</>}
                         </div>
                       );
                     })()}
@@ -165,10 +168,10 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
                           value={text}
                           disabled={locked}
                           placeholder="0"
-                          aria-label={`Quantity of ${need.label} in ${item.uom}`}
+                          aria-label={`Quantity of ${need.label} in ${bags ? 'bags' : item.uom}`}
                           onChange={(e) => setTyped((t) => ({ ...t, [need.key]: e.target.value }))}
                         />
-                        <span className="muted small">{item.uom}</span>
+                        <span className="muted small">{bags ? 'bags' : item.uom}</span>
                       </span>
                     ) : (
                       <span className="muted small">No item in ERPNext</span>
@@ -204,7 +207,7 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
             </div>
           )}
           <p className="hint">
-            Materials come from the selected elements; enter the quantity to request. Materials left blank are not requested.
+            Quantities are filled in from what the selected elements need — change any of them if needed. A line left blank or 0 is not requested.
           </p>
         </>
       )}
