@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { EmptyState, ErrorList, PageHeader, Spinner } from '../components/ui';
 import { errorMessages } from '../data/repository';
-import { countResults, planVsActual, PLAN_RESULT_LABELS, type PlanRow } from '../domain/planning';
+import { countResults, planEnd, planVsActual, PLAN_RESULT_LABELS, type PlanRow } from '../domain/planning';
 import { ELEMENT_TYPE_LABELS } from '../domain/reports';
 import { inWorkOrder } from '../domain/sequence';
 import { activityApplies, type ElementType } from '../domain/types';
@@ -16,12 +16,14 @@ const addDays = (ymd: string, n: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 const fmtDay = (ymd: string) => new Date(`${ymd}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+/** "20 Nov" or "20 – 25 Nov". */
+const rangeText = (from: string, to: string) => (to && to !== from ? `${fmtDay(from)} – ${fmtDay(to)}` : fmtDay(from));
 const REASONS = ['Rain', 'Material not available', 'Labour not available', 'Machine / shuttering not ready'];
 
 /**
  * Planning for the site engineer, kept simple (meeting 16-11):
- *   1. pick the day (Today / Tomorrow / a date), 2. tap the elements, 3. tap the work, 4. Add to plan.
- * Below: the plan day by day. Work reported in Work Done marks a job Done / Started by itself;
+ *   1. From – To dates, 2. tap the elements, 3. tap the work, 4. Add to plan.
+ * Below: the plans (now / coming up / past). Work reported in Work Done marks a job Done / Started by itself;
  * a job that did not happen gets "No work" with a reason (one tap for the usual reasons).
  */
 export function Planning() {
@@ -31,13 +33,14 @@ export function Planning() {
   const tomorrow = addDays(today, 1);
   const canPlan = role === 'site-engineer' || role === 'pmc-reviewer';
 
-  const [day, setDay] = useState(tomorrow);
+  const [pFrom, setPFrom] = useState(tomorrow);
+  const [pTo, setPTo] = useState(tomorrow);
   const [type, setType] = useState<ElementType | ''>('');
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [works, setWorks] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
-  const [view, setView] = useState<'today' | 'tomorrow' | 'week'>('today');
+  const [view, setView] = useState<'now' | 'upcoming' | 'past'>('now');
   const [noWorkFor, setNoWorkFor] = useState<string | null>(null);
   const [other, setOther] = useState('');
 
@@ -48,17 +51,23 @@ export function Planning() {
   const typeEls = elements.filter((e) => e.type === curType);
   const typeActs = activities.filter((a) => curType && activityApplies(a, curType));
 
-  const range = view === 'today' ? [today, today] : view === 'tomorrow' ? [tomorrow, tomorrow] : [addDays(today, -6), today];
+  // now = plans running today; coming up = starting after today; past = ended before today
+  const range = view === 'now' ? [today, today] : view === 'upcoming' ? [tomorrow, addDays(today, 365)] : [addDays(today, -365), addDays(today, -1)];
   const rows = useMemo(
     () => (planning && data ? planVsActual(planning, data.entries, elements, activities, today, range[0], range[1]) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [planning, data, elements, activities, today, view],
   );
+  // grouped by their dates (same From – To together)
   const byDay = useMemo(() => {
     const m = new Map<string, PlanRow[]>();
-    for (const r of [...rows].sort((a, b) => b.plan.date.localeCompare(a.plan.date))) m.set(r.plan.date, [...(m.get(r.plan.date) ?? []), r]);
+    const kept = rows.filter((r) => (view === 'upcoming' ? r.plan.date > today : view === 'past' ? planEnd(r.plan) < today : true));
+    for (const r of [...kept].sort((a, b) => (view === 'past' ? b.plan.date.localeCompare(a.plan.date) : a.plan.date.localeCompare(b.plan.date)))) {
+      const k = `${r.plan.date}|${planEnd(r.plan)}`;
+      m.set(k, [...(m.get(k) ?? []), r]);
+    }
     return [...m.entries()];
-  }, [rows]);
+  }, [rows, view, today]);
   const missedAll = useMemo(
     () => (planning && data ? planVsActual(planning, data.entries, elements, activities, today).filter((r) => r.result === 'missed').length : 0),
     [planning, data, elements, activities, today],
@@ -83,6 +92,7 @@ export function Planning() {
   };
   const allPicked = typeEls.length > 0 && typeEls.every((e) => picked.has(e.id));
   const jobs = picked.size * works.size;
+  const datesBad = !pFrom || !pTo || pTo < pFrom;
 
   async function add() {
     setErrors([]);
@@ -90,14 +100,14 @@ export function Planning() {
     let added = 0;
     try {
       for (const code of [...works]) {
-        const out = await repo.addPlans(data!.project.id, { date: day, activityCode: code, elementIds: [...picked] }, role);
+        const out = await repo.addPlans(data!.project.id, { date: pFrom, to: pTo, activityCode: code, elementIds: [...picked] }, role);
         setPlanning(data!.project.id, out);
         added += out.added;
       }
-      notify(`${added} job${added === 1 ? '' : 's'} planned for ${fmtDay(day)}.`);
+      notify(`${added} job${added === 1 ? '' : 's'} planned for ${rangeText(pFrom, pTo)}.`);
       setPicked(new Set());
       setWorks(new Set());
-      setView(day === today ? 'today' : day === tomorrow ? 'tomorrow' : 'week');
+      setView(pFrom <= today ? 'now' : 'upcoming');
     } catch (e) {
       setErrors(errorMessages(e));
     } finally {
@@ -133,7 +143,7 @@ export function Planning() {
       {missedAll > 0 && (
         <div className="alert alert-warn">
           <b>{missedAll} planned job{missedAll === 1 ? '' : 's'} not reported.</b> Enter the work in Work Done, or press <b>No work</b> and give the reason.{' '}
-          <button className="link" onClick={() => setView('week')}>
+          <button className="link" onClick={() => setView('past')}>
             Show them
           </button>
         </div>
@@ -147,15 +157,27 @@ export function Planning() {
           <div className="plan-step">
             <span className="plan-num">1</span>
             <div>
-              <div className="plan-step-title">Which day?</div>
-              <div className="plan-seg">
-                <button className={day === today ? 'on' : ''} onClick={() => setDay(today)}>
-                  Today
-                </button>
-                <button className={day === tomorrow ? 'on' : ''} onClick={() => setDay(tomorrow)}>
-                  Tomorrow
-                </button>
-                <input type="date" value={day} min={today} onChange={(e) => e.target.value && setDay(e.target.value)} aria-label="Other date" />
+              <div className="plan-step-title">When? (from – to)</div>
+              <div className="plan-seg plan-dates">
+                <label>
+                  From
+                  <input
+                    type="date"
+                    value={pFrom}
+                    min={today}
+                    onChange={(ev) => {
+                      const v = ev.target.value;
+                      if (!v) return;
+                      setPFrom(v);
+                      if (pTo < v) setPTo(v);
+                    }}
+                  />
+                </label>
+                <label>
+                  To
+                  <input type="date" value={pTo} min={pFrom || today} onChange={(ev) => ev.target.value && setPTo(ev.target.value)} />
+                </label>
+                {!datesBad && <span className="muted small">{rangeText(pFrom, pTo)}</span>}
               </div>
             </div>
           </div>
@@ -210,8 +232,8 @@ export function Planning() {
           </div>
 
           <div className="plan-go">
-            <button className="btn btn-primary" disabled={busy || !jobs} onClick={() => void add()}>
-              {busy ? 'Adding…' : jobs ? `Add to plan — ${fmtDay(day)}` : 'Add to plan'}
+            <button className="btn btn-primary" disabled={busy || !jobs || datesBad} onClick={() => void add()}>
+              {busy ? 'Adding…' : jobs ? `Add to plan — ${rangeText(pFrom, pTo)}` : 'Add to plan'}
             </button>
             <span className="muted small">
               {picked.size} element{picked.size === 1 ? '' : 's'} × {works.size} work = {jobs} job{jobs === 1 ? '' : 's'}
@@ -224,28 +246,29 @@ export function Planning() {
         <div className="dash-card-head">
           <h2 className="plan-h">The plan</h2>
           <div className="plan-seg">
-            <button className={view === 'today' ? 'on' : ''} onClick={() => setView('today')}>
-              Today
+            <button className={view === 'now' ? 'on' : ''} onClick={() => setView('now')}>
+              Running now
             </button>
-            <button className={view === 'tomorrow' ? 'on' : ''} onClick={() => setView('tomorrow')}>
-              Tomorrow
+            <button className={view === 'upcoming' ? 'on' : ''} onClick={() => setView('upcoming')}>
+              Coming up
             </button>
-            <button className={view === 'week' ? 'on' : ''} onClick={() => setView('week')}>
-              Last 7 days
+            <button className={view === 'past' ? 'on' : ''} onClick={() => setView('past')}>
+              Past
             </button>
           </div>
         </div>
         {!planning ? (
           <Spinner />
         ) : byDay.length === 0 ? (
-          <p className="rep-empty">Nothing planned{view === 'today' ? ' for today' : view === 'tomorrow' ? ' for tomorrow' : ' in the last 7 days'}.</p>
+          <p className="rep-empty">{view === 'now' ? 'No plan running today.' : view === 'upcoming' ? 'Nothing planned ahead.' : 'No past plans.'}</p>
         ) : (
-          byDay.map(([d, list]) => {
+          byDay.map(([k, list]) => {
             const c = countResults(list);
+            const [d, end] = k.split('|');
             return (
-              <div key={d} className="plan-day">
+              <div key={k} className="plan-day">
                 <div className="plan-day-head">
-                  <b>{d === today ? 'Today' : d === tomorrow ? 'Tomorrow' : fmtDay(d)}</b>
+                  <b>{rangeText(d, end)}</b>
                   <span className="muted small">
                     {list.length} planned · {c.done} done{c.started ? ` · ${c.started} started` : ''}
                     {c['no-work'] ? ` · ${c['no-work']} no work` : ''}

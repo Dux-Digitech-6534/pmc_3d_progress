@@ -793,11 +793,14 @@ export class LocalRepository implements PmcRepository {
     return this.op(() => this.planData(projectId));
   }
 
-  addPlans(projectId: string, input: { date: string; activityCode: string; elementIds: string[]; note?: string }, role: Role) {
+  addPlans(projectId: string, input: { date: string; to?: string; activityCode: string; elementIds: string[]; note?: string }, role: Role) {
     return this.op(() => {
       this.planner(role);
       const { elements, activities } = this.activeContext(projectId);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new RepositoryError('validation', 'Plan date is not a valid date.');
+      const to = input.to && input.to > input.date ? input.to : input.date;
+      if (input.to && !/^\d{4}-\d{2}-\d{2}$/.test(input.to)) throw new RepositoryError('validation', '"To" is not a valid date.');
+      if (input.to && input.to < input.date) throw new RepositoryError('validation', '"To" date is before "From" date.');
       const a = this.findActivity(activities, input.activityCode);
       if (!input.elementIds.length) throw new RepositoryError('validation', 'Select at least one element.');
       for (const id of input.elementIds) {
@@ -805,11 +808,11 @@ export class LocalRepository implements PmcRepository {
         if (!activityApplies(a, el.type)) throw new RepositoryError('validation', `${a.name} does not apply to ${el.code}.`);
       }
       const d = this.planData(projectId);
-      const have = new Set(d.plans.map((p) => `${p.elementId}|${p.activityCode}|${p.date}`));
+      const have = new Set(d.plans.map((p) => `${p.elementId}|${p.activityCode}|${p.date}|${p.to ?? p.date}`));
       let added = 0;
       for (const id of [...new Set(input.elementIds)]) {
-        if (have.has(`${id}|${a.code}|${input.date}`)) continue;
-        d.plans.push({ id: this.nextId('PLAN'), elementId: id, activityCode: a.code, date: input.date, note: input.note?.trim() ?? '', createdAt: this.nowIso() });
+        if (have.has(`${id}|${a.code}|${input.date}|${to}`)) continue;
+        d.plans.push({ id: this.nextId('PLAN'), elementId: id, activityCode: a.code, date: input.date, to, note: input.note?.trim() ?? '', createdAt: this.nowIso() });
         added += 1;
       }
       this.write(this.planKey(projectId), d);

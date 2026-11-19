@@ -221,10 +221,11 @@ export class FrappeRepository implements PmcRepository {
   getPlanning(projectId: string) {
     return call<PlanningData>('beta_api.get_planning', { project_id: projectId }, 'GET');
   }
-  addPlans(projectId: string, input: { date: string; activityCode: string; elementIds: string[]; note?: string }, role: Role) {
+  addPlans(projectId: string, input: { date: string; to?: string; activityCode: string; elementIds: string[]; note?: string }, role: Role) {
     return call<PlanningData & { added: number; skipped: number }>('beta_api.add_plans', {
       project_id: projectId,
       date: input.date,
+      to_date: input.to ?? input.date,
       activity_code: input.activityCode,
       element_ids: JSON.stringify(input.elementIds),
       note: input.note ?? '',

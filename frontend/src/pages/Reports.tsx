@@ -7,7 +7,7 @@ import { UNIT_LABELS, type ElementType } from '../domain/types';
 import { todayISO } from '../domain/workflow';
 import { downloadText, toCsv } from '../lib/download';
 import { useApp } from '../state/AppContext';
-import { completeDateOf, countResults, daysTaken, planVsActual, PLAN_RESULT_LABELS } from '../domain/planning';
+import { completeDateOf, countResults, daysTaken, planEnd, planVsActual, PLAN_RESULT_LABELS } from '../domain/planning';
 import { usePlanning } from '../state/planning';
 
 const fmtDay = (ymd: string) => (ymd ? new Date(`${ymd}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
@@ -143,7 +143,7 @@ export function Reports() {
       [],
       ['Plan vs actual'],
       ['Date', 'Element', 'Work', 'Result', 'Detail'],
-      ...planRows.map((r) => [r.plan.date, r.element ? elementLabel(r.element) : r.plan.elementId, r.activity?.name ?? r.plan.activityCode, PLAN_RESULT_LABELS[r.result], r.detail]),
+      ...planRows.map((r) => [planEnd(r.plan) === r.plan.date ? r.plan.date : `${r.plan.date} to ${planEnd(r.plan)}`, r.element ? elementLabel(r.element) : r.plan.elementId, r.activity?.name ?? r.plan.activityCode, PLAN_RESULT_LABELS[r.result], r.detail]),
     ];
     downloadText(`pmc-report-${data!.project.id}-${todayISO()}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
   }
@@ -476,7 +476,7 @@ export function Reports() {
                 <tbody>
                   {planRows.map((r) => (
                     <tr key={r.plan.id}>
-                      <td className="nowrap">{fmtDay(r.plan.date)}</td>
+                      <td className="nowrap">{fmtDay(r.plan.date)}{planEnd(r.plan) !== r.plan.date && ` – ${fmtDay(planEnd(r.plan))}`}</td>
                       <td>
                         <b>{r.element ? elementLabel(r.element) : r.plan.elementId}</b>
                       </td>

@@ -72,12 +72,15 @@ def get_planning(project_id):
 
 
 @frappe.whitelist(methods=["POST"])
-def add_plans(project_id, date, activity_code, element_ids, role, note=None):
-	"""Plan one activity on some elements for a date. An element already planned for that activity and date is skipped."""
+def add_plans(project_id, date, activity_code, element_ids, role, note=None, to_date=None):
+	"""Plan one activity on some elements for From (date) .. To (to_date). The same element, activity and dates again is skipped."""
 	_planner(role)
 	_lock(project_id)
 	_, _, document = _active_context(project_id)
-	day = _date(date, "Plan date")
+	day = _date(date, "From date")
+	end = _date(to_date, "To date") if to_date else day
+	if end < day:
+		_throw('"To" date is before "From" date.')
 	activity = _find_activity(document, activity_code)
 	ids = _ids(element_ids)
 	for i in ids:
@@ -89,11 +92,11 @@ def add_plans(project_id, date, activity_code, element_ids, role, note=None):
 	if len(note) > 300:
 		_throw("The note must be 300 characters or fewer.")
 	data = _load(project_id)
-	have = {(p["elementId"], p["activityCode"], p["date"]) for p in data["plans"]}
+	have = {(p["elementId"], p["activityCode"], p["date"], p.get("to") or p["date"]) for p in data["plans"]}
 	now = now_datetime().isoformat()
 	added = 0
 	for i in ids:
-		if (i, activity["code"], day) in have:
+		if (i, activity["code"], day, end) in have:
 			continue
 		data["plans"].append(
 			{
@@ -101,6 +104,7 @@ def add_plans(project_id, date, activity_code, element_ids, role, note=None):
 				"elementId": i,
 				"activityCode": activity["code"],
 				"date": day,
+				"to": end,
 				"note": note,
 				"createdBy": frappe.session.user,
 				"createdAt": now,

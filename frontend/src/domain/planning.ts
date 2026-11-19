@@ -5,8 +5,10 @@ export interface PlanItem {
   id: string;
   elementId: string;
   activityCode: string;
-  /** YYYY-MM-DD. */
+  /** First day of the plan, YYYY-MM-DD. */
   date: string;
+  /** Last day of the plan (same as date, or absent, for a one-day plan). */
+  to?: string;
   note?: string;
   createdBy?: string;
   createdAt?: string;
@@ -49,13 +51,17 @@ export interface PlanRow {
   detail: string;
 }
 
+/** Last day of a plan. */
+export const planEnd = (p: Pick<PlanItem, 'date' | 'to'>) => (p.to && p.to > p.date ? p.to : p.date);
+
 /**
- * Plan vs actual. A planned job is
- *  - Done: work for that element + activity was reported (sent or approved) on the plan date;
- *  - Started: it was marked started on the plan date;
+ * Plan vs actual. A planned job (one element + activity, From..To) is
+ *  - Done: work for it was reported (sent or approved) on a day From..To;
+ *  - Started: it was marked started on a day From..To;
  *  - No work: the engineer said it did not happen, with the reason;
- *  - Not reported: the date is over and none of the above — the engineer must report the work or "No work";
- *  - Planned: today or later, nothing yet.
+ *  - Not reported: the To date is over and none of the above — the engineer must report the work or "No work";
+ *  - Planned: To is today or later, nothing yet.
+ * A From / To filter keeps the plans that overlap those dates.
  */
 export function planVsActual(
   data: PlanningData,
@@ -68,18 +74,21 @@ export function planVsActual(
 ): PlanRow[] {
   const els = new Map(elements.map((e) => [e.id, e]));
   const acts = new Map(activities.map((a) => [a.code, a]));
-  const qty = new Map<string, number>();
-  for (const e of entries) {
-    if (e.status !== 'Submitted' && e.status !== 'Approved') continue;
-    const k = `${e.elementId}|${e.activityCode}|${e.date}`;
-    qty.set(k, (qty.get(k) ?? 0) + e.quantity);
-  }
-  const started = new Set(data.starts.map((s) => `${s.elementId}|${s.activityCode}|${s.date}`));
+  const reportedIn = (p: PlanItem) => {
+    const end = planEnd(p);
+    let q = 0;
+    for (const e of entries)
+      if ((e.status === 'Submitted' || e.status === 'Approved') && e.elementId === p.elementId && e.activityCode === p.activityCode && e.date >= p.date && e.date <= end) q += e.quantity;
+    return q;
+  };
+  const startedIn = (p: PlanItem) => {
+    const end = planEnd(p);
+    return data.starts.some((s) => s.elementId === p.elementId && s.activityCode === p.activityCode && s.date >= p.date && s.date <= end);
+  };
   return data.plans
-    .filter((p) => (!from || p.date >= from) && (!to || p.date <= to))
+    .filter((p) => (!from || planEnd(p) >= from) && (!to || p.date <= to))
     .map((p) => {
-      const k = `${p.elementId}|${p.activityCode}|${p.date}`;
-      const reported = qty.get(k) ?? 0;
+      const reported = reportedIn(p);
       const a = acts.get(p.activityCode);
       const unit = a ? ` ${a.unit === 'm3' ? 'm³' : a.unit === 'm2' ? 'm²' : a.unit}` : '';
       let result: PlanResult;
@@ -87,18 +96,18 @@ export function planVsActual(
       if (reported > 0) {
         result = 'done';
         detail = `Done ${Math.round(reported * 1000) / 1000}${unit}`;
-      } else if (started.has(k)) {
+      } else if (startedIn(p)) {
         result = 'started';
         detail = 'Started';
       } else if (p.noWork) {
         result = 'no-work';
         detail = `No work: ${p.noWork.reason}`;
-      } else if (p.date < today) {
+      } else if (planEnd(p) < today) {
         result = 'missed';
         detail = 'Nothing reported — report the work or "No work"';
       } else {
         result = 'pending';
-        detail = p.date === today ? 'Planned for today' : 'Planned';
+        detail = p.date <= today ? 'Due now' : 'Planned';
       }
       return { plan: p, element: els.get(p.elementId), activity: a, result, reported, detail };
     })

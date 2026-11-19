@@ -157,7 +157,7 @@ export function frappeMock(): Plugin {
               case 'beta_api.get_planning':
                 return r.getPlanning(args.project_id);
               case 'beta_api.add_plans':
-                return r.addPlans(args.project_id, { date: args.date, activityCode: args.activity_code, elementIds: JSON.parse(args.element_ids), note: args.note }, args.role);
+                return r.addPlans(args.project_id, { date: args.date, to: args.to_date, activityCode: args.activity_code, elementIds: JSON.parse(args.element_ids), note: args.note }, args.role);
               case 'beta_api.delete_plans':
                 return r.deletePlans(args.project_id, JSON.parse(args.plan_ids), args.role);
               case 'beta_api.set_no_work':

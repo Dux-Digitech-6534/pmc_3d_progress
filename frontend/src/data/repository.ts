@@ -70,7 +70,7 @@ export interface PmcRepository {
   // ---- planning (reports-mobile branch; on the server in pmc_3d_progress/beta_api.py) ----
   getPlanning(projectId: string): Promise<PlanningData>;
   /** Plan one activity on elements for a date; an element already planned for it that day is skipped. */
-  addPlans(projectId: string, input: { date: string; activityCode: string; elementIds: string[]; note?: string }, role: Role): Promise<PlanningData & { added: number; skipped: number }>;
+  addPlans(projectId: string, input: { date: string; to?: string; activityCode: string; elementIds: string[]; note?: string }, role: Role): Promise<PlanningData & { added: number; skipped: number }>;
   deletePlans(projectId: string, planIds: string[], role: Role): Promise<PlanningData>;
   /** Planned work that did not happen (reason required); an empty reason clears it. */
   setNoWork(projectId: string, planIds: string[], reason: string, role: Role): Promise<PlanningData>;

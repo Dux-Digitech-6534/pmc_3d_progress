@@ -4100,3 +4100,10 @@ input[type='radio'] {
 .plan-reasons input {
   width: 180px;
 }
+.plan-dates label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--navy);
+}

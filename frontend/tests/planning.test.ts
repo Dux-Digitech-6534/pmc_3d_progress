@@ -39,6 +39,21 @@ describe('plan vs actual', () => {
     expect(countResults(rows)).toEqual({ done: 1, started: 1, 'no-work': 1, missed: 2, pending: 1 });
   });
 
+  it('a From – To plan is Done when work is reported on any day inside it; Not reported only after To', () => {
+    const ranged: PlanningData = {
+      plans: [
+        { id: 'r1', elementId: 'F1', activityCode: 'CONC', date: '2026-11-08', to: '2026-11-12' }, // work on the 10th
+        { id: 'r2', elementId: 'F2', activityCode: 'CONC', date: '2026-11-15', to: '2026-11-22' }, // To not over yet
+        { id: 'r3', elementId: 'F3', activityCode: 'CONC', date: '2026-11-11', to: '2026-11-14' }, // over, nothing
+      ],
+      starts: [],
+    };
+    const rows = planVsActual(ranged, entries, els, [CONC], '2026-11-19');
+    expect(Object.fromEntries(rows.map((r) => [r.plan.id, r.result]))).toEqual({ r1: 'done', r2: 'pending', r3: 'missed' });
+    // a filter keeps plans that overlap the dates
+    expect(planVsActual(ranged, entries, els, [CONC], '2026-11-19', '2026-11-13', '2026-11-13').map((r) => r.plan.id)).toEqual(['r3']);
+  });
+
   it('filters by plan date', () => {
     expect(planVsActual(data, entries, els, [CONC], '2026-11-19', '2026-11-11', '2026-11-30').map((r) => r.plan.id)).toEqual(['p5']);
   });
@@ -71,6 +86,13 @@ describe('planning in the local repository', () => {
     // concreting does not apply to a door or wall
     const wall = els.find((e) => e.type === 'wall');
     if (wall) await expect(repo.addPlans('PMC-SEC-001', { date: '2026-12-01', activityCode: 'CONC', elementIds: [wall.id] }, 'site-engineer')).rejects.toThrow(/does not apply/);
+
+    // a From – To plan; To before From is refused
+    const r = await repo.addPlans('PMC-SEC-001', { date: '2026-12-01', to: '2026-12-05', activityCode: 'CONC', elementIds: footings.slice(0, 1) }, 'site-engineer');
+    expect(r.added).toBe(1);
+    expect(r.plans.at(-1)!.to).toBe('2026-12-05');
+    await expect(repo.addPlans('PMC-SEC-001', { date: '2026-12-05', to: '2026-12-01', activityCode: 'CONC', elementIds: footings }, 'site-engineer')).rejects.toThrow(/before/);
+    await repo.deletePlans('PMC-SEC-001', [r.plans.at(-1)!.id], 'site-engineer');
 
     const id = b.plans[0].id;
     let d = await repo.setNoWork('PMC-SEC-001', [id], 'Rain', 'site-engineer');
