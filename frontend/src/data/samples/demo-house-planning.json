@@ -1,0 +1,3285 @@
+{
+  "format": "pmc-procedural-model",
+  "formatVersion": 1,
+  "project": {
+    "id": "PMC-DEMO-PLAN",
+    "name": "Demo House (planning test)",
+    "location": "Local demo"
+  },
+  "model": {
+    "id": "DEMO-HOUSE",
+    "name": "Demo House",
+    "revision": "R01",
+    "lengthUnit": "m",
+    "upAxis": "y",
+    "source": {
+      "type": "model-builder",
+      "builderSpec": {
+        "projectId": "PMC-DEMO-PLAN",
+        "projectName": "Demo House (planning test)",
+        "location": "Local demo",
+        "modelId": "DEMO-HOUSE",
+        "modelName": "Demo House",
+        "revision": "R01",
+        "buildingName": "Demo House",
+        "xSpans": [
+          3500,
+          3500,
+          3000
+        ],
+        "ySpans": [
+          4000,
+          3500
+        ],
+        "columnTypes": [
+          {
+            "code": "C1",
+            "w": 300,
+            "d": 300,
+            "footing": "F1"
+          }
+        ],
+        "footingTypes": [
+          {
+            "code": "F1",
+            "w": 1400,
+            "d": 1400,
+            "t": 300
+          }
+        ],
+        "layout": [
+          [
+            "C1",
+            "C1",
+            "C1",
+            "C1"
+          ],
+          [
+            "C1",
+            "C1",
+            "C1",
+            "C1"
+          ],
+          [
+            "C1",
+            "C1",
+            "C1",
+            "C1"
+          ]
+        ],
+        "foundationDepth": 1000,
+        "roofLevel": 3000,
+        "plinthBeam": {
+          "enabled": true,
+          "w": 230,
+          "h": 300
+        },
+        "roofBeam": {
+          "enabled": true,
+          "w": 230,
+          "h": 300
+        },
+        "slab": {
+          "enabled": true,
+          "t": 125,
+          "overhang": 450
+        },
+        "steel": {
+          "footing": 80,
+          "column": 180,
+          "beam": 150,
+          "slab": 90
+        },
+        "walls": {
+          "enabled": true,
+          "t": 230,
+          "internal": false
+        },
+        "openingTypes": [
+          {
+            "mark": "D",
+            "kind": "door",
+            "w": 900,
+            "h": 2100,
+            "sill": 0
+          },
+          {
+            "mark": "D1",
+            "kind": "door",
+            "w": 750,
+            "h": 2100,
+            "sill": 0
+          },
+          {
+            "mark": "W",
+            "kind": "window",
+            "w": 1500,
+            "h": 1200,
+            "sill": 900
+          },
+          {
+            "mark": "V",
+            "kind": "ventilator",
+            "w": 600,
+            "h": 450,
+            "sill": 1800
+          }
+        ],
+        "openings": [
+          {
+            "mark": "D",
+            "wall": "X1Y1-X2Y1",
+            "offset": null
+          },
+          {
+            "mark": "W",
+            "wall": "X3Y1-X4Y1",
+            "offset": null
+          },
+          {
+            "mark": "W",
+            "wall": "X1Y1-X1Y2",
+            "offset": null
+          },
+          {
+            "mark": "W",
+            "wall": "X4Y2-X4Y3",
+            "offset": null
+          },
+          {
+            "mark": "V",
+            "wall": "X2Y3-X3Y3",
+            "offset": null
+          }
+        ],
+        "lintel": {
+          "enabled": true,
+          "h": 150,
+          "bearing": 150
+        },
+        "chhajja": {
+          "enabled": true,
+          "projection": 450,
+          "t": 75,
+          "overDoors": true
+        },
+        "drawingRefs": []
+      },
+      "drawings": [],
+      "kind": "building",
+      "grid": {
+        "xSpansMm": [
+          3500,
+          3500,
+          3000
+        ],
+        "ySpansMm": [
+          4000,
+          3500
+        ]
+      },
+      "columnSchedule": [
+        {
+          "code": "C1",
+          "w": 300,
+          "d": 300,
+          "footing": "F1"
+        }
+      ],
+      "footingSchedule": [
+        {
+          "code": "F1",
+          "w": 1400,
+          "d": 1400,
+          "t": 300
+        }
+      ],
+      "openingSchedule": [
+        {
+          "mark": "D",
+          "kind": "door",
+          "w": 900,
+          "h": 2100,
+          "sill": 0
+        },
+        {
+          "mark": "D1",
+          "kind": "door",
+          "w": 750,
+          "h": 2100,
+          "sill": 0
+        },
+        {
+          "mark": "W",
+          "kind": "window",
+          "w": 1500,
+          "h": 1200,
+          "sill": 900
+        },
+        {
+          "mark": "V",
+          "kind": "ventilator",
+          "w": 600,
+          "h": 450,
+          "sill": 1800
+        }
+      ],
+      "steelRatesKgPerM3": {
+        "footing": 80,
+        "column": 180,
+        "beam": 150,
+        "slab": 90
+      },
+      "materialNorms": {
+        "concreteGrade": "M20 (1:1.5:3)",
+        "concrete": {
+          "cementKg": 403,
+          "sandM3": 0.42,
+          "aggregateM3": 0.84
+        },
+        "brickwork": {
+          "bricks": 500,
+          "cementKg": 68,
+          "sandM3": 0.285
+        },
+        "plaster": {
+          "cementKg": 3.3,
+          "sandM3": 0.0137
+        },
+        "wastagePct": 0,
+        "bagKg": 50,
+        "gradeByType": {
+          "footing": "M20",
+          "column": "M20",
+          "beam": "M20",
+          "slab": "M20",
+          "lintel": "M20",
+          "chhajja": "M20"
+        },
+        "steelSplit": {
+          "footing": {
+            "10": 40,
+            "12": 60
+          },
+          "column": {
+            "8": 20,
+            "12": 40,
+            "16": 40
+          },
+          "beam": {
+            "8": 25,
+            "12": 45,
+            "16": 30
+          },
+          "slab": {
+            "8": 40,
+            "10": 60
+          },
+          "lintel": {
+            "8": 40,
+            "10": 60
+          },
+          "chhajja": {
+            "8": 50,
+            "10": 50
+          }
+        }
+      },
+      "note": "Built in the Model Builder from values read off the drawing(s). Verify against the approved drawing."
+    }
+  },
+  "buildings": [
+    {
+      "id": "BLD-DEMOHOUSE",
+      "name": "Demo House"
+    }
+  ],
+  "levels": [
+    {
+      "id": "FDN",
+      "name": "Foundation",
+      "buildingId": "BLD-DEMOHOUSE",
+      "elevation": -1
+    },
+    {
+      "id": "GF",
+      "name": "Ground / Plinth",
+      "buildingId": "BLD-DEMOHOUSE",
+      "elevation": 0
+    },
+    {
+      "id": "RF",
+      "name": "Roof",
+      "buildingId": "BLD-DEMOHOUSE",
+      "elevation": 3
+    }
+  ],
+  "activities": [
+    {
+      "code": "REINF",
+      "name": "Reinforcement",
+      "unit": "kg",
+      "appliesTo": [
+        "footing",
+        "column",
+        "beam",
+        "slab",
+        "lintel",
+        "chhajja"
+      ]
+    },
+    {
+      "code": "SHUT",
+      "name": "Shuttering",
+      "unit": "m2",
+      "appliesTo": [
+        "footing",
+        "column",
+        "beam",
+        "slab",
+        "lintel",
+        "chhajja"
+      ]
+    },
+    {
+      "code": "CONC",
+      "name": "Concreting",
+      "unit": "m3",
+      "appliesTo": [
+        "footing",
+        "column",
+        "beam",
+        "slab",
+        "lintel",
+        "chhajja"
+      ]
+    },
+    {
+      "code": "BRICK",
+      "name": "Brickwork",
+      "unit": "m3",
+      "appliesTo": [
+        "wall"
+      ]
+    },
+    {
+      "code": "PLAST",
+      "name": "Plaster",
+      "unit": "m2",
+      "appliesTo": [
+        "wall"
+      ]
+    },
+    {
+      "code": "FIX",
+      "name": "Fixing",
+      "unit": "nos",
+      "appliesTo": [
+        "door",
+        "window"
+      ]
+    }
+  ],
+  "elements": [
+    {
+      "id": "DEMOHOUSE-FTG-X1Y1",
+      "code": "F1-X1Y1",
+      "type": "footing",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -5,
+          -0.85,
+          3.75
+        ],
+        "size": [
+          1.4,
+          0.3,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 1.68,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.588,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 47,
+          "unit": "kg"
+        }
+      },
+      "notes": "Footing F1 1400×1400, D 300 mm"
+    },
+    {
+      "id": "DEMOHOUSE-COL-X1Y1",
+      "code": "C1-X1Y1",
+      "type": "column",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -5,
+          1.15,
+          3.75
+        ],
+        "size": [
+          0.3,
+          3.7,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 4.44,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.333,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 59.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Column C1 300×300 mm, from footing top to roof level"
+    },
+    {
+      "id": "DEMOHOUSE-FTG-X2Y1",
+      "code": "F1-X2Y1",
+      "type": "footing",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          -0.85,
+          3.75
+        ],
+        "size": [
+          1.4,
+          0.3,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 1.68,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.588,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 47,
+          "unit": "kg"
+        }
+      },
+      "notes": "Footing F1 1400×1400, D 300 mm"
+    },
+    {
+      "id": "DEMOHOUSE-COL-X2Y1",
+      "code": "C1-X2Y1",
+      "type": "column",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          1.15,
+          3.75
+        ],
+        "size": [
+          0.3,
+          3.7,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 4.44,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.333,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 59.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Column C1 300×300 mm, from footing top to roof level"
+    },
+    {
+      "id": "DEMOHOUSE-FTG-X3Y1",
+      "code": "F1-X3Y1",
+      "type": "footing",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2,
+          -0.85,
+          3.75
+        ],
+        "size": [
+          1.4,
+          0.3,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 1.68,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.588,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 47,
+          "unit": "kg"
+        }
+      },
+      "notes": "Footing F1 1400×1400, D 300 mm"
+    },
+    {
+      "id": "DEMOHOUSE-COL-X3Y1",
+      "code": "C1-X3Y1",
+      "type": "column",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2,
+          1.15,
+          3.75
+        ],
+        "size": [
+          0.3,
+          3.7,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 4.44,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.333,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 59.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Column C1 300×300 mm, from footing top to roof level"
+    },
+    {
+      "id": "DEMOHOUSE-FTG-X4Y1",
+      "code": "F1-X4Y1",
+      "type": "footing",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          5,
+          -0.85,
+          3.75
+        ],
+        "size": [
+          1.4,
+          0.3,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 1.68,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.588,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 47,
+          "unit": "kg"
+        }
+      },
+      "notes": "Footing F1 1400×1400, D 300 mm"
+    },
+    {
+      "id": "DEMOHOUSE-COL-X4Y1",
+      "code": "C1-X4Y1",
+      "type": "column",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          5,
+          1.15,
+          3.75
+        ],
+        "size": [
+          0.3,
+          3.7,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 4.44,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.333,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 59.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Column C1 300×300 mm, from footing top to roof level"
+    },
+    {
+      "id": "DEMOHOUSE-FTG-X1Y2",
+      "code": "F1-X1Y2",
+      "type": "footing",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -5,
+          -0.85,
+          -0.25
+        ],
+        "size": [
+          1.4,
+          0.3,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 1.68,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.588,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 47,
+          "unit": "kg"
+        }
+      },
+      "notes": "Footing F1 1400×1400, D 300 mm"
+    },
+    {
+      "id": "DEMOHOUSE-COL-X1Y2",
+      "code": "C1-X1Y2",
+      "type": "column",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -5,
+          1.15,
+          -0.25
+        ],
+        "size": [
+          0.3,
+          3.7,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 4.44,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.333,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 59.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Column C1 300×300 mm, from footing top to roof level"
+    },
+    {
+      "id": "DEMOHOUSE-FTG-X2Y2",
+      "code": "F1-X2Y2",
+      "type": "footing",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          -0.85,
+          -0.25
+        ],
+        "size": [
+          1.4,
+          0.3,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 1.68,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.588,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 47,
+          "unit": "kg"
+        }
+      },
+      "notes": "Footing F1 1400×1400, D 300 mm"
+    },
+    {
+      "id": "DEMOHOUSE-COL-X2Y2",
+      "code": "C1-X2Y2",
+      "type": "column",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          1.15,
+          -0.25
+        ],
+        "size": [
+          0.3,
+          3.7,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 4.44,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.333,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 59.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Column C1 300×300 mm, from footing top to roof level"
+    },
+    {
+      "id": "DEMOHOUSE-FTG-X3Y2",
+      "code": "F1-X3Y2",
+      "type": "footing",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2,
+          -0.85,
+          -0.25
+        ],
+        "size": [
+          1.4,
+          0.3,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 1.68,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.588,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 47,
+          "unit": "kg"
+        }
+      },
+      "notes": "Footing F1 1400×1400, D 300 mm"
+    },
+    {
+      "id": "DEMOHOUSE-COL-X3Y2",
+      "code": "C1-X3Y2",
+      "type": "column",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2,
+          1.15,
+          -0.25
+        ],
+        "size": [
+          0.3,
+          3.7,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 4.44,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.333,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 59.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Column C1 300×300 mm, from footing top to roof level"
+    },
+    {
+      "id": "DEMOHOUSE-FTG-X4Y2",
+      "code": "F1-X4Y2",
+      "type": "footing",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          5,
+          -0.85,
+          -0.25
+        ],
+        "size": [
+          1.4,
+          0.3,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 1.68,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.588,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 47,
+          "unit": "kg"
+        }
+      },
+      "notes": "Footing F1 1400×1400, D 300 mm"
+    },
+    {
+      "id": "DEMOHOUSE-COL-X4Y2",
+      "code": "C1-X4Y2",
+      "type": "column",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          5,
+          1.15,
+          -0.25
+        ],
+        "size": [
+          0.3,
+          3.7,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 4.44,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.333,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 59.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Column C1 300×300 mm, from footing top to roof level"
+    },
+    {
+      "id": "DEMOHOUSE-FTG-X1Y3",
+      "code": "F1-X1Y3",
+      "type": "footing",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -5,
+          -0.85,
+          -3.75
+        ],
+        "size": [
+          1.4,
+          0.3,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 1.68,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.588,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 47,
+          "unit": "kg"
+        }
+      },
+      "notes": "Footing F1 1400×1400, D 300 mm"
+    },
+    {
+      "id": "DEMOHOUSE-COL-X1Y3",
+      "code": "C1-X1Y3",
+      "type": "column",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -5,
+          1.15,
+          -3.75
+        ],
+        "size": [
+          0.3,
+          3.7,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 4.44,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.333,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 59.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Column C1 300×300 mm, from footing top to roof level"
+    },
+    {
+      "id": "DEMOHOUSE-FTG-X2Y3",
+      "code": "F1-X2Y3",
+      "type": "footing",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          -0.85,
+          -3.75
+        ],
+        "size": [
+          1.4,
+          0.3,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 1.68,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.588,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 47,
+          "unit": "kg"
+        }
+      },
+      "notes": "Footing F1 1400×1400, D 300 mm"
+    },
+    {
+      "id": "DEMOHOUSE-COL-X2Y3",
+      "code": "C1-X2Y3",
+      "type": "column",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          1.15,
+          -3.75
+        ],
+        "size": [
+          0.3,
+          3.7,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 4.44,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.333,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 59.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Column C1 300×300 mm, from footing top to roof level"
+    },
+    {
+      "id": "DEMOHOUSE-FTG-X3Y3",
+      "code": "F1-X3Y3",
+      "type": "footing",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2,
+          -0.85,
+          -3.75
+        ],
+        "size": [
+          1.4,
+          0.3,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 1.68,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.588,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 47,
+          "unit": "kg"
+        }
+      },
+      "notes": "Footing F1 1400×1400, D 300 mm"
+    },
+    {
+      "id": "DEMOHOUSE-COL-X3Y3",
+      "code": "C1-X3Y3",
+      "type": "column",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2,
+          1.15,
+          -3.75
+        ],
+        "size": [
+          0.3,
+          3.7,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 4.44,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.333,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 59.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Column C1 300×300 mm, from footing top to roof level"
+    },
+    {
+      "id": "DEMOHOUSE-FTG-X4Y3",
+      "code": "F1-X4Y3",
+      "type": "footing",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "FDN",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          5,
+          -0.85,
+          -3.75
+        ],
+        "size": [
+          1.4,
+          0.3,
+          1.4
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 1.68,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.588,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 47,
+          "unit": "kg"
+        }
+      },
+      "notes": "Footing F1 1400×1400, D 300 mm"
+    },
+    {
+      "id": "DEMOHOUSE-COL-X4Y3",
+      "code": "C1-X4Y3",
+      "type": "column",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          5,
+          1.15,
+          -3.75
+        ],
+        "size": [
+          0.3,
+          3.7,
+          0.3
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 4.44,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.333,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 59.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Column C1 300×300 mm, from footing top to roof level"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X1Y1-X2Y1",
+      "code": "PB-X1Y1-X2Y1",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -3.25,
+          -0.15,
+          3.75
+        ],
+        "size": [
+          3.2,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X2Y1-X3Y1",
+      "code": "PB-X2Y1-X3Y1",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0.25,
+          -0.15,
+          3.75
+        ],
+        "size": [
+          3.2,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X3Y1-X4Y1",
+      "code": "PB-X3Y1-X4Y1",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3.5,
+          -0.15,
+          3.75
+        ],
+        "size": [
+          2.7,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.24,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.186,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 27.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 2700 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X1Y2-X2Y2",
+      "code": "PB-X1Y2-X2Y2",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -3.25,
+          -0.15,
+          -0.25
+        ],
+        "size": [
+          3.2,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X2Y2-X3Y2",
+      "code": "PB-X2Y2-X3Y2",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0.25,
+          -0.15,
+          -0.25
+        ],
+        "size": [
+          3.2,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X3Y2-X4Y2",
+      "code": "PB-X3Y2-X4Y2",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3.5,
+          -0.15,
+          -0.25
+        ],
+        "size": [
+          2.7,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.24,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.186,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 27.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 2700 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X1Y3-X2Y3",
+      "code": "PB-X1Y3-X2Y3",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -3.25,
+          -0.15,
+          -3.75
+        ],
+        "size": [
+          3.2,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X2Y3-X3Y3",
+      "code": "PB-X2Y3-X3Y3",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0.25,
+          -0.15,
+          -3.75
+        ],
+        "size": [
+          3.2,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X3Y3-X4Y3",
+      "code": "PB-X3Y3-X4Y3",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3.5,
+          -0.15,
+          -3.75
+        ],
+        "size": [
+          2.7,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.24,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.186,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 27.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 2700 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X1Y1-X1Y2",
+      "code": "PB-X1Y1-X1Y2",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -5,
+          -0.15,
+          1.75
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.7
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 3.07,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.255,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 38.3,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 3700 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X1Y2-X1Y3",
+      "code": "PB-X1Y2-X1Y3",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -5,
+          -0.15,
+          -2
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.2
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X2Y1-X2Y2",
+      "code": "PB-X2Y1-X2Y2",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          -0.15,
+          1.75
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.7
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 3.07,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.255,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 38.3,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 3700 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X2Y2-X2Y3",
+      "code": "PB-X2Y2-X2Y3",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          -0.15,
+          -2
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.2
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X3Y1-X3Y2",
+      "code": "PB-X3Y1-X3Y2",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2,
+          -0.15,
+          1.75
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.7
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 3.07,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.255,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 38.3,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 3700 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X3Y2-X3Y3",
+      "code": "PB-X3Y2-X3Y3",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2,
+          -0.15,
+          -2
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.2
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X4Y1-X4Y2",
+      "code": "PB-X4Y1-X4Y2",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          5,
+          -0.15,
+          1.75
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.7
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 3.07,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.255,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 38.3,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 3700 mm"
+    },
+    {
+      "id": "DEMOHOUSE-PB-X4Y2-X4Y3",
+      "code": "PB-X4Y2-X4Y3",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          5,
+          -0.15,
+          -2
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.2
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Plinth beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X1Y1-X2Y1",
+      "code": "RB-X1Y1-X2Y1",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -3.25,
+          2.85,
+          3.75
+        ],
+        "size": [
+          3.2,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X2Y1-X3Y1",
+      "code": "RB-X2Y1-X3Y1",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0.25,
+          2.85,
+          3.75
+        ],
+        "size": [
+          3.2,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X3Y1-X4Y1",
+      "code": "RB-X3Y1-X4Y1",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3.5,
+          2.85,
+          3.75
+        ],
+        "size": [
+          2.7,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.24,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.186,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 27.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 2700 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X1Y2-X2Y2",
+      "code": "RB-X1Y2-X2Y2",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -3.25,
+          2.85,
+          -0.25
+        ],
+        "size": [
+          3.2,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X2Y2-X3Y2",
+      "code": "RB-X2Y2-X3Y2",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0.25,
+          2.85,
+          -0.25
+        ],
+        "size": [
+          3.2,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X3Y2-X4Y2",
+      "code": "RB-X3Y2-X4Y2",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3.5,
+          2.85,
+          -0.25
+        ],
+        "size": [
+          2.7,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.24,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.186,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 27.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 2700 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X1Y3-X2Y3",
+      "code": "RB-X1Y3-X2Y3",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -3.25,
+          2.85,
+          -3.75
+        ],
+        "size": [
+          3.2,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X2Y3-X3Y3",
+      "code": "RB-X2Y3-X3Y3",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0.25,
+          2.85,
+          -3.75
+        ],
+        "size": [
+          3.2,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X3Y3-X4Y3",
+      "code": "RB-X3Y3-X4Y3",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3.5,
+          2.85,
+          -3.75
+        ],
+        "size": [
+          2.7,
+          0.3,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.24,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.186,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 27.9,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 2700 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X1Y1-X1Y2",
+      "code": "RB-X1Y1-X1Y2",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -5,
+          2.85,
+          1.75
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.7
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 3.07,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.255,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 38.3,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 3700 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X1Y2-X1Y3",
+      "code": "RB-X1Y2-X1Y3",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -5,
+          2.85,
+          -2
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.2
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X2Y1-X2Y2",
+      "code": "RB-X2Y1-X2Y2",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          2.85,
+          1.75
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.7
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 3.07,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.255,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 38.3,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 3700 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X2Y2-X2Y3",
+      "code": "RB-X2Y2-X2Y3",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -1.5,
+          2.85,
+          -2
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.2
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X3Y1-X3Y2",
+      "code": "RB-X3Y1-X3Y2",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2,
+          2.85,
+          1.75
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.7
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 3.07,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.255,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 38.3,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 3700 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X3Y2-X3Y3",
+      "code": "RB-X3Y2-X3Y3",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          2,
+          2.85,
+          -2
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.2
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X4Y1-X4Y2",
+      "code": "RB-X4Y1-X4Y2",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          5,
+          2.85,
+          1.75
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.7
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 3.07,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.255,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 38.3,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 3700 mm"
+    },
+    {
+      "id": "DEMOHOUSE-RB-X4Y2-X4Y3",
+      "code": "RB-X4Y2-X4Y3",
+      "type": "beam",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          5,
+          2.85,
+          -2
+        ],
+        "size": [
+          0.23,
+          0.3,
+          3.2
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 2.66,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.221,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 33.1,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof beam 230×300 mm, clear span 3200 mm"
+    },
+    {
+      "id": "DEMOHOUSE-OPN-X1Y1-X2Y1-1",
+      "code": "D-X1Y1-X2Y1",
+      "type": "door",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -3.25,
+          1.05,
+          3.75
+        ],
+        "size": [
+          0.9,
+          2.1,
+          0.04
+        ]
+      },
+      "plannedQuantities": {
+        "FIX": {
+          "quantity": 1,
+          "unit": "nos"
+        }
+      },
+      "notes": "Door D 900×2100 mm, sill 0 mm"
+    },
+    {
+      "id": "DEMOHOUSE-LNT-X1Y1-X2Y1-1",
+      "code": "L-D-X1Y1-X2Y1",
+      "type": "lintel",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -3.25,
+          2.175,
+          3.75
+        ],
+        "size": [
+          1.2,
+          0.15,
+          0.24
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 0.57,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.041,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 6.2,
+          "unit": "kg"
+        }
+      },
+      "notes": "RCC lintel 1200 × 230 × 150 mm over D"
+    },
+    {
+      "id": "DEMOHOUSE-CHJ-X1Y1-X2Y1-1",
+      "code": "CH-D-X1Y1-X2Y1",
+      "type": "chhajja",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -3.25,
+          2.2125,
+          4.09
+        ],
+        "size": [
+          1.2,
+          0.075,
+          0.45
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 0.7,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.041,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 3.6,
+          "unit": "kg"
+        }
+      },
+      "notes": "Chhajja 450 mm projection, 75 mm thick over D"
+    },
+    {
+      "id": "DEMOHOUSE-WAL-X1Y1-X2Y1",
+      "code": "W-X1Y1-X2Y1",
+      "type": "wall",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          -3.25,
+          1.35,
+          3.75
+        ],
+        "size": [
+          3.2,
+          2.7,
+          0.23
+        ],
+        "openings": [
+          {
+            "center": 0,
+            "bottom": 0,
+            "width": 0.9,
+            "height": 2.1
+          }
+        ]
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 1.511,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 13.5,
+          "unit": "m2"
+        }
+      },
+      "notes": "230 mm wall, 3200 × 2700 mm, 1 opening(s)"
+    },
+    {
+      "id": "DEMOHOUSE-WAL-X2Y1-X3Y1",
+      "code": "W-X2Y1-X3Y1",
+      "type": "wall",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          0.25,
+          1.35,
+          3.75
+        ],
+        "size": [
+          3.2,
+          2.7,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 1.987,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 17.28,
+          "unit": "m2"
+        }
+      },
+      "notes": "230 mm wall, 3200 × 2700 mm, 0 opening(s)"
+    },
+    {
+      "id": "DEMOHOUSE-OPN-X3Y1-X4Y1-1",
+      "code": "W-X3Y1-X4Y1",
+      "type": "window",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3.5,
+          1.5,
+          3.75
+        ],
+        "size": [
+          1.5,
+          1.2,
+          0.04
+        ]
+      },
+      "plannedQuantities": {
+        "FIX": {
+          "quantity": 1,
+          "unit": "nos"
+        }
+      },
+      "notes": "Window W 1500×1200 mm, sill 900 mm"
+    },
+    {
+      "id": "DEMOHOUSE-LNT-X3Y1-X4Y1-1",
+      "code": "L-W-X3Y1-X4Y1",
+      "type": "lintel",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3.5,
+          2.175,
+          3.75
+        ],
+        "size": [
+          1.8,
+          0.15,
+          0.24
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 0.89,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.062,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 9.3,
+          "unit": "kg"
+        }
+      },
+      "notes": "RCC lintel 1800 × 230 × 150 mm over W"
+    },
+    {
+      "id": "DEMOHOUSE-CHJ-X3Y1-X4Y1-1",
+      "code": "CH-W-X3Y1-X4Y1",
+      "type": "chhajja",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          3.5,
+          2.2125,
+          4.09
+        ],
+        "size": [
+          1.8,
+          0.075,
+          0.45
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 1.01,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.061,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 5.5,
+          "unit": "kg"
+        }
+      },
+      "notes": "Chhajja 450 mm projection, 75 mm thick over W"
+    },
+    {
+      "id": "DEMOHOUSE-WAL-X3Y1-X4Y1",
+      "code": "W-X3Y1-X4Y1",
+      "type": "wall",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          3.5,
+          1.35,
+          3.75
+        ],
+        "size": [
+          2.7,
+          2.7,
+          0.23
+        ],
+        "openings": [
+          {
+            "center": 0,
+            "bottom": 0.9,
+            "width": 1.5,
+            "height": 1.2
+          }
+        ]
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 1.201,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 10.98,
+          "unit": "m2"
+        }
+      },
+      "notes": "230 mm wall, 2700 × 2700 mm, 1 opening(s)"
+    },
+    {
+      "id": "DEMOHOUSE-WAL-X1Y3-X2Y3",
+      "code": "W-X1Y3-X2Y3",
+      "type": "wall",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          -3.25,
+          1.35,
+          -3.75
+        ],
+        "size": [
+          3.2,
+          2.7,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 1.987,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 17.28,
+          "unit": "m2"
+        }
+      },
+      "notes": "230 mm wall, 3200 × 2700 mm, 0 opening(s)"
+    },
+    {
+      "id": "DEMOHOUSE-OPN-X2Y3-X3Y3-1",
+      "code": "V-X2Y3-X3Y3",
+      "type": "window",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0.25,
+          2.025,
+          -3.75
+        ],
+        "size": [
+          0.6,
+          0.45,
+          0.04
+        ]
+      },
+      "plannedQuantities": {
+        "FIX": {
+          "quantity": 1,
+          "unit": "nos"
+        }
+      },
+      "notes": "Ventilator V 600×450 mm, sill 1800 mm"
+    },
+    {
+      "id": "DEMOHOUSE-LNT-X2Y3-X3Y3-1",
+      "code": "L-V-X2Y3-X3Y3",
+      "type": "lintel",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0.25,
+          2.325,
+          -3.75
+        ],
+        "size": [
+          0.9,
+          0.15,
+          0.24
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 0.41,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.031,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 4.7,
+          "unit": "kg"
+        }
+      },
+      "notes": "RCC lintel 900 × 230 × 150 mm over V"
+    },
+    {
+      "id": "DEMOHOUSE-CHJ-X2Y3-X3Y3-1",
+      "code": "CH-V-X2Y3-X3Y3",
+      "type": "chhajja",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0.25,
+          2.3625,
+          -4.09
+        ],
+        "size": [
+          0.9,
+          0.075,
+          0.45
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 0.54,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.03,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 2.7,
+          "unit": "kg"
+        }
+      },
+      "notes": "Chhajja 450 mm projection, 75 mm thick over V"
+    },
+    {
+      "id": "DEMOHOUSE-WAL-X2Y3-X3Y3",
+      "code": "W-X2Y3-X3Y3",
+      "type": "wall",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          0.25,
+          1.35,
+          -3.75
+        ],
+        "size": [
+          3.2,
+          2.7,
+          0.23
+        ],
+        "openings": [
+          {
+            "center": 0,
+            "bottom": 1.8,
+            "width": 0.6,
+            "height": 0.45
+          }
+        ]
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 1.894,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 16.74,
+          "unit": "m2"
+        }
+      },
+      "notes": "230 mm wall, 3200 × 2700 mm, 1 opening(s)"
+    },
+    {
+      "id": "DEMOHOUSE-WAL-X3Y3-X4Y3",
+      "code": "W-X3Y3-X4Y3",
+      "type": "wall",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          3.5,
+          1.35,
+          -3.75
+        ],
+        "size": [
+          2.7,
+          2.7,
+          0.23
+        ]
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 1.677,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 14.58,
+          "unit": "m2"
+        }
+      },
+      "notes": "230 mm wall, 2700 × 2700 mm, 0 opening(s)"
+    },
+    {
+      "id": "DEMOHOUSE-OPN-X1Y1-X1Y2-1",
+      "code": "W-X1Y1-X1Y2",
+      "type": "window",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -5,
+          1.5,
+          1.75
+        ],
+        "size": [
+          0.04,
+          1.2,
+          1.5
+        ]
+      },
+      "plannedQuantities": {
+        "FIX": {
+          "quantity": 1,
+          "unit": "nos"
+        }
+      },
+      "notes": "Window W 1500×1200 mm, sill 900 mm"
+    },
+    {
+      "id": "DEMOHOUSE-LNT-X1Y1-X1Y2-1",
+      "code": "L-W-X1Y1-X1Y2",
+      "type": "lintel",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -5,
+          2.175,
+          1.75
+        ],
+        "size": [
+          0.24,
+          0.15,
+          1.8
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 0.89,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.062,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 9.3,
+          "unit": "kg"
+        }
+      },
+      "notes": "RCC lintel 1800 × 230 × 150 mm over W"
+    },
+    {
+      "id": "DEMOHOUSE-CHJ-X1Y1-X1Y2-1",
+      "code": "CH-W-X1Y1-X1Y2",
+      "type": "chhajja",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          -5.34,
+          2.2125,
+          1.75
+        ],
+        "size": [
+          0.45,
+          0.075,
+          1.8
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 1.01,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.061,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 5.5,
+          "unit": "kg"
+        }
+      },
+      "notes": "Chhajja 450 mm projection, 75 mm thick over W"
+    },
+    {
+      "id": "DEMOHOUSE-WAL-X1Y1-X1Y2",
+      "code": "W-X1Y1-X1Y2",
+      "type": "wall",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          -5,
+          1.35,
+          1.75
+        ],
+        "size": [
+          0.23,
+          2.7,
+          3.7
+        ],
+        "openings": [
+          {
+            "center": 0,
+            "bottom": 0.9,
+            "width": 1.5,
+            "height": 1.2
+          }
+        ]
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 1.822,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 16.38,
+          "unit": "m2"
+        }
+      },
+      "notes": "230 mm wall, 3700 × 2700 mm, 1 opening(s)"
+    },
+    {
+      "id": "DEMOHOUSE-WAL-X1Y2-X1Y3",
+      "code": "W-X1Y2-X1Y3",
+      "type": "wall",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          -5,
+          1.35,
+          -2
+        ],
+        "size": [
+          0.23,
+          2.7,
+          3.2
+        ]
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 1.987,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 17.28,
+          "unit": "m2"
+        }
+      },
+      "notes": "230 mm wall, 3200 × 2700 mm, 0 opening(s)"
+    },
+    {
+      "id": "DEMOHOUSE-WAL-X4Y1-X4Y2",
+      "code": "W-X4Y1-X4Y2",
+      "type": "wall",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          5,
+          1.35,
+          1.75
+        ],
+        "size": [
+          0.23,
+          2.7,
+          3.7
+        ]
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 2.298,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 19.98,
+          "unit": "m2"
+        }
+      },
+      "notes": "230 mm wall, 3700 × 2700 mm, 0 opening(s)"
+    },
+    {
+      "id": "DEMOHOUSE-OPN-X4Y2-X4Y3-1",
+      "code": "W-X4Y2-X4Y3",
+      "type": "window",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          5,
+          1.5,
+          -2
+        ],
+        "size": [
+          0.04,
+          1.2,
+          1.5
+        ]
+      },
+      "plannedQuantities": {
+        "FIX": {
+          "quantity": 1,
+          "unit": "nos"
+        }
+      },
+      "notes": "Window W 1500×1200 mm, sill 900 mm"
+    },
+    {
+      "id": "DEMOHOUSE-LNT-X4Y2-X4Y3-1",
+      "code": "L-W-X4Y2-X4Y3",
+      "type": "lintel",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          5,
+          2.175,
+          -2
+        ],
+        "size": [
+          0.24,
+          0.15,
+          1.8
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 0.89,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.062,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 9.3,
+          "unit": "kg"
+        }
+      },
+      "notes": "RCC lintel 1800 × 230 × 150 mm over W"
+    },
+    {
+      "id": "DEMOHOUSE-CHJ-X4Y2-X4Y3-1",
+      "code": "CH-W-X4Y2-X4Y3",
+      "type": "chhajja",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          5.34,
+          2.2125,
+          -2
+        ],
+        "size": [
+          0.45,
+          0.075,
+          1.8
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 1.01,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 0.061,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 5.5,
+          "unit": "kg"
+        }
+      },
+      "notes": "Chhajja 450 mm projection, 75 mm thick over W"
+    },
+    {
+      "id": "DEMOHOUSE-WAL-X4Y2-X4Y3",
+      "code": "W-X4Y2-X4Y3",
+      "type": "wall",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "GF",
+      "geometry": {
+        "shape": "wall",
+        "position": [
+          5,
+          1.35,
+          -2
+        ],
+        "size": [
+          0.23,
+          2.7,
+          3.2
+        ],
+        "openings": [
+          {
+            "center": 0,
+            "bottom": 0.9,
+            "width": 1.5,
+            "height": 1.2
+          }
+        ]
+      },
+      "plannedQuantities": {
+        "BRICK": {
+          "quantity": 1.511,
+          "unit": "m3"
+        },
+        "PLAST": {
+          "quantity": 13.68,
+          "unit": "m2"
+        }
+      },
+      "notes": "230 mm wall, 3200 × 2700 mm, 1 opening(s)"
+    },
+    {
+      "id": "DEMOHOUSE-SLAB-RF",
+      "code": "SL-RF",
+      "type": "slab",
+      "buildingId": "BLD-DEMOHOUSE",
+      "levelId": "RF",
+      "geometry": {
+        "shape": "box",
+        "position": [
+          0,
+          3.0625,
+          0
+        ],
+        "size": [
+          11.2,
+          0.125,
+          8.7
+        ]
+      },
+      "plannedQuantities": {
+        "SHUT": {
+          "quantity": 102.42,
+          "unit": "m2"
+        },
+        "CONC": {
+          "quantity": 12.18,
+          "unit": "m3"
+        },
+        "REINF": {
+          "quantity": 1096.2,
+          "unit": "kg"
+        }
+      },
+      "notes": "Roof slab 125 mm, overhang 450 mm"
+    }
+  ]
+}
