@@ -12,50 +12,49 @@ const en = (elementId: string, date: string, quantity: number, status: ProgressE
 describe('plan vs actual', () => {
   const data: PlanningData = {
     plans: [
-      { id: 'p1', elementId: 'F1', activityCode: 'CONC', date: '2026-11-10' }, // work reported that day
-      { id: 'p2', elementId: 'F2', activityCode: 'CONC', date: '2026-11-10' }, // started that day
+      { id: 'p1', elementId: 'F1', activityCode: 'CONC', date: '2026-11-10' }, // 1.5 of 2 m³ on the 10th: not finished, date over
+      { id: 'p2', elementId: 'F2', activityCode: 'CONC', date: '2026-11-10' }, // only marked started
       { id: 'p3', elementId: 'F3', activityCode: 'CONC', date: '2026-11-10', noWork: { reason: 'Rain' } },
-      { id: 'p4', elementId: 'F4', activityCode: 'CONC', date: '2026-11-10' }, // nothing: not reported
+      { id: 'p4', elementId: 'F4', activityCode: 'CONC', date: '2026-11-10' }, // finished on the 11th: 1 day late
       { id: 'p5', elementId: 'F5', activityCode: 'CONC', date: '2026-11-19' }, // today: still planned
       { id: 'p6', elementId: 'F6', activityCode: 'CONC', date: '2026-11-10' }, // only a draft: not reported
+      { id: 'p7', elementId: 'F7', activityCode: 'CONC', date: '2026-11-10', to: '2026-11-12' }, // finished on the 11th: on time
+      { id: 'p8', elementId: 'F8', activityCode: 'CONC', date: '2026-11-15', to: '2026-11-25' }, // started, To not over
     ],
-    starts: [{ elementId: 'F2', activityCode: 'CONC', date: '2026-11-10' }],
+    starts: [
+      { elementId: 'F2', activityCode: 'CONC', date: '2026-11-10' },
+      { elementId: 'F8', activityCode: 'CONC', date: '2026-11-16' },
+    ],
   };
-  const entries = [en('F1', '2026-11-10', 1.5), en('F6', '2026-11-10', 1, 'Draft'), en('F4', '2026-11-11', 2)];
-  const els = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6'].map(el);
+  const entries = [en('F1', '2026-11-10', 1.5), en('F6', '2026-11-10', 1, 'Draft'), en('F4', '2026-11-11', 2), en('F7', '2026-11-11', 2, 'Approved')];
+  const els = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8'].map(el);
 
-  it('Done / Started / No work / Not reported / Planned', () => {
+  it('On time / Late / Going on / No work / Not reported / Planned, with the real start and finish', () => {
     const rows = planVsActual(data, entries, els, [CONC], '2026-11-19');
+    const by = Object.fromEntries(rows.map((r) => [r.plan.id, r]));
     expect(Object.fromEntries(rows.map((r) => [r.plan.id, r.result]))).toEqual({
-      p1: 'done',
-      p2: 'started',
+      p1: 'late',
+      p2: 'late',
       p3: 'no-work',
-      p4: 'missed', // work reported on another day does not count for the plan date
+      p4: 'late',
       p5: 'pending',
       p6: 'missed', // a draft is not reported work
+      p7: 'done',
+      p8: 'started',
     });
-    expect(rows.find((r) => r.plan.id === 'p1')!.detail).toBe('Done 1.5 m³');
-    expect(rows.find((r) => r.plan.id === 'p3')!.detail).toBe('No work: Rain');
-    expect(countResults(rows)).toEqual({ done: 1, started: 1, 'no-work': 1, missed: 2, pending: 1 });
+    expect(by.p4.actualDone).toBe('2026-11-11');
+    expect(by.p4.detail).toBe('Finished 1 day late');
+    expect(by.p1.actualStart).toBe('2026-11-10');
+    expect(by.p1.detail).toBe('Started, not finished — 9 days past the plan');
+    expect(by.p7.detail).toBe('Finished on time');
+    expect(by.p8.actualStart).toBe('2026-11-16');
+    expect(by.p3.detail).toBe('No work: Rain');
+    expect(countResults(rows)).toEqual({ done: 1, late: 3, started: 1, 'no-work': 1, missed: 1, pending: 1 });
   });
 
-  it('a From – To plan is Done when work is reported on any day inside it; Not reported only after To', () => {
-    const ranged: PlanningData = {
-      plans: [
-        { id: 'r1', elementId: 'F1', activityCode: 'CONC', date: '2026-11-08', to: '2026-11-12' }, // work on the 10th
-        { id: 'r2', elementId: 'F2', activityCode: 'CONC', date: '2026-11-15', to: '2026-11-22' }, // To not over yet
-        { id: 'r3', elementId: 'F3', activityCode: 'CONC', date: '2026-11-11', to: '2026-11-14' }, // over, nothing
-      ],
-      starts: [],
-    };
-    const rows = planVsActual(ranged, entries, els, [CONC], '2026-11-19');
-    expect(Object.fromEntries(rows.map((r) => [r.plan.id, r.result]))).toEqual({ r1: 'done', r2: 'pending', r3: 'missed' });
-    // a filter keeps plans that overlap the dates
-    expect(planVsActual(ranged, entries, els, [CONC], '2026-11-19', '2026-11-13', '2026-11-13').map((r) => r.plan.id)).toEqual(['r3']);
-  });
-
-  it('filters by plan date', () => {
-    expect(planVsActual(data, entries, els, [CONC], '2026-11-19', '2026-11-11', '2026-11-30').map((r) => r.plan.id)).toEqual(['p5']);
+  it('a filter keeps the plans that overlap the dates', () => {
+    expect(planVsActual(data, entries, els, [CONC], '2026-11-19', '2026-11-12', '2026-11-12').map((r) => r.plan.id)).toEqual(['p7']);
+    expect(planVsActual(data, entries, els, [CONC], '2026-11-19', '2026-11-13', '2026-11-30').map((r) => r.plan.id)).toEqual(['p8', 'p5']);
   });
 });
 

@@ -142,8 +142,8 @@ export function Reports() {
       ),
       [],
       ['Plan vs actual'],
-      ['Date', 'Element', 'Work', 'Result', 'Detail'],
-      ...planRows.map((r) => [planEnd(r.plan) === r.plan.date ? r.plan.date : `${r.plan.date} to ${planEnd(r.plan)}`, r.element ? elementLabel(r.element) : r.plan.elementId, r.activity?.name ?? r.plan.activityCode, PLAN_RESULT_LABELS[r.result], r.detail]),
+      ['Element', 'Work', 'Planned from', 'Planned to', 'Started', 'Completed', 'Result', 'Detail'],
+      ...planRows.map((r) => [r.element ? elementLabel(r.element) : r.plan.elementId, r.activity?.name ?? r.plan.activityCode, r.plan.date, planEnd(r.plan), r.actualStart ?? '', r.actualDone ?? '', PLAN_RESULT_LABELS[r.result], r.detail]),
     ];
     downloadText(`pmc-report-${data!.project.id}-${todayISO()}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
   }
@@ -442,8 +442,9 @@ export function Reports() {
                 <thead>
                   <tr>
                     <th className="num">Planned</th>
-                    <th className="num">Done</th>
-                    <th className="num">Started</th>
+                    <th className="num">Done on time</th>
+                    <th className="num">Late</th>
+                    <th className="num">Going on</th>
                     <th className="num">No work</th>
                     <th className="num">Not reported</th>
                     <th className="num">Still to come</th>
@@ -455,6 +456,7 @@ export function Reports() {
                       <b>{planRows.length}</b>
                     </td>
                     <td className="num rep-n-done">{planCounts.done}</td>
+                    <td className="num rep-n-missed">{planCounts.late}</td>
                     <td className="num rep-n-doing">{planCounts.started}</td>
                     <td className="num">{planCounts['no-work']}</td>
                     <td className="num rep-n-missed">{planCounts.missed}</td>
@@ -467,20 +469,24 @@ export function Reports() {
               <table className="dash-table rep-table">
                 <thead>
                   <tr>
-                    <th>Date</th>
                     <th>Element</th>
                     <th>Work</th>
+                    <th>Planned</th>
+                    <th>Started</th>
+                    <th>Completed</th>
                     <th>Result</th>
                   </tr>
                 </thead>
                 <tbody>
                   {planRows.map((r) => (
                     <tr key={r.plan.id}>
-                      <td className="nowrap">{fmtDay(r.plan.date)}{planEnd(r.plan) !== r.plan.date && ` – ${fmtDay(planEnd(r.plan))}`}</td>
                       <td>
                         <b>{r.element ? elementLabel(r.element) : r.plan.elementId}</b>
                       </td>
                       <td>{r.activity?.name ?? r.plan.activityCode}</td>
+                      <td className="nowrap">{fmtDay(r.plan.date)}{planEnd(r.plan) !== r.plan.date && ` – ${fmtDay(planEnd(r.plan))}`}</td>
+                      <td className="nowrap">{r.actualStart ? fmtDay(r.actualStart) : <span className="muted">—</span>}</td>
+                      <td className="nowrap">{r.actualDone ? fmtDay(r.actualDone) : <span className="muted">—</span>}</td>
                       <td>
                         <span className={`plan-res plan-res-${r.result}`}>{PLAN_RESULT_LABELS[r.result]}</span> <span className="muted small">{r.detail}</span>
                       </td>

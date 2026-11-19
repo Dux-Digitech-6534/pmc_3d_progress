@@ -30,11 +30,12 @@ export interface PlanningData {
   starts: StartMark[];
 }
 
-export type PlanResult = 'done' | 'started' | 'no-work' | 'missed' | 'pending';
+export type PlanResult = 'done' | 'late' | 'started' | 'no-work' | 'missed' | 'pending';
 
 export const PLAN_RESULT_LABELS: Record<PlanResult, string> = {
-  done: 'Done',
-  started: 'Started',
+  done: 'Done on time',
+  late: 'Late',
+  started: 'Going on',
   'no-work': 'No work',
   missed: 'Not reported',
   pending: 'Planned',
@@ -45,22 +46,32 @@ export interface PlanRow {
   element?: ElementRecord;
   activity?: ActivityDef;
   result: PlanResult;
-  /** Work reported for that element and activity on the plan date (sent or approved). */
+  /** Work reported for that element and activity inside the plan dates (sent or approved). */
   reported: number;
-  /** "Done 2.4 m³", "Started", "No work: rain" … */
+  /** When the work really started: the Work Done "Started" date, else the first reported work. */
+  actualStart?: string;
+  /** When it reached 100 % (sent or approved). */
+  actualDone?: string;
+  /** Days after the planned To date (finished late, or still not finished). */
+  lateDays?: number;
+  /** "Finished 2 days late", "No work: rain" … */
   detail: string;
 }
 
 /** Last day of a plan. */
 export const planEnd = (p: Pick<PlanItem, 'date' | 'to'>) => (p.to && p.to > p.date ? p.to : p.date);
 
+const dayDiff = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00`) - Date.parse(`${a}T00:00:00`)) / 86400000);
+
 /**
- * Plan vs actual. A planned job (one element + activity, From..To) is
- *  - Done: work for it was reported (sent or approved) on a day From..To;
- *  - Started: it was marked started on a day From..To;
+ * Plan vs actual (meeting 16-11: "tera plan ye tha, aur ye hua"). For a planned job (one element + activity,
+ * planned From..To) the actual start and complete dates come from Work Done:
+ *  - Done on time: completed (100 %) on or before To;
+ *  - Late: completed after To, or To is over and it is started but not finished;
+ *  - Started: started, To not over yet;
  *  - No work: the engineer said it did not happen, with the reason;
- *  - Not reported: the To date is over and none of the above — the engineer must report the work or "No work";
- *  - Planned: To is today or later, nothing yet.
+ *  - Not reported: To is over and nothing was entered — report the work or "No work";
+ *  - Planned: nothing yet, To not over.
  * A From / To filter keeps the plans that overlap those dates.
  */
 export function planVsActual(
@@ -74,48 +85,58 @@ export function planVsActual(
 ): PlanRow[] {
   const els = new Map(elements.map((e) => [e.id, e]));
   const acts = new Map(activities.map((a) => [a.code, a]));
-  const reportedIn = (p: PlanItem) => {
-    const end = planEnd(p);
-    let q = 0;
-    for (const e of entries)
-      if ((e.status === 'Submitted' || e.status === 'Approved') && e.elementId === p.elementId && e.activityCode === p.activityCode && e.date >= p.date && e.date <= end) q += e.quantity;
-    return q;
-  };
-  const startedIn = (p: PlanItem) => {
-    const end = planEnd(p);
-    return data.starts.some((s) => s.elementId === p.elementId && s.activityCode === p.activityCode && s.date >= p.date && s.date <= end);
-  };
+  const counted = entries.filter((e) => e.status === 'Submitted' || e.status === 'Approved');
   return data.plans
     .filter((p) => (!from || planEnd(p) >= from) && (!to || p.date <= to))
     .map((p) => {
-      const reported = reportedIn(p);
+      const end = planEnd(p);
+      const el = els.get(p.elementId);
       const a = acts.get(p.activityCode);
-      const unit = a ? ` ${a.unit === 'm3' ? 'm³' : a.unit === 'm2' ? 'm²' : a.unit}` : '';
+      const mine = counted.filter((e) => e.elementId === p.elementId && e.activityCode === p.activityCode);
+      const reported = mine.filter((e) => e.date >= p.date && e.date <= end).reduce((n, e) => n + e.quantity, 0);
+      const startMark = data.starts.find((s) => s.elementId === p.elementId && s.activityCode === p.activityCode)?.date;
+      const firstWork = mine.map((e) => e.date).sort()[0];
+      const actualStart = [startMark, firstWork].filter((d): d is string => !!d).sort()[0];
+      const actualDone = el ? completeDateOf(el, p.activityCode, entries) : undefined;
       let result: PlanResult;
       let detail: string;
-      if (reported > 0) {
-        result = 'done';
-        detail = `Done ${Math.round(reported * 1000) / 1000}${unit}`;
-      } else if (startedIn(p)) {
-        result = 'started';
-        detail = 'Started';
+      let lateDays: number | undefined;
+      if (actualDone) {
+        lateDays = dayDiff(end, actualDone);
+        if (lateDays > 0) {
+          result = 'late';
+          detail = `Finished ${lateDays} day${lateDays === 1 ? '' : 's'} late`;
+        } else {
+          result = 'done';
+          lateDays = undefined;
+          detail = 'Finished on time';
+        }
       } else if (p.noWork) {
         result = 'no-work';
         detail = `No work: ${p.noWork.reason}`;
-      } else if (planEnd(p) < today) {
-        result = 'missed';
-        detail = 'Nothing reported — report the work or "No work"';
+      } else if (end < today) {
+        lateDays = dayDiff(end, today);
+        if (actualStart) {
+          result = 'late';
+          detail = `Started, not finished — ${lateDays} day${lateDays === 1 ? '' : 's'} past the plan`;
+        } else {
+          result = 'missed';
+          detail = 'Nothing entered — report the work or "No work"';
+        }
+      } else if (actualStart) {
+        result = 'started';
+        detail = 'Work going on';
       } else {
         result = 'pending';
         detail = p.date <= today ? 'Due now' : 'Planned';
       }
-      return { plan: p, element: els.get(p.elementId), activity: a, result, reported, detail };
+      return { plan: p, element: el, activity: a, result, reported, actualStart, actualDone, lateDays, detail };
     })
     .sort((x, y) => (x.plan.date === y.plan.date ? (x.element?.code ?? '').localeCompare(y.element?.code ?? '') : x.plan.date.localeCompare(y.plan.date)));
 }
 
 export function countResults(rows: PlanRow[]): Record<PlanResult, number> {
-  const out: Record<PlanResult, number> = { done: 0, started: 0, 'no-work': 0, missed: 0, pending: 0 };
+  const out: Record<PlanResult, number> = { done: 0, late: 0, started: 0, 'no-work': 0, missed: 0, pending: 0 };
   for (const r of rows) out[r.result] += 1;
   return out;
 }

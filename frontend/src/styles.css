@@ -4107,3 +4107,48 @@ input[type='radio'] {
   font-weight: 600;
   color: var(--navy);
 }
+/* plan vs actual dates on each planned job */
+.plan-dates-row {
+  display: flex;
+  gap: 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--navy);
+}
+.plan-dates-row span {
+  display: flex;
+  flex-direction: column;
+  min-width: 82px;
+}
+.plan-dates-row small {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.plan-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 110px;
+}
+.plan-res-late {
+  background: #ffedd5;
+  color: #c2410c;
+}
+@media (max-width: 760px) {
+  .plan-dates-row {
+    flex-basis: 100%;
+    gap: 10px;
+  }
+}
+/* keep the date columns of planned jobs in line */
+.plan-item-act {
+  min-width: 120px;
+  justify-content: flex-end;
+}
+@media (max-width: 760px) {
+  .plan-item-act {
+    min-width: 0;
+  }
+}

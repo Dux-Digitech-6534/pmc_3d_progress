@@ -207,7 +207,7 @@ export function Planning() {
                   {allPicked ? 'Unselect all' : `All ${typeEls.length}`}
                 </button>
                 {typeEls.map((e) => (
-                  <button key={e.id} className={`plan-tag ${picked.has(e.id) ? 'on' : ''}`} onClick={() => setPicked(toggle(picked, e.id))} title={`${e.buildingName} – ${e.levelName}`}>
+                  <button key={e.id} className={`plan-tag ${picked.has(e.id) ? 'on' : ''}`} onClick={() => setPicked((p) => toggle(p, e.id))} title={`${e.buildingName} – ${e.levelName}`}>
                     {e.code}
                     <small>{e.levelName}</small>
                   </button>
@@ -222,7 +222,7 @@ export function Planning() {
               <div className="plan-step-title">Which work?</div>
               <div className="plan-seg">
                 {typeActs.map((a) => (
-                  <button key={a.code} className={works.has(a.code) ? 'on' : ''} onClick={() => setWorks(toggle(works, a.code))}>
+                  <button key={a.code} className={works.has(a.code) ? 'on' : ''} onClick={() => setWorks((w) => toggle(w, a.code))}>
                     {works.has(a.code) ? '✓ ' : ''}
                     {a.name}
                   </button>
@@ -270,7 +270,7 @@ export function Planning() {
                 <div className="plan-day-head">
                   <b>{rangeText(d, end)}</b>
                   <span className="muted small">
-                    {list.length} planned · {c.done} done{c.started ? ` · ${c.started} started` : ''}
+                    {list.length} planned · {c.done} on time{c.late ? ` · ${c.late} late` : ''}{c.started ? ` · ${c.started} going on` : ''}
                     {c['no-work'] ? ` · ${c['no-work']} no work` : ''}
                     {c.missed ? ` · ${c.missed} not reported` : ''}
                   </span>
@@ -279,12 +279,27 @@ export function Planning() {
                   <div key={r.plan.id} className={`plan-item plan-item-${r.result}`}>
                     <div className="plan-item-main">
                       <b>{r.element?.code ?? r.plan.elementId}</b> <span>{r.activity?.name ?? r.plan.activityCode}</span>
-                      <div className="muted small">
-                        {r.element ? `${r.element.buildingName} – ${r.element.levelName}` : ''}
-                        {r.result === 'no-work' ? ` · ${r.plan.noWork?.reason}` : r.result === 'done' ? ` · ${r.detail}` : ''}
-                      </div>
+                      <div className="muted small">{r.element ? `${r.element.buildingName} – ${r.element.levelName}` : ''}</div>
                     </div>
-                    <span className={`plan-res plan-res-${r.result}`}>{PLAN_RESULT_LABELS[r.result]}</span>
+                    {/* plan vs actual on the same line: planned dates, real start, real finish */}
+                    <div className="plan-dates-row">
+                      <span>
+                        <small>Planned</small>
+                        {rangeText(r.plan.date, planEnd(r.plan))}
+                      </span>
+                      <span>
+                        <small>Started</small>
+                        {r.actualStart ? fmtDay(r.actualStart) : '—'}
+                      </span>
+                      <span>
+                        <small>Completed</small>
+                        {r.actualDone ? fmtDay(r.actualDone) : '—'}
+                      </span>
+                    </div>
+                    <span className="plan-result">
+                      <span className={`plan-res plan-res-${r.result}`}>{PLAN_RESULT_LABELS[r.result]}</span>
+                      {(r.result === 'late' || r.result === 'no-work') && <small className="muted">{r.result === 'no-work' ? r.plan.noWork?.reason : r.detail}</small>}
+                    </span>
                     {canPlan && (
                       <div className="plan-item-act">
                         {(r.result === 'missed' || r.result === 'pending') && (
