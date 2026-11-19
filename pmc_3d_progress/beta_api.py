@@ -106,6 +106,7 @@ def add_plans(project_id, date, activity_code, element_ids, role, note=None, to_
 				"date": day,
 				"to": end,
 				"note": note,
+				"status": "draft",
 				"createdBy": frappe.session.user,
 				"createdAt": now,
 			}
@@ -121,7 +122,44 @@ def delete_plans(project_id, plan_ids, role):
 	_lock(project_id)
 	ids = set(_ids(plan_ids))
 	data = _load(project_id)
+	if any(p["id"] in ids and p.get("status") == "submitted" for p in data["plans"]):
+		_throw("A submitted plan cannot be removed.")
 	data["plans"] = [p for p in data["plans"] if p["id"] not in ids]
+	return _save(project_id, data)
+
+
+@frappe.whitelist(methods=["POST"])
+def change_plan_dates(project_id, plan_ids, date, to_date, role):
+	"""New From / To dates for draft plans (a submitted plan is final)."""
+	_planner(role)
+	_lock(project_id)
+	ids = set(_ids(plan_ids))
+	day = _date(date, "From date")
+	end = _date(to_date, "To date")
+	if end < day:
+		_throw('"To" date is before "From" date.')
+	data = _load(project_id)
+	for p in data["plans"]:
+		if p["id"] in ids:
+			if p.get("status") == "submitted":
+				_throw("A submitted plan cannot be changed.")
+			p["date"], p["to"] = day, end
+	return _save(project_id, data)
+
+
+@frappe.whitelist(methods=["POST"])
+def submit_plans(project_id, plan_ids, role):
+	"""Draft plans become final: plan vs actual is counted on them from now on."""
+	_planner(role)
+	_lock(project_id)
+	ids = set(_ids(plan_ids))
+	data = _load(project_id)
+	now = now_datetime().isoformat()
+	for p in data["plans"]:
+		if p["id"] in ids and p.get("status") != "submitted":
+			p["status"] = "submitted"
+			p["submittedAt"] = now
+			p["submittedBy"] = frappe.session.user
 	return _save(project_id, data)
 
 

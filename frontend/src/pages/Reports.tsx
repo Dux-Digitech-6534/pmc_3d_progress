@@ -7,7 +7,7 @@ import { UNIT_LABELS, type ElementType } from '../domain/types';
 import { todayISO } from '../domain/workflow';
 import { downloadText, toCsv } from '../lib/download';
 import { useApp } from '../state/AppContext';
-import { completeDateOf, countResults, daysTaken, planEnd, planVsActual, PLAN_RESULT_LABELS } from '../domain/planning';
+import { completeDateOf, countResults, daysTaken, isSubmitted, planEnd, planVsActual, PLAN_RESULT_LABELS } from '../domain/planning';
 import { usePlanning } from '../state/planning';
 
 const fmtDay = (ymd: string) => (ymd ? new Date(`${ymd}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
@@ -82,7 +82,7 @@ export function Reports() {
   const planRows = useMemo(() => {
     if (!planning) return [];
     const ok = new Set(elements.filter((e) => (!buildingId || e.buildingId === buildingId) && (!type || e.type === type) && (!elementIdOk || e.id === elementIdOk)).map((e) => e.id));
-    return planVsActual(planning, entries, elements, activities, todayISO(), dates.from, dates.to).filter((r) => ok.has(r.plan.elementId));
+    return planVsActual(planning, entries, elements, activities, todayISO(), dates.from, dates.to).filter((r) => ok.has(r.plan.elementId) && isSubmitted(r.plan)); // only the submitted (final) plan is compared
   }, [planning, entries, elements, activities, dates.from, dates.to, buildingId, type, elementIdOk]);
   const planCounts = countResults(planRows);
 
@@ -428,7 +428,7 @@ export function Reports() {
           <div>
             <h2>3. Plan vs actual</h2>
             <p>
-              {periodText} · {scopeText} · planned in Planning, compared with what was reported
+              {periodText} · {scopeText} · submitted plans compared with what was reported
             </p>
           </div>
           <button className="link" onClick={() => go('planning')}>

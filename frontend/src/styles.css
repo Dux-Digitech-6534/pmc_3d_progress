@@ -4156,3 +4156,31 @@ input[type='radio'] {
 .picker-list .el-code {
   white-space: nowrap;
 }
+/* planning: draft / submitted / completed */
+.plan-help {
+  margin: -6px 0 10px;
+}
+.plan-submit-all {
+  margin: 0 0 10px;
+}
+.plan-day-head {
+  flex-wrap: wrap;
+}
+.plan-day-act {
+  margin-left: auto;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.plan-day-act input[type='date'] {
+  width: 140px;
+}
+.plan-res-draft {
+  background: #f1f5f9;
+  color: var(--muted);
+  border: 1px dashed #94a3b8;
+}
+.plan-item-draft {
+  background: #fbfcfd;
+}

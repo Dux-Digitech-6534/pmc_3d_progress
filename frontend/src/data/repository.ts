@@ -71,7 +71,12 @@ export interface PmcRepository {
   getPlanning(projectId: string): Promise<PlanningData>;
   /** Plan one activity on elements for a date; an element already planned for it that day is skipped. */
   addPlans(projectId: string, input: { date: string; to?: string; activityCode: string; elementIds: string[]; note?: string }, role: Role): Promise<PlanningData & { added: number; skipped: number }>;
+  /** Only draft plans can be removed. */
   deletePlans(projectId: string, planIds: string[], role: Role): Promise<PlanningData>;
+  /** Change the From / To dates of draft plans. */
+  changePlanDates(projectId: string, planIds: string[], date: string, to: string, role: Role): Promise<PlanningData>;
+  /** Submit draft plans: they become final and plan vs actual is counted on them. */
+  submitPlans(projectId: string, planIds: string[], role: Role): Promise<PlanningData>;
   /** Planned work that did not happen (reason required); an empty reason clears it. */
   setNoWork(projectId: string, planIds: string[], reason: string, role: Role): Promise<PlanningData>;
   /** Work Done "Started": the date the activity was started on these elements. */

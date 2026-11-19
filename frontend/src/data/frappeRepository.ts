@@ -235,6 +235,12 @@ export class FrappeRepository implements PmcRepository {
   deletePlans(projectId: string, planIds: string[], role: Role) {
     return call<PlanningData>('beta_api.delete_plans', { project_id: projectId, plan_ids: JSON.stringify(planIds), role });
   }
+  changePlanDates(projectId: string, planIds: string[], date: string, to: string, role: Role) {
+    return call<PlanningData>('beta_api.change_plan_dates', { project_id: projectId, plan_ids: JSON.stringify(planIds), date, to_date: to, role });
+  }
+  submitPlans(projectId: string, planIds: string[], role: Role) {
+    return call<PlanningData>('beta_api.submit_plans', { project_id: projectId, plan_ids: JSON.stringify(planIds), role });
+  }
   setNoWork(projectId: string, planIds: string[], reason: string, role: Role) {
     return call<PlanningData>('beta_api.set_no_work', { project_id: projectId, plan_ids: JSON.stringify(planIds), reason, role });
   }

@@ -10,6 +10,10 @@ export interface PlanItem {
   /** Last day of the plan (same as date, or absent, for a one-day plan). */
   to?: string;
   note?: string;
+  /** Draft = can still be changed or removed; Submitted = final, plan vs actual is counted on it. Absent = Draft. */
+  status?: 'draft' | 'submitted';
+  submittedAt?: string;
+  submittedBy?: string;
   createdBy?: string;
   createdAt?: string;
   /** Set when the planned job did not happen; the reason is required. */
@@ -57,6 +61,10 @@ export interface PlanRow {
   /** "Finished 2 days late", "No work: rain" … */
   detail: string;
 }
+
+export const isSubmitted = (p: Pick<PlanItem, 'status'>) => p.status === 'submitted';
+/** A planned job that is finished (on time or late). */
+export const isCompleted = (r: Pick<PlanRow, 'actualDone'>) => !!r.actualDone;
 
 /** Last day of a plan. */
 export const planEnd = (p: Pick<PlanItem, 'date' | 'to'>) => (p.to && p.to > p.date ? p.to : p.date);

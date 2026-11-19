@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { EmptyState, ErrorList, PageHeader, Spinner } from '../components/ui';
 import { errorMessages } from '../data/repository';
-import { countResults, planEnd, planVsActual, PLAN_RESULT_LABELS, type PlanRow } from '../domain/planning';
+import { countResults, isCompleted, isSubmitted, planEnd, planVsActual, PLAN_RESULT_LABELS, type PlanRow } from '../domain/planning';
 import { ELEMENT_TYPE_LABELS } from '../domain/reports';
 import { inWorkOrder } from '../domain/sequence';
 import { activityApplies, type ElementType } from '../domain/types';
@@ -23,7 +23,8 @@ const REASONS = ['Rain', 'Material not available', 'Labour not available', 'Mach
 /**
  * Planning for the site engineer, kept simple (meeting 16-11):
  *   1. From – To dates, 2. tap the elements, 3. tap the work, 4. Add to plan.
- * Below: the plans (now / coming up / past). Work reported in Work Done marks a job Done / Started by itself;
+ * New jobs are saved as Draft (dates can be changed, jobs removed), then Submitted (final). Below: Draft /
+ * Submitted / Completed. Work reported in Work Done fills in the real start and finish by itself;
  * a job that did not happen gets "No work" with a reason (one tap for the usual reasons).
  */
 export function Planning() {
@@ -40,9 +41,11 @@ export function Planning() {
   const [works, setWorks] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
-  const [view, setView] = useState<'now' | 'upcoming' | 'past'>('now');
+  // Draft = still being made (change / remove / submit); Submitted = final, not finished yet; Completed = finished
+  const [view, setView] = useState<'draft' | 'submitted' | 'completed'>('draft');
   const [noWorkFor, setNoWorkFor] = useState<string | null>(null);
   const [other, setOther] = useState('');
+  const [editDates, setEditDates] = useState<{ key: string; from: string; to: string } | null>(null);
 
   const elements = useMemo(() => data?.elements ?? [], [data]);
   const activities = useMemo(() => inWorkOrder(data?.model?.document?.activities ?? []), [data]);
@@ -51,27 +54,22 @@ export function Planning() {
   const typeEls = elements.filter((e) => e.type === curType);
   const typeActs = activities.filter((a) => curType && activityApplies(a, curType));
 
-  // now = plans running today; coming up = starting after today; past = ended before today
-  const range = view === 'now' ? [today, today] : view === 'upcoming' ? [tomorrow, addDays(today, 365)] : [addDays(today, -365), addDays(today, -1)];
-  const rows = useMemo(
-    () => (planning && data ? planVsActual(planning, data.entries, elements, activities, today, range[0], range[1]) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [planning, data, elements, activities, today, view],
-  );
-  // grouped by their dates (same From – To together)
-  const byDay = useMemo(() => {
+  const all = useMemo(() => (planning && data ? planVsActual(planning, data.entries, elements, activities, today) : []), [planning, data, elements, activities, today]);
+  const drafts = all.filter((r) => !isSubmitted(r.plan));
+  const submitted = all.filter((r) => isSubmitted(r.plan) && !isCompleted(r));
+  const completed = all.filter((r) => isSubmitted(r.plan) && isCompleted(r));
+  const shown = view === 'draft' ? drafts : view === 'submitted' ? submitted : completed;
+  // grouped by their dates (same From – To together); completed: latest first
+  const groups = useMemo(() => {
     const m = new Map<string, PlanRow[]>();
-    const kept = rows.filter((r) => (view === 'upcoming' ? r.plan.date > today : view === 'past' ? planEnd(r.plan) < today : true));
-    for (const r of [...kept].sort((a, b) => (view === 'past' ? b.plan.date.localeCompare(a.plan.date) : a.plan.date.localeCompare(b.plan.date)))) {
+    const sorted = [...shown].sort((a, b) => (view === 'completed' ? b.plan.date.localeCompare(a.plan.date) : a.plan.date.localeCompare(b.plan.date)));
+    for (const r of sorted) {
       const k = `${r.plan.date}|${planEnd(r.plan)}`;
       m.set(k, [...(m.get(k) ?? []), r]);
     }
     return [...m.entries()];
-  }, [rows, view, today]);
-  const missedAll = useMemo(
-    () => (planning && data ? planVsActual(planning, data.entries, elements, activities, today).filter((r) => r.result === 'missed').length : 0),
-    [planning, data, elements, activities, today],
-  );
+  }, [shown, view]);
+  const missedAll = submitted.filter((r) => r.result === 'missed').length;
 
   if (!data) return <Spinner />;
   if (!data.model)
@@ -104,10 +102,14 @@ export function Planning() {
         setPlanning(data!.project.id, out);
         added += out.added;
       }
-      notify(added ? `${added} job${added === 1 ? '' : 's'} planned for ${rangeText(pFrom, pTo)}.` : `Nothing new — these jobs are already planned for ${rangeText(pFrom, pTo)}.`);
+      notify(
+        added
+          ? `${added} job${added === 1 ? '' : 's'} saved as draft for ${rangeText(pFrom, pTo)} — check them and press Submit plan.`
+          : `Nothing new — these jobs are already planned for ${rangeText(pFrom, pTo)}.`,
+      );
       setPicked(new Set());
       setWorks(new Set());
-      setView(pFrom <= today ? 'now' : 'upcoming');
+      setView('draft');
     } catch (e) {
       setErrors(errorMessages(e));
     } finally {
@@ -115,35 +117,39 @@ export function Planning() {
     }
   }
 
-  async function noWork(id: string, reason: string) {
+  async function run(fn: () => Promise<Parameters<typeof setPlanning>[1]>, done: string) {
     setErrors([]);
     try {
-      setPlanning(data!.project.id, await repo.setNoWork(data!.project.id, [id], reason, role));
-      setNoWorkFor(null);
-      setOther('');
-      notify(reason ? `Marked No work — ${reason}.` : 'No work removed.');
+      setPlanning(data!.project.id, await fn());
+      notify(done);
+      return true;
     } catch (e) {
       setErrors(errorMessages(e));
+      return false;
     }
   }
-
-  async function remove(id: string) {
-    try {
-      setPlanning(data!.project.id, await repo.deletePlans(data!.project.id, [id], role));
-      notify('Removed from the plan.');
-    } catch (e) {
-      setErrors(errorMessages(e));
-    }
-  }
+  const pid = data.project.id;
+  const noWork = (id: string, reason: string) =>
+    run(() => repo.setNoWork(pid, [id], reason, role), reason ? `Marked No work — ${reason}.` : 'No work removed.').then((ok) => {
+      if (ok) {
+        setNoWorkFor(null);
+        setOther('');
+      }
+    });
+  const remove = (ids: string[]) => run(() => repo.deletePlans(pid, ids, role), ids.length === 1 ? 'Removed from the draft.' : `${ids.length} jobs removed from the draft.`);
+  const submit = (ids: string[]) =>
+    run(() => repo.submitPlans(pid, ids, role), `${ids.length} job${ids.length === 1 ? '' : 's'} submitted — the plan is final now.`).then((ok) => ok && setView('submitted'));
+  const saveDates = (ids: string[], from: string, to: string) =>
+    run(() => repo.changePlanDates(pid, ids, from, to, role), `Dates changed to ${rangeText(from, to)}.`).then((ok) => ok && setEditDates(null));
 
   return (
     <div className="page">
-      <PageHeader title="Planning" subtitle="Plan what will be done. When the work happens, enter it in Work Done as usual — the plan updates by itself." />
+      <PageHeader title="Planning" subtitle="Make the plan, save it as draft, change it if needed, then Submit. Work entered in Work Done is compared with the submitted plan." />
       {error && <div className="alert alert-warn">Could not read the planning: {error}</div>}
       {missedAll > 0 && (
         <div className="alert alert-warn">
           <b>{missedAll} planned job{missedAll === 1 ? '' : 's'} not reported.</b> Enter the work in Work Done, or press <b>No work</b> and give the reason.{' '}
-          <button className="link" onClick={() => setView('past')}>
+          <button className="link" onClick={() => setView('submitted')}>
             Show them
           </button>
         </div>
@@ -246,37 +252,78 @@ export function Planning() {
         <div className="dash-card-head">
           <h2 className="plan-h">The plan</h2>
           <div className="plan-seg">
-            <button className={view === 'now' ? 'on' : ''} onClick={() => setView('now')}>
-              Running now
+            <button className={view === 'draft' ? 'on' : ''} onClick={() => setView('draft')}>
+              Draft ({drafts.length})
             </button>
-            <button className={view === 'upcoming' ? 'on' : ''} onClick={() => setView('upcoming')}>
-              Coming up
+            <button className={view === 'submitted' ? 'on' : ''} onClick={() => setView('submitted')}>
+              Submitted ({submitted.length})
             </button>
-            <button className={view === 'past' ? 'on' : ''} onClick={() => setView('past')}>
-              Past
+            <button className={view === 'completed' ? 'on' : ''} onClick={() => setView('completed')}>
+              Completed ({completed.length})
             </button>
           </div>
         </div>
+        <p className="muted small plan-help">
+          {view === 'draft'
+            ? 'Draft: not final yet — change the dates, remove jobs, then press Submit plan.'
+            : view === 'submitted'
+              ? 'Submitted: the final plan, not finished yet. Enter the work in Work Done; if a job did not happen press No work.'
+              : 'Completed: planned jobs that are finished — planned dates against the real start and finish.'}
+        </p>
+        {view === 'draft' && canPlan && drafts.length > 1 && (
+          <div className="plan-submit-all">
+            <button className="btn btn-primary" onClick={() => void submit(drafts.map((r) => r.plan.id))}>
+              Submit all drafts ({drafts.length})
+            </button>
+          </div>
+        )}
         {!planning ? (
           <Spinner />
-        ) : byDay.length === 0 ? (
-          <p className="rep-empty">{view === 'now' ? 'No plan running today.' : view === 'upcoming' ? 'Nothing planned ahead.' : 'No past plans.'}</p>
+        ) : groups.length === 0 ? (
+          <p className="rep-empty">{view === 'draft' ? 'No draft plan. Plan new work above.' : view === 'submitted' ? 'Nothing submitted and open.' : 'No planned job is finished yet.'}</p>
         ) : (
-          byDay.map(([k, list]) => {
+          groups.map(([k, list]) => {
             const c = countResults(list);
             const [d, end] = k.split('|');
+            const ids = list.map((r) => r.plan.id);
+            const editing = editDates?.key === k;
             return (
               <div key={k} className="plan-day">
                 <div className="plan-day-head">
                   <b>{rangeText(d, end)}</b>
                   <span className="muted small">
-                    {list.length} planned · {c.done} on time{c.late ? ` · ${c.late} late` : ''}{c.started ? ` · ${c.started} going on` : ''}
-                    {c['no-work'] ? ` · ${c['no-work']} no work` : ''}
-                    {c.missed ? ` · ${c.missed} not reported` : ''}
+                    {list.length} job{list.length === 1 ? '' : 's'}
+                    {view === 'completed' ? ` · ${c.done} on time${c.late ? ` · ${c.late} late` : ''}` : ''}
+                    {view === 'submitted' && c.missed ? ` · ${c.missed} not reported` : ''}
                   </span>
+                  {view === 'draft' && canPlan && (
+                    <span className="plan-day-act">
+                      {editing ? (
+                        <>
+                          <input type="date" value={editDates.from} min={today} onChange={(e) => setEditDates({ ...editDates, from: e.target.value, to: editDates.to < e.target.value ? e.target.value : editDates.to })} />
+                          <input type="date" value={editDates.to} min={editDates.from} onChange={(e) => setEditDates({ ...editDates, to: e.target.value })} />
+                          <button className="btn btn-small btn-primary" disabled={!editDates.from || !editDates.to || editDates.to < editDates.from} onClick={() => void saveDates(ids, editDates.from, editDates.to)}>
+                            Save dates
+                          </button>
+                          <button className="link" onClick={() => setEditDates(null)}>
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button className="btn btn-small" onClick={() => setEditDates({ key: k, from: d, to: end })}>
+                            Change dates
+                          </button>
+                          <button className="btn btn-small btn-primary" onClick={() => void submit(ids)}>
+                            Submit plan ({list.length})
+                          </button>
+                        </>
+                      )}
+                    </span>
+                  )}
                 </div>
                 {list.map((r) => (
-                  <div key={r.plan.id} className={`plan-item plan-item-${r.result}`}>
+                  <div key={r.plan.id} className={`plan-item plan-item-${view === 'draft' ? 'draft' : r.result}`}>
                     <div className="plan-item-main">
                       <b>{r.element?.code ?? r.plan.elementId}</b> <span>{r.activity?.name ?? r.plan.activityCode}</span>
                       <div className="muted small">{r.element ? `${r.element.buildingName} – ${r.element.levelName}` : ''}</div>
@@ -297,24 +344,30 @@ export function Planning() {
                       </span>
                     </div>
                     <span className="plan-result">
-                      <span className={`plan-res plan-res-${r.result}`}>{PLAN_RESULT_LABELS[r.result]}</span>
-                      {(r.result === 'late' || r.result === 'no-work') && <small className="muted">{r.result === 'no-work' ? r.plan.noWork?.reason : r.detail}</small>}
+                      {view === 'draft' ? (
+                        <span className="plan-res plan-res-draft">Draft</span>
+                      ) : (
+                        <>
+                          <span className={`plan-res plan-res-${r.result}`}>{PLAN_RESULT_LABELS[r.result]}</span>
+                          {(r.result === 'late' || r.result === 'no-work') && <small className="muted">{r.result === 'no-work' ? r.plan.noWork?.reason : r.detail}</small>}
+                        </>
+                      )}
                     </span>
                     {canPlan && (
                       <div className="plan-item-act">
-                        {(r.result === 'missed' || r.result === 'pending') && (
+                        {view === 'draft' && (
+                          <button className="link danger-link" onClick={() => void remove([r.plan.id])} title="Remove from the draft">
+                            ✕
+                          </button>
+                        )}
+                        {view === 'submitted' && (r.result === 'missed' || r.result === 'pending') && (
                           <button className="btn btn-small" onClick={() => setNoWorkFor(noWorkFor === r.plan.id ? null : r.plan.id)}>
                             No work
                           </button>
                         )}
-                        {r.result === 'no-work' && (
+                        {view === 'submitted' && r.result === 'no-work' && (
                           <button className="link" onClick={() => void noWork(r.plan.id, '')}>
                             Undo
-                          </button>
-                        )}
-                        {r.result === 'pending' && (
-                          <button className="link danger-link" onClick={() => void remove(r.plan.id)} title="Remove from the plan">
-                            ✕
                           </button>
                         )}
                       </div>
@@ -340,7 +393,7 @@ export function Planning() {
           })
         )}
         <p className="rep-note">
-          Done / Started fill in by themselves from Work Done. The full plan vs actual for any dates is in{' '}
+          Started / Completed fill in by themselves from Work Done. The full plan vs actual for any dates is in{' '}
           <button className="link" onClick={() => go('reports')}>
             Reports
           </button>

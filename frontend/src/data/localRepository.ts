@@ -812,7 +812,7 @@ export class LocalRepository implements PmcRepository {
       let added = 0;
       for (const id of [...new Set(input.elementIds)]) {
         if (have.has(`${id}|${a.code}|${input.date}|${to}`)) continue;
-        d.plans.push({ id: this.nextId('PLAN'), elementId: id, activityCode: a.code, date: input.date, to, note: input.note?.trim() ?? '', createdAt: this.nowIso() });
+        d.plans.push({ id: this.nextId('PLAN'), elementId: id, activityCode: a.code, date: input.date, to, note: input.note?.trim() ?? '', status: 'draft', createdAt: this.nowIso() });
         added += 1;
       }
       this.write(this.planKey(projectId), d);
@@ -824,7 +824,40 @@ export class LocalRepository implements PmcRepository {
     return this.op(() => {
       this.planner(role);
       const d = this.planData(projectId);
+      if (d.plans.some((p) => planIds.includes(p.id) && p.status === 'submitted')) throw new RepositoryError('validation', 'A submitted plan cannot be removed.');
       d.plans = d.plans.filter((p) => !planIds.includes(p.id));
+      this.write(this.planKey(projectId), d);
+      return d;
+    });
+  }
+
+  changePlanDates(projectId: string, planIds: string[], date: string, to: string, role: Role) {
+    return this.op(() => {
+      this.planner(role);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new RepositoryError('validation', 'Choose valid From and To dates.');
+      if (to < date) throw new RepositoryError('validation', '"To" date is before "From" date.');
+      const d = this.planData(projectId);
+      for (const p of d.plans) {
+        if (!planIds.includes(p.id)) continue;
+        if (p.status === 'submitted') throw new RepositoryError('validation', 'A submitted plan cannot be changed.');
+        p.date = date;
+        p.to = to;
+      }
+      this.write(this.planKey(projectId), d);
+      return d;
+    });
+  }
+
+  submitPlans(projectId: string, planIds: string[], role: Role) {
+    return this.op(() => {
+      this.planner(role);
+      const d = this.planData(projectId);
+      for (const p of d.plans) {
+        if (planIds.includes(p.id) && p.status !== 'submitted') {
+          p.status = 'submitted';
+          p.submittedAt = this.nowIso();
+        }
+      }
       this.write(this.planKey(projectId), d);
       return d;
     });

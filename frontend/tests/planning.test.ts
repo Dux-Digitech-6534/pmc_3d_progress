@@ -86,6 +86,21 @@ describe('planning in the local repository', () => {
     const wall = els.find((e) => e.type === 'wall');
     if (wall) await expect(repo.addPlans('PMC-SEC-001', { date: '2026-12-01', activityCode: 'CONC', elementIds: [wall.id] }, 'site-engineer')).rejects.toThrow(/does not apply/);
 
+    // new plans are drafts: dates can change; once submitted they are final
+    expect(b.plans.every((p) => p.status === 'draft')).toBe(true);
+    const two = b.plans.slice(0, 2).map((p) => p.id);
+    let dd = await repo.changePlanDates('PMC-SEC-001', two, '2026-12-02', '2026-12-04', 'site-engineer');
+    expect(dd.plans.filter((p) => two.includes(p.id)).map((p) => [p.date, p.to])).toEqual([
+      ['2026-12-02', '2026-12-04'],
+      ['2026-12-02', '2026-12-04'],
+    ]);
+    await expect(repo.changePlanDates('PMC-SEC-001', two, '2026-12-04', '2026-12-02', 'site-engineer')).rejects.toThrow(/before/);
+    dd = await repo.submitPlans('PMC-SEC-001', two.slice(0, 1), 'site-engineer');
+    expect(dd.plans.find((p) => p.id === two[0])!.status).toBe('submitted');
+    await expect(repo.changePlanDates('PMC-SEC-001', two.slice(0, 1), '2026-12-05', '2026-12-06', 'site-engineer')).rejects.toThrow(/submitted plan/);
+    await expect(repo.deletePlans('PMC-SEC-001', two.slice(0, 1), 'site-engineer')).rejects.toThrow(/submitted plan/);
+    await expect(repo.submitPlans('PMC-SEC-001', two, 'owner')).rejects.toThrow(/Site Engineer or PMC Reviewer/);
+
     // a From – To plan; To before From is refused
     const r = await repo.addPlans('PMC-SEC-001', { date: '2026-12-01', to: '2026-12-05', activityCode: 'CONC', elementIds: footings.slice(0, 1) }, 'site-engineer');
     expect(r.added).toBe(1);
@@ -93,7 +108,7 @@ describe('planning in the local repository', () => {
     await expect(repo.addPlans('PMC-SEC-001', { date: '2026-12-05', to: '2026-12-01', activityCode: 'CONC', elementIds: footings }, 'site-engineer')).rejects.toThrow(/before/);
     await repo.deletePlans('PMC-SEC-001', [r.plans.at(-1)!.id], 'site-engineer');
 
-    const id = b.plans[0].id;
+    const id = b.plans[2].id; // a draft (the first one was submitted above)
     let d = await repo.setNoWork('PMC-SEC-001', [id], 'Rain', 'site-engineer');
     expect(d.plans.find((p) => p.id === id)!.noWork!.reason).toBe('Rain');
     d = await repo.setNoWork('PMC-SEC-001', [id], '', 'site-engineer');

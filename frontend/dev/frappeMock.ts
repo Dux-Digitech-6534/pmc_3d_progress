@@ -160,6 +160,10 @@ export function frappeMock(): Plugin {
                 return r.addPlans(args.project_id, { date: args.date, to: args.to_date, activityCode: args.activity_code, elementIds: JSON.parse(args.element_ids), note: args.note }, args.role);
               case 'beta_api.delete_plans':
                 return r.deletePlans(args.project_id, JSON.parse(args.plan_ids), args.role);
+              case 'beta_api.change_plan_dates':
+                return r.changePlanDates(args.project_id, JSON.parse(args.plan_ids), args.date, args.to_date, args.role);
+              case 'beta_api.submit_plans':
+                return r.submitPlans(args.project_id, JSON.parse(args.plan_ids), args.role);
               case 'beta_api.set_no_work':
                 return r.setNoWork(args.project_id, JSON.parse(args.plan_ids), args.reason ?? '', args.role);
               case 'beta_api.mark_started':
