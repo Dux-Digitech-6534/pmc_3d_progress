@@ -4184,3 +4184,21 @@ input[type='radio'] {
 .plan-item-draft {
   background: #fbfcfd;
 }
+/* planning: No work choice and "showing the plan of" line */
+.plan-seg .plan-nowork-btn {
+  border-style: dashed;
+  color: #3730a3;
+}
+.plan-seg .plan-nowork-btn.on {
+  background: #3730a3;
+  border-color: #3730a3;
+  color: #fff;
+}
+.plan-nowork-why {
+  margin-top: 8px;
+}
+.plan-focus {
+  margin: -4px 0 6px;
+  font-size: 13px;
+  color: var(--navy);
+}

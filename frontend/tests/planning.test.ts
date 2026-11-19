@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LocalRepository, MemoryStorage } from '../src/data/localRepository';
 import { seedDemoData } from '../src/data/seed';
-import { completeDateOf, countResults, daysTaken, planVsActual, type PlanningData } from '../src/domain/planning';
+import { completeDateOf, countResults, daysTaken, NO_WORK_CODE, planVsActual, type PlanningData } from '../src/domain/planning';
 import type { ActivityDef, ElementRecord, ProgressEntry } from '../src/domain/types';
 
 const CONC = { code: 'CONC', name: 'Concreting', unit: 'm3' } as ActivityDef;
@@ -123,5 +123,25 @@ describe('planning in the local repository', () => {
     d = await repo.clearStarted('PMC-SEC-001', footings.slice(0, 2), 'REINF', 'site-engineer');
     expect(d.starts).toHaveLength(0);
     await expect(repo.markStarted('PMC-SEC-001', footings, 'REINF', '2999-01-01', 'site-engineer')).rejects.toThrow(/future/);
+  });
+});
+
+describe('a planned "No work"', () => {
+  it('needs no report and shows the reason; it can be planned on any element', async () => {
+    const rows = planVsActual(
+      { plans: [{ id: 'n1', elementId: 'F1', activityCode: NO_WORK_CODE, date: '2026-11-01', to: '2026-11-05', note: 'Waiting for columns', status: 'submitted' }], starts: [] },
+      [],
+      [el('F1')],
+      [CONC],
+      '2026-11-19',
+    );
+    expect(rows[0].result).toBe('no-work');
+    expect(rows[0].detail).toBe('No work planned: Waiting for columns');
+    expect(rows[0].activity?.name).toBe('No work');
+
+    const repo = new LocalRepository({ storage: new MemoryStorage(), seed: seedDemoData });
+    const slab = (await repo.listElements('PMC-SEC-001')).find((e) => e.type === 'slab')!;
+    const out = await repo.addPlans('PMC-SEC-001', { date: '2026-11-25', to: '2026-11-30', activityCode: NO_WORK_CODE, elementIds: [slab.id], note: 'Not in this period' }, 'site-engineer');
+    expect(out.plans.at(-1)).toMatchObject({ activityCode: NO_WORK_CODE, note: 'Not in this period', status: 'draft' });
   });
 });

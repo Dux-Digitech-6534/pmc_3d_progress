@@ -34,6 +34,9 @@ export interface PlanningData {
   starts: StartMark[];
 }
 
+/** Activity code of a "No work" plan: nothing will be done on these elements in these dates (meeting 16-11). */
+export const NO_WORK_CODE = 'NO-WORK';
+
 export type PlanResult = 'done' | 'late' | 'started' | 'no-work' | 'missed' | 'pending';
 
 export const PLAN_RESULT_LABELS: Record<PlanResult, string> = {
@@ -100,6 +103,11 @@ export function planVsActual(
       const end = planEnd(p);
       const el = els.get(p.elementId);
       const a = acts.get(p.activityCode);
+      if (p.activityCode === NO_WORK_CODE) {
+        // planned that nothing will be done: it never needs a report
+        const why = p.noWork?.reason || p.note;
+        return { plan: p, element: el, activity: { code: NO_WORK_CODE, name: 'No work', unit: 'nos' } as ActivityDef, result: 'no-work' as PlanResult, reported: 0, detail: `No work planned${why ? `: ${why}` : ''}` };
+      }
       const mine = counted.filter((e) => e.elementId === p.elementId && e.activityCode === p.activityCode);
       const reported = mine.filter((e) => e.date >= p.date && e.date <= end).reduce((n, e) => n + e.quantity, 0);
       const startMark = data.starts.find((s) => s.elementId === p.elementId && s.activityCode === p.activityCode)?.date;

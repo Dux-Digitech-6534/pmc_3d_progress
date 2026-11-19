@@ -2,7 +2,7 @@ import { resolveBatchQuantities } from '../domain/allocation';
 import { validateModelDocument } from '../domain/modelValidation';
 import type { ActivityDef, ElementRecord, HistoryItem, ModelRecord, ProgressEntry, Project, Role, Unit } from '../domain/types';
 import { activityApplies, PLANNING_STATUSES, ROLE_LABELS } from '../domain/types';
-import type { PlanningData } from '../domain/planning';
+import { NO_WORK_CODE, type PlanningData } from '../domain/planning';
 import type { SentLine } from '../domain/materialVariation';
 import { inModelFamily } from '../domain/progress';
 import { checkQuantity, findPossibleDuplicate, permissions, validateDate, type ReviewDecision } from '../domain/workflow';
@@ -801,11 +801,13 @@ export class LocalRepository implements PmcRepository {
       const to = input.to && input.to > input.date ? input.to : input.date;
       if (input.to && !/^\d{4}-\d{2}-\d{2}$/.test(input.to)) throw new RepositoryError('validation', '"To" is not a valid date.');
       if (input.to && input.to < input.date) throw new RepositoryError('validation', '"To" date is before "From" date.');
-      const a = this.findActivity(activities, input.activityCode);
+      // "No work" plan: no activity, nothing will be done on these elements in these dates
+      const noWork = input.activityCode === NO_WORK_CODE;
+      const a = noWork ? { code: NO_WORK_CODE, name: 'No work', unit: 'nos' as const } : this.findActivity(activities, input.activityCode);
       if (!input.elementIds.length) throw new RepositoryError('validation', 'Select at least one element.');
       for (const id of input.elementIds) {
         const el = this.findElement(elements, id);
-        if (!activityApplies(a, el.type)) throw new RepositoryError('validation', `${a.name} does not apply to ${el.code}.`);
+        if (!noWork && !activityApplies(a, el.type)) throw new RepositoryError('validation', `${a.name} does not apply to ${el.code}.`);
       }
       const d = this.planData(projectId);
       const have = new Set(d.plans.map((p) => `${p.elementId}|${p.activityCode}|${p.date}|${p.to ?? p.date}`));

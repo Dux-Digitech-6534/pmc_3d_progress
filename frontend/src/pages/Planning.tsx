@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { EmptyState, ErrorList, PageHeader, Spinner } from '../components/ui';
 import { errorMessages } from '../data/repository';
-import { countResults, isCompleted, isSubmitted, planEnd, planVsActual, PLAN_RESULT_LABELS, type PlanRow } from '../domain/planning';
+import { countResults, isCompleted, isSubmitted, NO_WORK_CODE, planEnd, planVsActual, PLAN_RESULT_LABELS, type PlanRow } from '../domain/planning';
 import { ELEMENT_TYPE_LABELS } from '../domain/reports';
 import { inWorkOrder } from '../domain/sequence';
 import { activityApplies, type ElementType } from '../domain/types';
@@ -46,6 +46,8 @@ export function Planning() {
   const [noWorkFor, setNoWorkFor] = useState<string | null>(null);
   const [other, setOther] = useState('');
   const [editDates, setEditDates] = useState<{ key: string; from: string; to: string } | null>(null);
+  // reason of a planned "No work" (e.g. "Slab not now — waiting for columns")
+  const [noWorkWhy, setNoWorkWhy] = useState('');
 
   const elements = useMemo(() => data?.elements ?? [], [data]);
   const activities = useMemo(() => inWorkOrder(data?.model?.document?.activities ?? []), [data]);
@@ -54,7 +56,12 @@ export function Planning() {
   const typeEls = elements.filter((e) => e.type === curType);
   const typeActs = activities.filter((a) => curType && activityApplies(a, curType));
 
-  const all = useMemo(() => (planning && data ? planVsActual(planning, data.entries, elements, activities, today) : []), [planning, data, elements, activities, today]);
+  // the plan below shows only the elements chosen above: the ticked ones, else every element of the type
+  const focus = useMemo(() => new Set(picked.size ? [...picked] : typeEls.map((e) => e.id)), [picked, typeEls]);
+  const all = useMemo(
+    () => (planning && data ? planVsActual(planning, data.entries, elements, activities, today).filter((r) => focus.has(r.plan.elementId)) : []),
+    [planning, data, elements, activities, today, focus],
+  );
   const drafts = all.filter((r) => !isSubmitted(r.plan));
   const submitted = all.filter((r) => isSubmitted(r.plan) && !isCompleted(r));
   const completed = all.filter((r) => isSubmitted(r.plan) && isCompleted(r));
@@ -98,7 +105,11 @@ export function Planning() {
     let added = 0;
     try {
       for (const code of [...works]) {
-        const out = await repo.addPlans(data!.project.id, { date: pFrom, to: pTo, activityCode: code, elementIds: [...picked] }, role);
+        const out = await repo.addPlans(
+          data!.project.id,
+          { date: pFrom, to: pTo, activityCode: code, elementIds: [...picked], note: code === NO_WORK_CODE ? noWorkWhy.trim() : undefined },
+          role,
+        );
         setPlanning(data!.project.id, out);
         added += out.added;
       }
@@ -107,8 +118,8 @@ export function Planning() {
           ? `${added} job${added === 1 ? '' : 's'} saved as draft for ${rangeText(pFrom, pTo)} — check them and press Submit plan.`
           : `Nothing new — these jobs are already planned for ${rangeText(pFrom, pTo)}.`,
       );
-      setPicked(new Set());
       setWorks(new Set());
+      setNoWorkWhy('');
       setView('draft');
     } catch (e) {
       setErrors(errorMessages(e));
@@ -228,12 +239,37 @@ export function Planning() {
               <div className="plan-step-title">Which work?</div>
               <div className="plan-seg">
                 {typeActs.map((a) => (
-                  <button key={a.code} className={works.has(a.code) ? 'on' : ''} onClick={() => setWorks((w) => toggle(w, a.code))}>
+                  <button
+                    key={a.code}
+                    className={works.has(a.code) ? 'on' : ''}
+                    onClick={() =>
+                      setWorks((w) => {
+                        const n = toggle(w, a.code);
+                        n.delete(NO_WORK_CODE);
+                        return n;
+                      })
+                    }
+                  >
                     {works.has(a.code) ? '✓ ' : ''}
                     {a.name}
                   </button>
                 ))}
+                {/* nothing will be done on these elements in these dates */}
+                <button className={`plan-nowork-btn ${works.has(NO_WORK_CODE) ? 'on' : ''}`} onClick={() => setWorks((w) => (w.has(NO_WORK_CODE) ? new Set() : new Set([NO_WORK_CODE])))}>
+                  {works.has(NO_WORK_CODE) ? '✓ ' : ''}No work
+                </button>
               </div>
+              {works.has(NO_WORK_CODE) && (
+                <div className="plan-reasons plan-nowork-why">
+                  <span className="small">Why? (optional)</span>
+                  {['Waiting for earlier work', 'Material not available', 'Labour not available', 'Not in this period'].map((x) => (
+                    <button key={x} className={`plan-tag ${noWorkWhy === x ? 'on' : ''}`} onClick={() => setNoWorkWhy(noWorkWhy === x ? '' : x)}>
+                      {x}
+                    </button>
+                  ))}
+                  <input value={noWorkWhy} maxLength={300} onChange={(e) => setNoWorkWhy(e.target.value)} placeholder="Or type the reason" />
+                </div>
+              )}
             </div>
           </div>
 
@@ -242,7 +278,9 @@ export function Planning() {
               {busy ? 'Adding…' : jobs ? `Add to plan — ${rangeText(pFrom, pTo)}` : 'Add to plan'}
             </button>
             <span className="muted small">
-              {picked.size} element{picked.size === 1 ? '' : 's'} × {works.size} work = {jobs} job{jobs === 1 ? '' : 's'}
+              {works.has(NO_WORK_CODE)
+                ? `No work on ${picked.size} element${picked.size === 1 ? '' : 's'}`
+                : `${picked.size} element${picked.size === 1 ? '' : 's'} × ${works.size} work = ${jobs} job${jobs === 1 ? '' : 's'}`}
             </span>
           </div>
         </section>
@@ -263,6 +301,19 @@ export function Planning() {
             </button>
           </div>
         </div>
+        <p className="plan-focus">
+          Showing the plan of{' '}
+          <b>
+            {picked.size
+              ? typeEls
+                  .filter((e) => picked.has(e.id))
+                  .slice(0, 6)
+                  .map((e) => e.code)
+                  .join(', ') + (picked.size > 6 ? ` +${picked.size - 6} more` : '')
+              : `all ${typeEls.length} ${ELEMENT_TYPE_LABELS[curType as ElementType]?.toLowerCase() ?? ''}s`}
+          </b>{' '}
+          — choose other elements above to see theirs.
+        </p>
         <p className="muted small plan-help">
           {view === 'draft'
             ? 'Draft: not final yet — change the dates, remove jobs, then press Submit plan.'
@@ -349,7 +400,7 @@ export function Planning() {
                       ) : (
                         <>
                           <span className={`plan-res plan-res-${r.result}`}>{PLAN_RESULT_LABELS[r.result]}</span>
-                          {(r.result === 'late' || r.result === 'no-work') && <small className="muted">{r.result === 'no-work' ? r.plan.noWork?.reason : r.detail}</small>}
+                          {(r.result === 'late' || r.result === 'no-work') && <small className="muted">{r.result === 'no-work' ? (r.plan.noWork?.reason ?? r.detail) : r.detail}</small>}
                         </>
                       )}
                     </span>
@@ -365,7 +416,7 @@ export function Planning() {
                             No work
                           </button>
                         )}
-                        {view === 'submitted' && r.result === 'no-work' && (
+                        {view === 'submitted' && r.result === 'no-work' && r.plan.activityCode !== NO_WORK_CODE && (
                           <button className="link" onClick={() => void noWork(r.plan.id, '')}>
                             Undo
                           </button>

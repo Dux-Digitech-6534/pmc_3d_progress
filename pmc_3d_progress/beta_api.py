@@ -15,6 +15,8 @@ from frappe.utils import getdate, now_datetime, nowdate
 from pmc_3d_progress.api import _act_as, _active_context, _find_activity, _find_element, _parse, _require_reader, _throw
 
 _PLANNERS = ("site-engineer", "pmc-reviewer")
+# a "No work" plan: nothing will be done on these elements in these dates
+NO_WORK_CODE = "NO-WORK"
 _MAX_ITEMS = 20000
 
 
@@ -81,11 +83,12 @@ def add_plans(project_id, date, activity_code, element_ids, role, note=None, to_
 	end = _date(to_date, "To date") if to_date else day
 	if end < day:
 		_throw('"To" date is before "From" date.')
-	activity = _find_activity(document, activity_code)
+	no_work = activity_code == NO_WORK_CODE
+	activity = {"code": NO_WORK_CODE, "name": "No work"} if no_work else _find_activity(document, activity_code)
 	ids = _ids(element_ids)
 	for i in ids:
 		el = _find_element(document, i)
-		applies = activity.get("appliesTo")
+		applies = None if no_work else activity.get("appliesTo")
 		if applies and el.get("type") not in applies:
 			_throw(f'{activity["name"]} does not apply to {el.get("code") or i}.')
 	note = (note or "").strip()
