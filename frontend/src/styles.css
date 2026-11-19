@@ -4152,3 +4152,7 @@ input[type='radio'] {
     min-width: 0;
   }
 }
+/* element codes in the picker stay on one line next to the Details button */
+.picker-list .el-code {
+  white-space: nowrap;
+}

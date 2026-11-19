@@ -138,7 +138,7 @@ export function WorkDoneForm({
       setBusy(false);
     }
     if (done.length) {
-      notify(`${done.join(', ')} marked started on ${date} for ${elements.length} element${elements.length === 1 ? '' : 's'}.`);
+      notify(`${done.join(', ')} marked started on ${new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} for ${elements.length} element${elements.length === 1 ? '' : 's'}.`);
       setTicked(new Set());
     }
     if (failed.length) setErrors(failed);

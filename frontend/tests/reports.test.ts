@@ -134,6 +134,12 @@ describe('category-wise status', () => {
     expect(s.buckets.find((b) => b.label === 'Reinforcement done')!.elements.map((e) => e.id)).toEqual(['F2', 'F4']);
   });
 
+  it('a Work Done "Started" mark (no quantity yet) shows as "<work> started", not Not started', () => {
+    const s = categoryStatus(elements, entries, ACTS, 'footing', 'approved', undefined, [{ elementId: 'F5', activityCode: 'REINF' }]);
+    expect(s.rows.find((r) => r.element.id === 'F5')!.label).toBe('Reinforcement started');
+    expect(s.counts.notStarted).toBe(1);
+  });
+
   it('elements without planned quantities get their own bucket', () => {
     const s = categoryStatus([el('S1', 'slab')], [], ACTS, 'slab', 'approved');
     expect(s.buckets.map((b) => b.label)).toEqual(['No planned quantity']);

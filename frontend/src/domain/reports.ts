@@ -179,7 +179,9 @@ export interface CategoryStatus {
  * 2 Shuttering in progress · 8 Not started". An element's stage is the LAST activity in site order
  * with any work counted: fully done → "<activity> done", partly → "<activity> in progress".
  */
-export function categoryStatus(elements: ElementRecord[], entries: ProgressEntry[], activities: ActivityDef[], type: ElementType, mode: CountMode, buildingId?: string): CategoryStatus {
+export function categoryStatus(elements: ElementRecord[], entries: ProgressEntry[], activities: ActivityDef[], type: ElementType, mode: CountMode, buildingId?: string, starts: { elementId: string; activityCode: string }[] = []): CategoryStatus {
+  // Work Done "Started" (no quantity yet) also counts as work going on
+  const startedSet = new Set(starts.map((s) => `${s.elementId}|${s.activityCode}`));
   const els = elements.filter((e) => e.type === type && (!buildingId || e.buildingId === buildingId));
   const acts = inWorkOrder(activities.filter((a) => activityApplies(a, type)));
   const plannedSum: Record<string, number> = {};
@@ -188,7 +190,7 @@ export function categoryStatus(elements: ElementRecord[], entries: ProgressEntry
     const percent: Record<string, number | null> = {};
     let planned = 0;
     let complete = 0;
-    let last: { a: ActivityDef; full: boolean } | null = null;
+    let last: { a: ActivityDef; full: boolean; started?: boolean } | null = null;
     for (const a of acts) {
       const p = computeActivityProgress(el, a, entries);
       if (p.planned === null) {
@@ -202,14 +204,14 @@ export function categoryStatus(elements: ElementRecord[], entries: ProgressEntry
       const full = done + QTY_EPSILON >= p.planned;
       percent[a.code] = roundQty(Math.min((done / p.planned) * 100, 100), 0);
       if (full) complete += 1;
-      if (done > QTY_EPSILON) last = { a, full };
+      if (done > QTY_EPSILON || (!full && startedSet.has(`${el.id}|${a.code}`))) last = { a, full, started: done <= QTY_EPSILON };
     }
     if (!planned) return { element: el, stage: 'no-plan', label: 'No planned quantity', percent };
     if (complete === planned) return { element: el, stage: 'complete', label: 'Complete', percent };
     if (!last) return { element: el, stage: 'not-started', label: 'Not started', percent };
     return last.full
       ? { element: el, stage: `${last.a.code}:done`, label: `${last.a.name} done`, percent }
-      : { element: el, stage: `${last.a.code}:doing`, label: `${last.a.name} in progress`, percent };
+      : { element: el, stage: `${last.a.code}:doing`, label: `${last.a.name} ${last.started ? 'started' : 'in progress'}`, percent };
   });
 
   // furthest first: complete, then the later activities, "in progress" after "done" of the same activity

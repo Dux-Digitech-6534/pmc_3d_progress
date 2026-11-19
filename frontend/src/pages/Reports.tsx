@@ -50,17 +50,19 @@ export function Reports() {
     () => executiveSummary(elements, entries, activities, { from: dates.from, to: dates.to, buildingId, type, elementId: elementIdOk, mode }),
     [elements, entries, activities, dates.from, dates.to, buildingId, type, elementIdOk, mode],
   );
+  // planning (start dates, plans) of this project
+  const { data: planning } = usePlanning();
+  const planningStarts = useMemo(() => planning?.starts ?? [], [planning]);
   const statuses = useMemo(
     () =>
       types
         .filter((t) => !type || t === type)
-        .map((t) => ({ type: t, s: categoryStatus(elements, entries, activities, t, mode, buildingId) }))
+        .map((t) => ({ type: t, s: categoryStatus(elements, entries, activities, t, mode, buildingId, planningStarts) }))
         .filter((x) => x.s.rows.length),
-    [types, type, elements, entries, activities, mode, buildingId],
+    [types, type, elements, entries, activities, mode, buildingId, planningStarts],
   );
   // activity columns of the summary table: those planned for any type shown, in site order
   // start / complete dates of each element (Work Done "Started" and the entry that made it 100 %)
-  const { data: planning } = usePlanning();
   const datesOf = (el: (typeof elements)[number], stage: string) => {
     const starts = (planning?.starts ?? []).filter((s) => s.elementId === el.id).map((s) => s.date);
     const firstEntry = entries.filter((e) => e.elementId === el.id && (e.status === 'Approved' || e.status === 'Submitted')).map((e) => e.date);

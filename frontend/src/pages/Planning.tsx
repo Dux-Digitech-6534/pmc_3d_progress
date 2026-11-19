@@ -104,7 +104,7 @@ export function Planning() {
         setPlanning(data!.project.id, out);
         added += out.added;
       }
-      notify(`${added} job${added === 1 ? '' : 's'} planned for ${rangeText(pFrom, pTo)}.`);
+      notify(added ? `${added} job${added === 1 ? '' : 's'} planned for ${rangeText(pFrom, pTo)}.` : `Nothing new — these jobs are already planned for ${rangeText(pFrom, pTo)}.`);
       setPicked(new Set());
       setWorks(new Set());
       setView(pFrom <= today ? 'now' : 'upcoming');
