@@ -49,18 +49,20 @@ export function ElementPanel({
     );
   }
 
-  if (selected.length > 1) {
+  if (!detailsOnly) {
     return (
       <div className="panel-scroll">
         <div className="panel-section">
-          <h2 className="panel-title">{selected.length} elements selected</h2>
-          <div className="chips">
-            {selected.map((e) => (
-              <button key={e.id} className="chip" onClick={() => onOpen(e.id)} title="Show details" aria-label={`Details of ${e.code}`}>
-                {e.code}
+          <h2 className="panel-title">{selected.length === 1 ? `${selected[0].code} selected` : `${selected.length} elements selected`}</h2>
+          <p className="muted small">
+            {selected.length === 1 ? (
+              <button className="link" onClick={() => onOpen(selected[0].id)}>
+                Show details and history of {selected[0].code}
               </button>
-            ))}
-          </div>
+            ) : (
+              "To see an element's details and history, press its Details button in the list above."
+            )}
+          </p>
         </div>
         <ApproveTicked elements={selected} entries={entries} />
         <DraftEntries elements={selected} entries={entries} />

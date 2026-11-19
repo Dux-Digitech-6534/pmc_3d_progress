@@ -123,19 +123,20 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
     [selection, setSelection],
   );
 
-  // Click in 3D ticks the element (click again to untick) and shows its details.
+  // Click in 3D only ticks the element (click again to untick). Details open only from a "Details" button,
+  // so selecting several elements is never interrupted by a details card (meeting 16-11).
   const onPick = useCallback(
     (id: string | null) => {
       if (!id) return; // clicking empty space keeps the ticks; use Clear or Esc
-      const ticking = !selection.has(id);
+      const unticking = selection.has(id);
       toggle(id);
-      setFocusId((f) => (ticking ? id : f === id ? null : f));
+      if (unticking) setFocusId((f) => (f === id ? null : f));
     },
     [toggle, selection],
   );
   const focusEl = focusId ? (elements.find((e) => e.id === focusId) ?? null) : null;
-  // the details card is not needed when that element is the only one ticked (the panel below shows it)
-  const showCard = !!focusEl && !(selection.size === 1 && selection.has(focusEl.id));
+  // the panel below never shows details, so the card shows whenever a Details button was pressed
+  const showCard = !!focusEl;
   useEffect(() => {
     if (focusId) document.querySelector('.ws-right-body')?.scrollTo({ top: 0 });
   }, [focusId]);

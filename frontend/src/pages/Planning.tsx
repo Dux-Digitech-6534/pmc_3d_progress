@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { EmptyState, ErrorList, PageHeader, Spinner } from '../components/ui';
 import { errorMessages } from '../data/repository';
-import { countResults, planVsActual, PLAN_RESULT_LABELS, type PlanResult } from '../domain/planning';
-import { elementLabel, ELEMENT_TYPE_LABELS } from '../domain/reports';
+import { countResults, planVsActual, PLAN_RESULT_LABELS, type PlanRow } from '../domain/planning';
+import { ELEMENT_TYPE_LABELS } from '../domain/reports';
 import { inWorkOrder } from '../domain/sequence';
 import { activityApplies, type ElementType } from '../domain/types';
 import { todayISO } from '../domain/workflow';
+import { TYPE_COLORS } from '../lib/colors';
 import { useApp } from '../state/AppContext';
 import { setPlanning, usePlanning } from '../state/planning';
 
@@ -15,48 +16,53 @@ const addDays = (ymd: string, n: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 const fmtDay = (ymd: string) => new Date(`${ymd}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+const REASONS = ['Rain', 'Material not available', 'Labour not available', 'Machine / shuttering not ready'];
 
 /**
- * Planning (meeting 16-11): the site engineer plans which work will be done on a date; afterwards each
- * planned job is Done (work reported that day), Started, or "No work" with the reason. A planned job
- * left without any of these is "Not reported".
+ * Planning for the site engineer, kept simple (meeting 16-11):
+ *   1. pick the day (Today / Tomorrow / a date), 2. tap the elements, 3. tap the work, 4. Add to plan.
+ * Below: the plan day by day. Work reported in Work Done marks a job Done / Started by itself;
+ * a job that did not happen gets "No work" with a reason (one tap for the usual reasons).
  */
 export function Planning() {
   const { data, repo, role, notify, go } = useApp();
-  const { data: planning, error, reload } = usePlanning();
+  const { data: planning, error } = usePlanning();
   const today = todayISO();
+  const tomorrow = addDays(today, 1);
   const canPlan = role === 'site-engineer' || role === 'pmc-reviewer';
 
-  // ---- add to plan ----
-  const [date, setDate] = useState(today);
+  const [day, setDay] = useState(tomorrow);
   const [type, setType] = useState<ElementType | ''>('');
-  const [code, setCode] = useState('');
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [note, setNote] = useState('');
+  const [works, setWorks] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
-
-  // ---- list ----
-  const [from, setFrom] = useState(addDays(today, -7));
-  const [to, setTo] = useState(addDays(today, 7));
-  const [show, setShow] = useState<'all' | PlanResult>('all');
+  const [view, setView] = useState<'today' | 'tomorrow' | 'week'>('today');
   const [noWorkFor, setNoWorkFor] = useState<string | null>(null);
-  const [reason, setReason] = useState('');
+  const [other, setOther] = useState('');
 
   const elements = useMemo(() => data?.elements ?? [], [data]);
   const activities = useMemo(() => inWorkOrder(data?.model?.document?.activities ?? []), [data]);
   const types = useMemo(() => (Object.keys(ELEMENT_TYPE_LABELS) as ElementType[]).filter((t) => elements.some((e) => e.type === t)), [elements]);
-  const curType = type || types[0] || '';
+  const curType = type && types.includes(type) ? type : (types[0] ?? '');
+  const typeEls = elements.filter((e) => e.type === curType);
   const typeActs = activities.filter((a) => curType && activityApplies(a, curType));
-  const curCode = typeActs.some((a) => a.code === code) ? code : (typeActs[0]?.code ?? '');
-  const listEls = elements.filter((e) => e.type === curType);
 
+  const range = view === 'today' ? [today, today] : view === 'tomorrow' ? [tomorrow, tomorrow] : [addDays(today, -6), today];
   const rows = useMemo(
-    () => (planning && data ? planVsActual(planning, data.entries, elements, activities, today, from, to) : []),
-    [planning, data, elements, activities, today, from, to],
+    () => (planning && data ? planVsActual(planning, data.entries, elements, activities, today, range[0], range[1]) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [planning, data, elements, activities, today, view],
   );
-  const counts = countResults(rows);
-  const shown = rows.filter((r) => show === 'all' || r.result === show);
+  const byDay = useMemo(() => {
+    const m = new Map<string, PlanRow[]>();
+    for (const r of [...rows].sort((a, b) => b.plan.date.localeCompare(a.plan.date))) m.set(r.plan.date, [...(m.get(r.plan.date) ?? []), r]);
+    return [...m.entries()];
+  }, [rows]);
+  const missedAll = useMemo(
+    () => (planning && data ? planVsActual(planning, data.entries, elements, activities, today).filter((r) => r.result === 'missed').length : 0),
+    [planning, data, elements, activities, today],
+  );
 
   if (!data) return <Spinner />;
   if (!data.model)
@@ -69,16 +75,29 @@ export function Planning() {
       </div>
     );
 
+  const toggle = (set: Set<string>, id: string) => {
+    const n = new Set(set);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
+  };
+  const allPicked = typeEls.length > 0 && typeEls.every((e) => picked.has(e.id));
+  const jobs = picked.size * works.size;
+
   async function add() {
     setErrors([]);
-    if (!picked.size) return setErrors(['Select at least one element.']);
     setBusy(true);
+    let added = 0;
     try {
-      const out = await repo.addPlans(data!.project.id, { date, activityCode: curCode, elementIds: [...picked], note }, role);
-      setPlanning(data!.project.id, out);
-      notify(`${out.added} job${out.added === 1 ? '' : 's'} added to the plan for ${fmtDay(date)}${out.skipped ? ` (${out.skipped} already planned)` : ''}.`);
+      for (const code of [...works]) {
+        const out = await repo.addPlans(data!.project.id, { date: day, activityCode: code, elementIds: [...picked] }, role);
+        setPlanning(data!.project.id, out);
+        added += out.added;
+      }
+      notify(`${added} job${added === 1 ? '' : 's'} planned for ${fmtDay(day)}.`);
       setPicked(new Set());
-      setNote('');
+      setWorks(new Set());
+      setView(day === today ? 'today' : day === tomorrow ? 'tomorrow' : 'week');
     } catch (e) {
       setErrors(errorMessages(e));
     } finally {
@@ -86,214 +105,209 @@ export function Planning() {
     }
   }
 
-  async function act(fn: () => Promise<{ plans: unknown[] }>, done: string) {
+  async function noWork(id: string, reason: string) {
     setErrors([]);
     try {
-      const out = (await fn()) as Parameters<typeof setPlanning>[1];
-      setPlanning(data!.project.id, out);
-      notify(done);
+      setPlanning(data!.project.id, await repo.setNoWork(data!.project.id, [id], reason, role));
+      setNoWorkFor(null);
+      setOther('');
+      notify(reason ? `Marked No work — ${reason}.` : 'No work removed.');
     } catch (e) {
       setErrors(errorMessages(e));
     }
   }
 
-  const allPicked = listEls.length > 0 && listEls.every((e) => picked.has(e.id));
+  async function remove(id: string) {
+    try {
+      setPlanning(data!.project.id, await repo.deletePlans(data!.project.id, [id], role));
+      notify('Removed from the plan.');
+    } catch (e) {
+      setErrors(errorMessages(e));
+    }
+  }
 
   return (
     <div className="page">
-      <PageHeader
-        title="Planning"
-        subtitle="Plan the work for a date. Afterwards report it in Work Done (Started / Completed), or mark No work with the reason."
-      />
+      <PageHeader title="Planning" subtitle="Plan what will be done. When the work happens, enter it in Work Done as usual — the plan updates by itself." />
       {error && <div className="alert alert-warn">Could not read the planning: {error}</div>}
+      {missedAll > 0 && (
+        <div className="alert alert-warn">
+          <b>{missedAll} planned job{missedAll === 1 ? '' : 's'} not reported.</b> Enter the work in Work Done, or press <b>No work</b> and give the reason.{' '}
+          <button className="link" onClick={() => setView('week')}>
+            Show them
+          </button>
+        </div>
+      )}
       <ErrorList errors={errors} />
 
       {canPlan && (
-        <section className="dash-card">
-          <div className="dash-card-head">
+        <section className="dash-card plan-new">
+          <h2 className="plan-h">Plan new work</h2>
+
+          <div className="plan-step">
+            <span className="plan-num">1</span>
             <div>
-              <h2>Add to plan</h2>
-              <p>Pick the date, the work and the elements.</p>
+              <div className="plan-step-title">Which day?</div>
+              <div className="plan-seg">
+                <button className={day === today ? 'on' : ''} onClick={() => setDay(today)}>
+                  Today
+                </button>
+                <button className={day === tomorrow ? 'on' : ''} onClick={() => setDay(tomorrow)}>
+                  Tomorrow
+                </button>
+                <input type="date" value={day} min={today} onChange={(e) => e.target.value && setDay(e.target.value)} aria-label="Other date" />
+              </div>
             </div>
           </div>
-          <div className="filters plan-form">
-            <label>
-              Date
-              <input type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} />
-            </label>
-            <label>
-              Element type
-              <select value={curType} onChange={(e) => (setType(e.target.value as ElementType), setPicked(new Set()))}>
+
+          <div className="plan-step">
+            <span className="plan-num">2</span>
+            <div className="plan-grow">
+              <div className="plan-step-title">Which elements?</div>
+              <div className="plan-seg plan-types">
                 {types.map((t) => (
-                  <option key={t} value={t}>
-                    {ELEMENT_TYPE_LABELS[t]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Work
-              <select value={curCode} onChange={(e) => setCode(e.target.value)}>
-                {typeActs.map((a) => (
-                  <option key={a.code} value={a.code}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grow">
-              Note (optional)
-              <input value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} placeholder="e.g. labour gang 2" />
-            </label>
-          </div>
-          <div className="plan-pick">
-            <div className="plan-pick-head">
-              <b>
-                {picked.size} of {listEls.length} {ELEMENT_TYPE_LABELS[curType as ElementType]?.toLowerCase()}s selected
-              </b>
-              <button className="link" onClick={() => setPicked(allPicked ? new Set() : new Set(listEls.map((e) => e.id)))}>
-                {allPicked ? 'Unselect all' : 'Select all'}
-              </button>
-            </div>
-            <div className="plan-pick-list">
-              {listEls.map((e) => (
-                <label key={e.id} className={picked.has(e.id) ? 'on' : ''}>
-                  <input
-                    type="checkbox"
-                    checked={picked.has(e.id)}
-                    onChange={() => {
-                      const n = new Set(picked);
-                      if (n.has(e.id)) n.delete(e.id);
-                      else n.add(e.id);
-                      setPicked(n);
+                  <button
+                    key={t}
+                    className={curType === t ? 'on' : ''}
+                    onClick={() => {
+                      setType(t);
+                      setPicked(new Set());
+                      setWorks(new Set());
                     }}
-                  />
-                  {elementLabel(e)}
-                </label>
-              ))}
+                  >
+                    <span className="swatch" style={{ background: TYPE_COLORS[t] }} />
+                    {ELEMENT_TYPE_LABELS[t]}
+                  </button>
+                ))}
+              </div>
+              <div className="plan-tags">
+                <button className="plan-tag plan-tag-all" onClick={() => setPicked(allPicked ? new Set() : new Set(typeEls.map((e) => e.id)))}>
+                  {allPicked ? 'Unselect all' : `All ${typeEls.length}`}
+                </button>
+                {typeEls.map((e) => (
+                  <button key={e.id} className={`plan-tag ${picked.has(e.id) ? 'on' : ''}`} onClick={() => setPicked(toggle(picked, e.id))} title={`${e.buildingName} – ${e.levelName}`}>
+                    {e.code}
+                    <small>{e.levelName}</small>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-          <div className="form-actions">
-            <button className="btn btn-primary" disabled={busy || !picked.size || !curCode} onClick={() => void add()}>
-              {busy ? 'Adding…' : `Add to plan (${picked.size})`}
+
+          <div className="plan-step">
+            <span className="plan-num">3</span>
+            <div>
+              <div className="plan-step-title">Which work?</div>
+              <div className="plan-seg">
+                {typeActs.map((a) => (
+                  <button key={a.code} className={works.has(a.code) ? 'on' : ''} onClick={() => setWorks(toggle(works, a.code))}>
+                    {works.has(a.code) ? '✓ ' : ''}
+                    {a.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="plan-go">
+            <button className="btn btn-primary" disabled={busy || !jobs} onClick={() => void add()}>
+              {busy ? 'Adding…' : jobs ? `Add to plan — ${fmtDay(day)}` : 'Add to plan'}
             </button>
+            <span className="muted small">
+              {picked.size} element{picked.size === 1 ? '' : 's'} × {works.size} work = {jobs} job{jobs === 1 ? '' : 's'}
+            </span>
           </div>
         </section>
       )}
 
       <section className="dash-card">
         <div className="dash-card-head">
-          <div>
-            <h2>Plan vs actual</h2>
-            <p>Done = work reported that day · Started = marked started that day · Not reported = date over, nothing entered.</p>
+          <h2 className="plan-h">The plan</h2>
+          <div className="plan-seg">
+            <button className={view === 'today' ? 'on' : ''} onClick={() => setView('today')}>
+              Today
+            </button>
+            <button className={view === 'tomorrow' ? 'on' : ''} onClick={() => setView('tomorrow')}>
+              Tomorrow
+            </button>
+            <button className={view === 'week' ? 'on' : ''} onClick={() => setView('week')}>
+              Last 7 days
+            </button>
           </div>
-          <button className="link" onClick={() => void reload()}>
-            Refresh
-          </button>
         </div>
-        <div className="filters plan-filters">
-          <label>
-            From
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </label>
-          <label>
-            To
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </label>
-          <label>
-            Show
-            <select value={show} onChange={(e) => setShow(e.target.value as typeof show)}>
-              <option value="all">All ({rows.length})</option>
-              {(Object.keys(PLAN_RESULT_LABELS) as PlanResult[]).map((r) => (
-                <option key={r} value={r}>
-                  {PLAN_RESULT_LABELS[r]} ({counts[r]})
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <p className="plan-counts">
-          <span className="plan-res plan-res-done">{counts.done} done</span>
-          <span className="plan-res plan-res-started">{counts.started} started</span>
-          <span className="plan-res plan-res-no-work">{counts['no-work']} no work</span>
-          <span className="plan-res plan-res-missed">{counts.missed} not reported</span>
-          <span className="plan-res plan-res-pending">{counts.pending} planned</span>
-        </p>
         {!planning ? (
           <Spinner />
-        ) : shown.length === 0 ? (
-          <p className="rep-empty">Nothing planned in these dates.</p>
+        ) : byDay.length === 0 ? (
+          <p className="rep-empty">Nothing planned{view === 'today' ? ' for today' : view === 'tomorrow' ? ' for tomorrow' : ' in the last 7 days'}.</p>
         ) : (
-          <div className="dash-table-wrap">
-            <table className="dash-table rep-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Element</th>
-                  <th>Work</th>
-                  <th>Result</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((r) => (
-                  <tr key={r.plan.id} className={r.result === 'missed' ? 'plan-row-missed' : ''}>
-                    <td className="nowrap">{fmtDay(r.plan.date)}</td>
-                    <td>
-                      <b>{r.element ? elementLabel(r.element) : r.plan.elementId}</b>
-                      {r.plan.note && <div className="muted small">{r.plan.note}</div>}
-                    </td>
-                    <td>{r.activity?.name ?? r.plan.activityCode}</td>
-                    <td>
-                      <span className={`plan-res plan-res-${r.result}`}>{PLAN_RESULT_LABELS[r.result]}</span>
-                      <div className="muted small">{r.detail}</div>
-                    </td>
-                    <td className="nowrap num">
-                      {canPlan && noWorkFor === r.plan.id ? (
-                        <span className="plan-nowork">
-                          <input autoFocus value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} placeholder="Reason, e.g. rain" />
-                          <button
-                            className="btn btn-small btn-primary"
-                            disabled={!reason.trim()}
-                            onClick={() =>
-                              void act(() => repo.setNoWork(data.project.id, [r.plan.id], reason, role), 'Marked No work.').then(() => {
-                                setNoWorkFor(null);
-                                setReason('');
-                              })
-                            }
-                          >
-                            Save
+          byDay.map(([d, list]) => {
+            const c = countResults(list);
+            return (
+              <div key={d} className="plan-day">
+                <div className="plan-day-head">
+                  <b>{d === today ? 'Today' : d === tomorrow ? 'Tomorrow' : fmtDay(d)}</b>
+                  <span className="muted small">
+                    {list.length} planned · {c.done} done{c.started ? ` · ${c.started} started` : ''}
+                    {c['no-work'] ? ` · ${c['no-work']} no work` : ''}
+                    {c.missed ? ` · ${c.missed} not reported` : ''}
+                  </span>
+                </div>
+                {list.map((r) => (
+                  <div key={r.plan.id} className={`plan-item plan-item-${r.result}`}>
+                    <div className="plan-item-main">
+                      <b>{r.element?.code ?? r.plan.elementId}</b> <span>{r.activity?.name ?? r.plan.activityCode}</span>
+                      <div className="muted small">
+                        {r.element ? `${r.element.buildingName} – ${r.element.levelName}` : ''}
+                        {r.result === 'no-work' ? ` · ${r.plan.noWork?.reason}` : r.result === 'done' ? ` · ${r.detail}` : ''}
+                      </div>
+                    </div>
+                    <span className={`plan-res plan-res-${r.result}`}>{PLAN_RESULT_LABELS[r.result]}</span>
+                    {canPlan && (
+                      <div className="plan-item-act">
+                        {(r.result === 'missed' || r.result === 'pending') && (
+                          <button className="btn btn-small" onClick={() => setNoWorkFor(noWorkFor === r.plan.id ? null : r.plan.id)}>
+                            No work
                           </button>
-                          <button className="link" onClick={() => setNoWorkFor(null)}>
-                            Cancel
+                        )}
+                        {r.result === 'no-work' && (
+                          <button className="link" onClick={() => void noWork(r.plan.id, '')}>
+                            Undo
                           </button>
-                        </span>
-                      ) : canPlan ? (
-                        <>
-                          {(r.result === 'missed' || r.result === 'pending') && (
-                            <button className="link" onClick={() => (setNoWorkFor(r.plan.id), setReason(''))}>
-                              No work
-                            </button>
-                          )}
-                          {r.result === 'no-work' && (
-                            <button className="link" onClick={() => void act(() => repo.setNoWork(data.project.id, [r.plan.id], '', role), 'No work removed.')}>
-                              Undo No work
-                            </button>
-                          )}
-                          {r.result === 'pending' && (
-                            <button className="link danger-link" onClick={() => void act(() => repo.deletePlans(data.project.id, [r.plan.id], role), 'Removed from the plan.')}>
-                              Remove
-                            </button>
-                          )}
-                        </>
-                      ) : null}
-                    </td>
-                  </tr>
+                        )}
+                        {r.result === 'pending' && (
+                          <button className="link danger-link" onClick={() => void remove(r.plan.id)} title="Remove from the plan">
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {noWorkFor === r.plan.id && (
+                      <div className="plan-reasons">
+                        <span className="small">Why was it not done?</span>
+                        {REASONS.map((x) => (
+                          <button key={x} className="plan-tag" onClick={() => void noWork(r.plan.id, x)}>
+                            {x}
+                          </button>
+                        ))}
+                        <input value={other} maxLength={300} onChange={(e) => setOther(e.target.value)} placeholder="Other reason" />
+                        <button className="btn btn-small btn-primary" disabled={!other.trim()} onClick={() => void noWork(r.plan.id, other)}>
+                          Save
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            );
+          })
         )}
+        <p className="rep-note">
+          Done / Started fill in by themselves from Work Done. The full plan vs actual for any dates is in{' '}
+          <button className="link" onClick={() => go('reports')}>
+            Reports
+          </button>
+          .
+        </p>
       </section>
     </div>
   );

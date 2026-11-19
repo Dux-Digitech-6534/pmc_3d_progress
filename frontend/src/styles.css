@@ -3926,3 +3926,177 @@ input[type='radio'] {
   max-height: 420px;
   overflow: auto;
 }
+/* picker: Details button beside each element (selecting never opens details) */
+.picker-details {
+  flex: none;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--teal);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 3px 8px;
+  margin-right: 6px;
+  cursor: pointer;
+}
+.picker-details:hover {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+}
+/* Planning, simple version: 1 day · 2 elements · 3 work */
+.plan-h {
+  font-size: 17px;
+  margin: 0 0 12px;
+}
+.plan-step {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.plan-num {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--teal);
+  color: #fff;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+}
+.plan-grow {
+  flex: 1;
+  min-width: 0;
+}
+.plan-step-title {
+  font-weight: 700;
+  color: var(--navy);
+  margin: 3px 0 8px;
+}
+.plan-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.plan-seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--navy);
+  cursor: pointer;
+}
+.plan-seg button.on {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+.plan-seg .swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.plan-types {
+  margin-bottom: 8px;
+}
+.plan-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+.plan-tag {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--navy);
+  cursor: pointer;
+  line-height: 1.2;
+}
+.plan-tag small {
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 11px;
+}
+.plan-tag.on {
+  background: var(--teal-soft);
+  border-color: var(--teal);
+  box-shadow: inset 0 0 0 1px var(--teal);
+}
+.plan-tag-all {
+  color: var(--teal);
+  justify-content: center;
+}
+.plan-go {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.plan-day {
+  margin-bottom: 14px;
+}
+.plan-day-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 2px solid var(--border);
+  color: var(--navy);
+}
+.plan-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.plan-item-main {
+  flex: 1;
+  min-width: 160px;
+}
+.plan-item-main span {
+  color: var(--muted);
+  font-weight: 600;
+}
+.plan-item-missed {
+  background: #fff7f7;
+}
+.plan-item-act {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.plan-reasons {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 0 2px;
+}
+.plan-reasons input {
+  width: 180px;
+}

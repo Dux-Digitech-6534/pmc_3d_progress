@@ -99,7 +99,7 @@ export function ElementPicker({
                 return (
                   <li key={el.id} className={on ? 'on' : ''} data-element-id={el.id}>
                     <input type="checkbox" checked={on} onChange={() => set([el.id], !on)} aria-label={`Select ${el.code}`} />
-                    <button className="picker-el" onClick={() => onOpen(el.id)} title="Show details">
+                    <button className="picker-el" onClick={() => set([el.id], !on)} title={on ? 'Unselect' : 'Select'}>
                       <span className="el-code">{el.code}</span>
                       <span className="muted small">{type === 'all' ? TYPE_LABELS[el.type] : el.levelName}</span>
                       {st && (
@@ -108,6 +108,9 @@ export function ElementPicker({
                           {st.label}
                         </span>
                       )}
+                    </button>
+                    <button className="picker-details" onClick={() => onOpen(el.id)} title={`Details of ${el.code}`}>
+                      Details
                     </button>
                   </li>
                 );
