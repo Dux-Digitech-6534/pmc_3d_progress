@@ -90,16 +90,39 @@ export function WorkDoneForm({
   );
   useEffect(() => setOrderOk(false), [ticked, ids]);
 
+  // "Started" only for elements not started yet: a Started date already kept, or any work already
+  // entered (draft, sent or approved) means the work has begun — starting it again is not allowed
+  const alreadyStarted = (elementId: string, code: string) =>
+    !!planning?.starts.some((s) => s.elementId === elementId && s.activityCode === code) ||
+    entries.some((e) => e.elementId === elementId && e.activityCode === code && e.status !== 'Returned' && e.quantity > 0);
+  const toStart = useMemo(
+    () =>
+      activities
+        .filter((a) => ticked.has(a.code))
+        .map((a) => {
+          const applies = elements.filter((el) => activityApplies(a, el.type));
+          const fresh = applies.filter((el) => !alreadyStarted(el.id, a.code));
+          return { activity: a, fresh, skipped: applies.length - fresh.length };
+        }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activities, ticked, elements, planning, entries],
+  );
+
   const liveErrors = useMemo(() => {
     const errs = [...validateDate(date)];
     if (outOfOrder.length && !orderOk) errs.push('Earlier work is not reported yet — confirm it is done on site, or report it first.');
     if (!ticked.size) errs.push('Select at least one activity.');
-    if (kind === 'started') return errs.filter((e) => !e.startsWith('Earlier work'));
+    if (kind === 'started') {
+      const out = errs.filter((e) => !e.startsWith('Earlier work'));
+      if (ticked.size && !toStart.some((t) => t.fresh.length))
+        out.push('Already started — the selected work has begun on all these elements. When it is finished, choose Completed 100%.');
+      return out;
+    }
     if (!pctOk) errs.push('Work done must be between 1 and 100 %.');
     else if (ticked.size && !plans.some((p) => p.recording.length)) errs.push(`Nothing new to record — the selected work is already marked ${pct}% or more.`);
     if (remarks.length > 500) errs.push('Remarks must be 500 characters or fewer.');
     return errs;
-  }, [date, ticked, pctOk, pct, plans, remarks, outOfOrder, orderOk, kind]);
+  }, [date, ticked, pctOk, pct, plans, remarks, outOfOrder, orderOk, kind, toStart]);
 
   function toggle(code: string) {
     setTicked((t) => {
@@ -123,12 +146,14 @@ export function WorkDoneForm({
     const projectId = elements[0].projectId;
     const done: string[] = [];
     const failed: string[] = [];
+    let count = 0;
     try {
-      for (const a of activities.filter((x) => ticked.has(x.code))) {
-        const ids = elements.filter((el) => activityApplies(a, el.type)).map((el) => el.id);
+      for (const { activity: a, fresh } of toStart) {
+        if (!fresh.length) continue;
         try {
-          setPlanning(projectId, await repo.markStarted(projectId, ids, a.code, date, role));
+          setPlanning(projectId, await repo.markStarted(projectId, fresh.map((el) => el.id), a.code, date, role));
           done.push(a.name);
+          count = Math.max(count, fresh.length);
         } catch (e) {
           failed.push(`${a.name}: ${errorMessages(e).join(' ')}`);
         }
@@ -138,7 +163,7 @@ export function WorkDoneForm({
       setBusy(false);
     }
     if (done.length) {
-      notify(`${done.join(', ')} marked started on ${new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} for ${elements.length} element${elements.length === 1 ? '' : 's'}.`);
+      notify(`${done.join(', ')} marked started on ${new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} for ${count} element${count === 1 ? '' : 's'}.`);
       setTicked(new Set());
     }
     if (failed.length) setErrors(failed);
@@ -317,6 +342,11 @@ export function WorkDoneForm({
 
           {kind === 'started' ? (
             <>
+              {toStart.some((t) => t.skipped) && toStart.some((t) => t.fresh.length) && (
+                <p className="hint">
+                  Already started, skipped: {toStart.filter((t) => t.skipped).map((t) => `${t.activity.name} on ${t.skipped} element${t.skipped === 1 ? '' : 's'}`).join(', ')}.
+                </p>
+              )}
               <div className="form-actions">
                 <button type="submit" className="btn btn-primary" disabled={busy}>
                   {busy ? 'Saving…' : 'OK — mark started'}
