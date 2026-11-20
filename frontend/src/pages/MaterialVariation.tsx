@@ -55,16 +55,6 @@ function KindSelect({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
-/** The ERP project picked earlier in this browser (before the link moved to the server). */
-const erpKey = (projectId: string) => `pmc3d.erpProject.${projectId}`;
-const remembered = (projectId: string) => {
-  try {
-    return localStorage.getItem(erpKey(projectId)) ?? '';
-  } catch {
-    return '';
-  }
-};
-
 /**
  * Material variation: what the ERP sent to the site against what the approved work done should
  * have used ("300 kg should have gone in — 500 kg was asked for"). A few % over is normal on site.
@@ -93,9 +83,8 @@ export function MaterialVariation() {
       const s = await repo.getVariationSettings(projectId);
       if (!alive) return;
       setItemMap(s.itemMap);
-      // a choice made earlier in this browser only moves to the server once
-      const old = remembered(projectId);
-      if (!s.erpProject && old) await repo.saveVariationSettings(projectId, { erpProject: old });
+      // the link is made only on the server (a project of the Material Request company); an old choice kept
+      // in a browser is never copied back — it once linked projects of another company
       const p = await repo.ensureErpProject(projectId);
       if (!alive) return;
       setErpProject(p.erpProject);

@@ -214,7 +214,8 @@ export class FrappeRepository implements PmcRepository {
   }
 
   ensureErpProject(projectId: string) {
-    return call<{ erpProject: string; erpProjectName: string }>(`${M}ensure_erp_project`, { project_id: projectId });
+    // beta: the linked ERPNext project must belong to the Material Request company, else it is re-linked
+    return call<{ erpProject: string; erpProjectName: string }>('beta_api.ensure_erp_project', { project_id: projectId });
   }
 
   // planning lives in pmc_3d_progress/beta_api.py (reports-mobile branch)

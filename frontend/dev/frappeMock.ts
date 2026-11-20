@@ -153,6 +153,7 @@ export function frappeMock(): Plugin {
               case 'api.delete_draft_entry':
                 return r.deleteDraftEntry(args.entry_id, args.role);
               case 'api.ensure_erp_project':
+              case 'beta_api.ensure_erp_project':
                 return r.ensureErpProject(args.project_id);
               case 'beta_api.get_planning':
                 return r.getPlanning(args.project_id);

@@ -12,7 +12,7 @@ import uuid
 import frappe
 from frappe.utils import getdate, now_datetime, nowdate
 
-from pmc_3d_progress.api import _act_as, _active_context, _find_activity, _find_element, _parse, _require_reader, _throw
+from pmc_3d_progress.api import _ERP_COMPANY, _act_as, _active_context, _erp_key, _find_activity, _find_element, _parse, _require_reader, _throw
 
 _PLANNERS = ("site-engineer", "pmc-reviewer")
 # a "No work" plan: nothing will be done on these elements in these dates
@@ -215,3 +215,50 @@ def clear_started(project_id, element_ids, activity_code, role):
 	data = _load(project_id)
 	data["starts"] = [s for s in data["starts"] if not (s["activityCode"] == activity_code and s["elementId"] in ids)]
 	return _save(project_id, data)
+
+
+# ---------------------------------------------------------------- ERPNext project of a PMC project
+
+
+def _mr_company():
+	"""The company Material Requests are made in (the same one the page uses)."""
+	if frappe.db.exists("Company", _ERP_COMPANY):
+		return _ERP_COMPANY
+	return frappe.defaults.get_global_default("company") or frappe.db.get_value("Company", {}, "name")
+
+
+@frappe.whitelist(methods=["POST"])
+def ensure_erp_project(project_id):
+	"""The ERPNext Project of a PMC project, always one of the Material Request company.
+
+	Same as api.ensure_erp_project (linked before, else same name, else new), plus: a linked project of
+	another company (e.g. an old choice "PRJ3" of a school) is replaced by a project of the right company,
+	so a Material Request never fails with "Project ... does not belong to the Company".
+	"""
+	_require_reader()
+	pmc = frappe.db.get_value("PMC Project", project_id, ["name", "project_name"], as_dict=True)
+	if not pmc:
+		_throw(f"Project {project_id} was not found.", frappe.DoesNotExistError)
+	company = _mr_company()
+	linked = frappe.defaults.get_global_default(_erp_key(project_id))
+	if linked and frappe.db.get_value("Project", linked, "company") == company:
+		name = linked
+	else:
+		title = (pmc.project_name or pmc.name).strip()[:140]
+		name = frappe.db.get_value("Project", {"project_name": title, "company": company}, "name")
+		if not name:
+			taken = frappe.db.exists("Project", {"project_name": title})
+			doc = frappe.get_doc(
+				{
+					"doctype": "Project",
+					# a project of another company may already use the name: keep both apart
+					"project_name": f"{title} ({company})"[:140] if taken else title,
+					"company": company,
+					"status": "Open",
+				}
+			)
+			doc.flags.ignore_permissions = True
+			doc.insert()
+			name = doc.name
+		frappe.defaults.set_global_default(_erp_key(project_id), name)
+	return {"erpProject": name, "erpProjectName": frappe.db.get_value("Project", name, "project_name") or name}
