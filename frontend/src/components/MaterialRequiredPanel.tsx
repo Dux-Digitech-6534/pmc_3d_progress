@@ -3,7 +3,7 @@ import { normsOf } from '../domain/materials';
 import { materialRequired } from '../domain/materialRequired';
 import { computeActivityProgress, formatQty } from '../domain/progress';
 import type { ElementRecord, ProgressEntry } from '../domain/types';
-import { downloadText, toCsv } from '../lib/download';
+import { downloadXlsx, type SheetSpec } from '../lib/xlsxWriter';
 import { requestNeeds } from '../domain/materialRequest';
 import { todayISO } from '../domain/workflow';
 import { useApp } from '../state/AppContext';
@@ -60,28 +60,62 @@ export function MaterialRequiredPanel({
   const other = requestNeeds(req).filter((n) => n.kind !== 'steel');
   const hasAny = !nothing || other.length > 0;
 
-  // "Download requirement" as an Excel-readable sheet (meeting 16-11)
+  // "Download requirement" (meeting 16-11): a formatted Excel sheet that reads like a material requisition
   function download() {
-    const rows: (string | number)[][] = [
-      ['Material required', data?.project.name ?? ''],
-      ['Date', todayISO()],
-      ['Elements', selected.length, selected.map((e) => e.code).join(', ')],
-      ...(norms.wastagePct ? [['Wastage included', `${norms.wastagePct}%`]] : []),
-      [],
-      ['Steel (reinforcement)', 'kg', 'MT'],
-      ...req.steel.map((s) => [s.dia ? `${s.dia} mm` : 'Size not set', s.kg, Math.round(s.kg) / 1000]),
-      ['Total steel', req.steelTotal, Math.round(req.steelTotal) / 1000],
-      [],
-      ['Concrete grade', 'Elements', 'm³'],
-      ...req.concrete.map((g) => [g.grade, g.elements, g.m3]),
-      [],
-      ['Material', 'Quantity', 'Unit'],
-      ...other.map((n) => [n.label, n.qty, n.unit]),
-      [],
-      ['Element', 'Type', 'Floor'],
-      ...selected.map((e) => [e.code, e.type, `${e.buildingName} – ${e.levelName}`]),
+    const day = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    const types = Object.entries(
+      selected.reduce<Record<string, number>>((m, el) => ((m[el.type] = (m[el.type] ?? 0) + 1), m), {}),
+    )
+      .map(([t, n]) => `${n} ${t}${n === 1 ? '' : 's'}`)
+      .join(', ');
+    const floors = [...new Set(selected.map((el) => `${el.buildingName} – ${el.levelName}`))].join(', ');
+    const up = (n: number, d = 0) => Math.ceil(n * 10 ** d - 1e-9) / 10 ** d;
+    const lines: { material: string; spec: string; qty: number; unit: string; int?: boolean; note?: string }[] = [
+      ...req.steel.map((st) => ({ material: 'Steel (TMT bar)', spec: st.dia ? `${st.dia} mm` : 'Size not set', qty: up(st.kg), unit: 'kg', int: true })),
+      ...req.concrete.map((g) => ({ material: 'Concrete', spec: `${g.grade} · ${g.elements} element${g.elements === 1 ? '' : 's'}`, qty: up(g.m3, 2), unit: 'm³' })),
+      ...other.map((n) => ({
+        material: n.label,
+        spec: n.kind === 'cement' ? `OPC, ${norms.bagKg || 50} kg bag` : n.kind === 'aggregate' ? '20 mm' : '',
+        qty: n.unit === 'bags' || n.unit === 'nos' ? up(n.qty) : up(n.qty, 2),
+        unit: n.unit,
+        int: n.unit === 'bags' || n.unit === 'nos',
+        note: n.kind === 'cement' || n.kind === 'sand' || n.kind === 'aggregate' ? (req.concrete.length ? 'for site-mixed concrete / mortar' : 'for mortar') : '',
+      })),
     ];
-    downloadText(`material-required-${data?.project.id ?? 'project'}-${todayISO()}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
+    const rows: SheetSpec['rows'] = [
+      [{ v: 'MATERIAL REQUIREMENT', s: 'title' }],
+      [{ v: 'Project', s: 'label' }, data?.project.name ?? '', null, null, { v: 'Date', s: 'label' }, day],
+      [{ v: 'Location', s: 'label' }, floors],
+      [{ v: 'Elements', s: 'label' }, `${selected.length} (${types})`],
+      [{ v: `Quantities from the 3D model and BOQ of the selected elements${norms.wastagePct ? `, ${norms.wastagePct}% wastage included` : ''}; rounded up for ordering.`, s: 'note' }],
+      [],
+      ['Sr', 'Material', 'Specification', 'Quantity', 'Unit', 'Remarks'].map((v) => ({ v, s: 'head' as const })),
+      ...lines.map((l, i) => [
+        { v: i + 1, s: 'int' as const },
+        { v: l.material, s: 'cell' as const },
+        { v: l.spec, s: 'cell' as const },
+        { v: l.qty, s: (l.int ? 'int' : 'num') as 'int' | 'num' },
+        { v: l.unit, s: 'cell' as const },
+        { v: l.note ?? '', s: 'cell' as const },
+      ]),
+      ...(req.steel.length
+        ? [[{ v: '', s: 'totalLabel' as const }, { v: 'Total steel', s: 'totalLabel' as const }, { v: '', s: 'totalLabel' as const }, { v: up(req.steelTotal), s: 'total' as const }, { v: 'kg', s: 'totalLabel' as const }, { v: `= ${(up(req.steelTotal) / 1000).toFixed(3)} MT`, s: 'totalLabel' as const }]]
+        : []),
+      [],
+      [{ v: 'Elements covered', s: 'label' }],
+      ['Sr', 'Element', 'Type', 'Building – Floor'].map((v) => ({ v, s: 'head' as const })),
+      ...selected.map((el, i) => [{ v: i + 1, s: 'int' as const }, { v: el.code, s: 'cell' as const }, { v: el.type, s: 'cell' as const }, { v: `${el.buildingName} – ${el.levelName}`, s: 'cell' as const }]),
+      [],
+      [],
+      [],
+      [null, { v: 'Prepared by (Site Engineer)', s: 'sign' }, null, { v: 'Checked by (PMC)', s: 'sign' }, null, { v: 'Approved by', s: 'sign' }],
+    ];
+    downloadXlsx(`material-requirement-${data?.project.id ?? 'project'}-${todayISO()}.xlsx`, {
+      name: 'Material Requirement',
+      cols: [6, 30, 26, 14, 9, 30],
+      rows,
+      merges: ['A1:F1', 'B2:D2', 'B3:F3', 'B4:F4', 'A5:F5'],
+    });
   }
 
   return (
