@@ -1,4 +1,3 @@
-import { writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { readXlsx } from '../src/data/xlsxReader';
 import { buildXlsx } from '../src/lib/xlsxWriter';
@@ -17,7 +16,6 @@ describe('xlsx writer', () => {
       ],
       merges: ['A1:C1'],
     });
-    if (process.env.XLSX_SAMPLE) writeFileSync(process.env.XLSX_SAMPLE, bytes);
     const wb = await readXlsx(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
     const rows = wb['Material Requirement'];
     expect(rows[0][0]).toBe('MATERIAL REQUIREMENT');
