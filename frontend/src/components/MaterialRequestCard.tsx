@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { IS_FRAPPE } from '../config';
-import { errorMessages, type ErpItem } from '../data/repository';
+import { errorMessages, type ErpItem, type MaterialRequestSummary } from '../data/repository';
 import { inItemUnit, requestNeeds, suggestItem } from '../domain/materialRequest';
 import { toReportUnit } from '../domain/materialVariation';
 import { formatQty } from '../domain/progress';
@@ -30,6 +30,14 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [saved, setSaved] = useState<{ name: string; state: string; submitted: boolean } | null>(null);
+  // requests already made for this project (so nobody asks twice without seeing it)
+  const [earlier, setEarlier] = useState<MaterialRequestSummary[] | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const loadEarlier = (p: string) =>
+    repo.listMaterialRequests(p).then(
+      (l) => setEarlier(l),
+      () => setEarlier([]),
+    );
 
   useEffect(() => {
     Promise.all([repo.listErpItems(), repo.listErpCompanies()]).then(
@@ -47,7 +55,11 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
     if (!projectId) return;
     let alive = true;
     repo.ensureErpProject(projectId).then(
-      (s) => alive && setErpProject(s.erpProject),
+      (s) => {
+        if (!alive) return;
+        setErpProject(s.erpProject);
+        void loadEarlier(s.erpProject);
+      },
       () => alive && setErpProject(''),
     );
     return () => {
@@ -104,10 +116,12 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
           lines: ready.map((l) => ({ itemCode: l.item!.code, qty: l.qty, uom: l.item!.uom })),
         });
         setSaved({ ...out, submitted: false });
+        if (erpProject) void loadEarlier(erpProject);
         notify(`Material Request ${out.name} saved as draft — ${ready.length} item${ready.length === 1 ? '' : 's'}.`);
       } else if (saved) {
         const out = await repo.submitMaterialRequest(saved.name);
         setSaved({ ...out, submitted: true });
+        if (erpProject) void loadEarlier(erpProject);
         notify(`Material Request ${out.name} submitted (${out.state}).`);
       }
     } catch (e) {
@@ -210,6 +224,34 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
             Quantities are filled in from what the selected elements need — change any of them if needed. A line left blank or 0 is not requested.
           </p>
         </>
+      )}
+      {earlier && earlier.length > 0 && (
+        <div className="mr-earlier">
+          <h4>
+            Already requested for this project <span className="muted">({earlier.length})</span>
+          </h4>
+          {(showAll ? earlier : earlier.slice(0, 5)).map((m) => (
+            <div key={m.name} className="mr-earlier-row">
+              <div>
+                {IS_FRAPPE ? (
+                  <a href={`/app/material-request/${encodeURIComponent(m.name)}`} target="_blank" rel="noreferrer">
+                    <b>{m.name}</b>
+                  </a>
+                ) : (
+                  <b>{m.name}</b>
+                )}
+                <span className="muted small"> · {new Date(`${m.date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+                <div className="muted small">{m.items.map((i) => `${i.name} ${formatQty(i.qty)} ${i.uom}`).join(' · ')}</div>
+              </div>
+              <span className={`mr-state ${/reject|cancel/i.test(m.state) ? 'bad' : /approved|ordered|received|transferred|issued|completed/i.test(m.state) ? 'good' : ''}`}>{m.state}</span>
+            </div>
+          ))}
+          {earlier.length > 5 && (
+            <button className="link" onClick={() => setShowAll(!showAll)}>
+              {showAll ? 'Show fewer' : `Show all ${earlier.length}`}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

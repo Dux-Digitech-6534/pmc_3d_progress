@@ -61,6 +61,8 @@ export interface PmcRepository {
   createMaterialRequest(input: MaterialRequestInput): Promise<{ name: string; state: string }>;
   /** Send a saved (draft) Material Request on: its ERPNext workflow's first step, or a plain submit without a workflow. */
   submitMaterialRequest(name: string): Promise<{ name: string; state: string }>;
+  /** Material Requests already made for an ERPNext project, newest first (with their items). */
+  listMaterialRequests(erpProject: string): Promise<MaterialRequestSummary[]>;
   /** Material variation settings kept for everyone: the ERPNext project of a PMC project, and items set by hand. */
   getVariationSettings(projectId: string): Promise<VariationSettings>;
   saveVariationSettings(projectId: string, change: { erpProject?: string; itemMap?: ItemMap }): Promise<VariationSettings>;
@@ -101,6 +103,15 @@ export interface ErpItem {
   code: string;
   name: string;
   uom: string;
+}
+
+export interface MaterialRequestSummary {
+  name: string;
+  /** YYYY-MM-DD. */
+  date: string;
+  /** Workflow state, else the document status. */
+  state: string;
+  items: { name: string; qty: number; uom: string }[];
 }
 
 export interface MaterialRequestInput {

@@ -71,6 +71,18 @@ export function frappeMock(): Plugin {
           const r = await getRepo();
           if (q.doctype === 'Project') return send(res, 200, { message: (await r.listErpProjects()).map((p) => ({ name: p.id, project_name: p.name })) });
           if (q.doctype === 'Item') return send(res, 200, { message: (await r.listErpItems()).map((i) => ({ name: i.code, item_name: i.name, stock_uom: i.uom })) });
+          if (q.doctype === 'Material Request Item' || q.doctype === 'Material Request') {
+            const flt = JSON.parse(q.filters || '[]') as unknown[][];
+            if (q.doctype === 'Material Request Item') {
+              const proj = String(flt.find((f) => f[1] === 'project')?.[3] ?? '');
+              const mrs = await r.listMaterialRequests(proj);
+              return send(res, 200, { message: mrs.flatMap((m: { name: string; items: { name: string; qty: number; uom: string }[] }) => m.items.map((i) => ({ parent: m.name, item_name: i.name, item_code: i.name, qty: i.qty, uom: i.uom }))) });
+            }
+            const names = (flt.find((f) => f[1] === 'name')?.[3] ?? []) as string[];
+            const all = JSON.parse('[]');
+            for (const p of ['ERP-DEMO']) all.push(...(await r.listMaterialRequests(p)));
+            return send(res, 200, { message: all.filter((m: { name: string }) => names.includes(m.name)).map((m: { name: string; date: string; state: string }) => ({ name: m.name, transaction_date: m.date, workflow_state: m.state, docstatus: 0 })) });
+          }
           if (q.doctype === 'Company') return send(res, 200, { message: (await r.listErpCompanies()).map((name) => ({ name })) });
           if (q.doctype === 'Warehouse') {
             const company = (JSON.parse(q.filters || '[]') as unknown[][]).find((f) => f[1] === 'company')?.[3] as string;

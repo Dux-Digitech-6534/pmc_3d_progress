@@ -10,6 +10,7 @@ import {
   type ErpItem,
   type ErpProject,
   type MaterialRequestInput,
+  type MaterialRequestSummary,
   type ItemMap,
   type VariationSettings,
   type ImportModelOutcome,
@@ -207,6 +208,40 @@ export class FrappeRepository implements PmcRepository {
       ? await callMethod<MrDoc>('frappe.model.workflow.apply_workflow', { doc, action: forward.action })
       : await callMethod<MrDoc>('frappe.client.submit', { doc });
     return { name: out.name, state: out.workflow_state || out.status || 'Submitted' };
+  }
+
+  async listMaterialRequests(erpProject: string): Promise<MaterialRequestSummary[]> {
+    // the project is on the item lines: find the lines, then their requests
+    const lines = await callMethod<{ parent: string; item_name: string; item_code: string; qty: number; uom: string }[]>(
+      'frappe.client.get_list',
+      {
+        doctype: 'Material Request Item',
+        parent: 'Material Request',
+        fields: ['parent', 'item_name', 'item_code', 'qty', 'uom'],
+        filters: [['Material Request Item', 'project', '=', erpProject]],
+        limit_page_length: 1000,
+      },
+      'GET',
+    );
+    const names = [...new Set(lines.map((l) => l.parent))];
+    if (!names.length) return [];
+    const docs = await callMethod<{ name: string; transaction_date: string; workflow_state?: string; status?: string; docstatus: number }[]>(
+      'frappe.client.get_list',
+      {
+        doctype: 'Material Request',
+        fields: ['name', 'transaction_date', 'workflow_state', 'status', 'docstatus'],
+        filters: [['Material Request', 'name', 'in', names]],
+        order_by: 'creation desc',
+        limit_page_length: 50,
+      },
+      'GET',
+    );
+    return docs.map((d) => ({
+      name: d.name,
+      date: d.transaction_date,
+      state: d.docstatus === 2 ? 'Cancelled' : d.workflow_state || d.status || (d.docstatus ? 'Submitted' : 'Draft'),
+      items: lines.filter((l) => l.parent === d.name).map((l) => ({ name: l.item_name || l.item_code, qty: Number(l.qty) || 0, uom: l.uom })),
+    }));
   }
 
   getVariationSettings(projectId: string) {

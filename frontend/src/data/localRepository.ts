@@ -763,6 +763,16 @@ export class LocalRepository implements PmcRepository {
     });
   }
 
+  listMaterialRequests(erpProject: string) {
+    return this.op(() => {
+      const list = JSON.parse(this.storage.getItem(`${STORAGE_PREFIX}demoMaterialRequests`) ?? '[]') as (MaterialRequestInput & { name: string; createdAt: string; state?: string })[];
+      return list
+        .filter((m) => m.project === erpProject)
+        .reverse()
+        .map((m) => ({ name: m.name, date: m.createdAt.slice(0, 10), state: m.state ?? 'Draft', items: m.lines.map((l) => ({ name: l.itemCode, qty: l.qty, uom: l.uom })) }));
+    });
+  }
+
   submitMaterialRequest(name: string): Promise<{ name: string; state: string }> {
     return this.op(() => {
       const key = `${STORAGE_PREFIX}demoMaterialRequests`;
