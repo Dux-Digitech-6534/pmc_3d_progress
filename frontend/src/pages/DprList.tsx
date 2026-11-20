@@ -6,6 +6,7 @@ import { ENTRY_STATUSES, UNIT_LABELS, type EntryStatus, type ProgressEntry } fro
 import { permissions, todayISO } from '../domain/workflow';
 import { downloadText, toCsv } from '../lib/download';
 import { useApp } from '../state/AppContext';
+import { usePlanning } from '../state/planning';
 
 export function DprList() {
   const { data, repo, projects, role, go, setSelection } = useApp();
@@ -17,6 +18,19 @@ export function DprList() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [viewing, setViewing] = useState<ProgressEntry | null>(null);
+  const { data: planning } = usePlanning();
+  // Work Done "Started": no quantity, so not an entry — listed apart, with the same date filter
+  const startRows = useMemo(() => {
+    if (!planning || !data) return [];
+    const els = new Map(data.elements.map((e) => [e.id, e]));
+    const acts = new Map((data.model?.document?.activities ?? []).map((a) => [a.code, a.name]));
+    const q = search.trim().toLowerCase();
+    return planning.starts
+      .filter((s) => (!from || s.date >= from) && (!to || s.date <= to))
+      .map((s) => ({ ...s, code: els.get(s.elementId)?.code ?? s.elementId, floor: els.get(s.elementId) ? `${els.get(s.elementId)!.buildingName} – ${els.get(s.elementId)!.levelName}` : '', activity: acts.get(s.activityCode) ?? s.activityCode }))
+      .filter((s) => !q || `${s.code} ${s.activity}`.toLowerCase().includes(q))
+      .sort((a, b) => b.date.localeCompare(a.date) || a.code.localeCompare(b.code));
+  }, [planning, data, from, to, search]);
 
   useEffect(() => {
     if (scope !== 'all') return;
@@ -204,6 +218,34 @@ export function DprList() {
                       </button>
                     )}
                   </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {scope === 'current' && startRows.length > 0 && (
+        <div className="card table-card dpr-starts">
+          <h3>
+            Work started <span className="muted small">— start dates from Work Done "Started" (no quantity, no approval)</span>
+          </h3>
+          <table className="table dpr-table">
+            <thead>
+              <tr>
+                <th>Start date</th>
+                <th>Element</th>
+                <th>Activity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {startRows.map((s) => (
+                <tr key={`${s.elementId}|${s.activityCode}`}>
+                  <td className="nowrap">{fmtDate(s.date)}</td>
+                  <td>
+                    <b>{s.code}</b>
+                    <div className="muted small">{s.floor}</div>
+                  </td>
+                  <td>{s.activity}</td>
                 </tr>
               ))}
             </tbody>

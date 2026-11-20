@@ -4239,3 +4239,43 @@ input[type='radio'] {
   background: #fde2e2;
   color: #b91c1c;
 }
+/* dashboard: planning at a glance */
+.dash-plan-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.dash-plan-row span {
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--navy);
+}
+.dash-plan-row b {
+  font-size: 18px;
+  margin-right: 4px;
+}
+.dash-plan-row .bad {
+  background: #fde2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+.dash-plan-row .warn {
+  background: #ffedd5;
+  border-color: #fdba74;
+  color: #c2410c;
+}
+.dash-plan-row .good {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.dpr-starts {
+  margin-top: 16px;
+}
+.dpr-starts h3 {
+  margin: 12px 14px 8px;
+  font-size: 15px;
+  color: var(--navy);
+}

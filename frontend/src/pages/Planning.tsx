@@ -4,6 +4,7 @@ import { errorMessages } from '../data/repository';
 import { countResults, isCompleted, isSubmitted, NO_WORK_CODE, planEnd, planVsActual, PLAN_RESULT_LABELS, type PlanRow } from '../domain/planning';
 import { ELEMENT_TYPE_LABELS } from '../domain/reports';
 import { inWorkOrder } from '../domain/sequence';
+import { computeActivityProgress, QTY_EPSILON } from '../domain/progress';
 import { activityApplies, type ElementType } from '../domain/types';
 import { todayISO } from '../domain/workflow';
 import { TYPE_COLORS } from '../lib/colors';
@@ -32,7 +33,8 @@ export function Planning() {
   const { data: planning, error } = usePlanning();
   const today = todayISO();
   const tomorrow = addDays(today, 1);
-  const canPlan = role === 'site-engineer' || role === 'pmc-reviewer';
+  // the site engineer plans (meeting 16-11); the PMC Reviewer and the Owner see the plan
+  const canPlan = role === 'site-engineer';
 
   const [pFrom, setPFrom] = useState(tomorrow);
   const [pTo, setPTo] = useState(tomorrow);
@@ -99,25 +101,37 @@ export function Planning() {
   const jobs = picked.size * works.size;
   const datesBad = !pFrom || !pTo || pTo < pFrom;
 
+  // work already finished (approved or sent for approval, 100 %) is not planned again
+  const finished = (elementId: string, code: string) => {
+    const el = elements.find((e) => e.id === elementId);
+    const a = activities.find((x) => x.code === code);
+    if (!el || !a) return false;
+    const p = computeActivityProgress(el, a, data!.entries);
+    return p.planned !== null && p.approved + p.pendingReview + QTY_EPSILON >= p.planned;
+  };
+
   async function add() {
     setErrors([]);
     setBusy(true);
     let added = 0;
+    const skipped: string[] = [];
     try {
       for (const code of [...works]) {
+        const ids = code === NO_WORK_CODE ? [...picked] : [...picked].filter((id) => !finished(id, code));
+        for (const id of picked) if (!ids.includes(id)) skipped.push(`${elements.find((e) => e.id === id)?.code} ${activities.find((a) => a.code === code)?.name}`);
+        if (!ids.length) continue;
         const out = await repo.addPlans(
           data!.project.id,
-          { date: pFrom, to: pTo, activityCode: code, elementIds: [...picked], note: code === NO_WORK_CODE ? noWorkWhy.trim() : undefined },
+          { date: pFrom, to: pTo, activityCode: code, elementIds: ids, note: code === NO_WORK_CODE ? noWorkWhy.trim() : undefined },
           role,
         );
         setPlanning(data!.project.id, out);
         added += out.added;
       }
-      notify(
-        added
-          ? `${added} job${added === 1 ? '' : 's'} saved as draft for ${rangeText(pFrom, pTo)} — check them and press Submit plan.`
-          : `Nothing new — these jobs are already planned for ${rangeText(pFrom, pTo)}.`,
-      );
+      if (skipped.length)
+        setErrors([`Already done, not planned again: ${skipped.slice(0, 8).join(', ')}${skipped.length > 8 ? ` +${skipped.length - 8} more` : ''}.`]);
+      if (added) notify(`${added} job${added === 1 ? '' : 's'} saved as draft for ${rangeText(pFrom, pTo)} — check them and press Submit plan.`);
+      else if (!skipped.length) notify(`Nothing new — these jobs are already planned for ${rangeText(pFrom, pTo)}.`);
       setWorks(new Set());
       setNoWorkWhy('');
       setView('draft');

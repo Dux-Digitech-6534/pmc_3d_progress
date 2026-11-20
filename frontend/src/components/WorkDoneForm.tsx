@@ -108,6 +108,38 @@ export function WorkDoneForm({
     [activities, ticked, elements, planning, entries],
   );
 
+  const undoable = useMemo(
+    () =>
+      activities
+        .filter((a) => ticked.has(a.code))
+        .map((a) => ({
+          activity: a,
+          ids: elements
+            .filter((el) => planning?.starts.some((s) => s.elementId === el.id && s.activityCode === a.code))
+            .filter((el) => !entries.some((e) => e.elementId === el.id && e.activityCode === a.code && e.status !== 'Returned' && e.quantity > 0))
+            .map((el) => el.id),
+        }))
+        .filter((x) => x.ids.length),
+    [activities, ticked, elements, planning, entries],
+  );
+
+  async function undoStarted() {
+    if (inFlight.current || !undoable.length) return;
+    inFlight.current = true;
+    setBusy(true);
+    setErrors([]);
+    const projectId = elements[0].projectId;
+    try {
+      for (const u of undoable) setPlanning(projectId, await repo.clearStarted(projectId, u.ids, u.activity.code, role));
+      notify(`Start date removed: ${undoable.map((u) => `${u.activity.name} on ${u.ids.length} element${u.ids.length === 1 ? '' : 's'}`).join(', ')}.`);
+    } catch (e) {
+      setErrors(errorMessages(e));
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  }
+
   const liveErrors = useMemo(() => {
     const errs = [...validateDate(date)];
     if (outOfOrder.length && !orderOk) errs.push('Earlier work is not reported yet — confirm it is done on site, or report it first.');
@@ -353,6 +385,14 @@ export function WorkDoneForm({
                 </button>
               </div>
               <p className="hint">Only the start date is kept (no quantity, no approval). When the work is finished, choose Completed 100%.</p>
+              {undoable.length > 0 && (
+                <p className="hint">
+                  Marked Started by mistake?{' '}
+                  <button type="button" className="link" disabled={busy} onClick={() => void undoStarted()}>
+                    Remove the start date ({undoable.map((u) => `${u.activity.name}: ${u.ids.length}`).join(', ')})
+                  </button>
+                </p>
+              )}
             </>
           ) : (
             <>

@@ -4,6 +4,7 @@ import { materialRequired } from '../domain/materialRequired';
 import { computeActivityProgress, formatQty } from '../domain/progress';
 import type { ElementRecord, ProgressEntry } from '../domain/types';
 import { downloadText, toCsv } from '../lib/download';
+import { requestNeeds } from '../domain/materialRequest';
 import { todayISO } from '../domain/workflow';
 import { useApp } from '../state/AppContext';
 import { MaterialRequestCard } from './MaterialRequestCard';
@@ -55,6 +56,9 @@ export function MaterialRequiredPanel({
 
   // the summary the PMC asked for: steel by bar size and concrete by grade (no "Other" list)
   const nothing = !req.steel.length && !req.concrete.length;
+  // walls, plaster …: no steel or concrete, but bricks, cement, sand (the same lines the Material Request asks for)
+  const other = requestNeeds(req).filter((n) => n.kind !== 'steel');
+  const hasAny = !nothing || other.length > 0;
 
   // "Download requirement" as an Excel-readable sheet (meeting 16-11)
   function download() {
@@ -70,6 +74,9 @@ export function MaterialRequiredPanel({
       [],
       ['Concrete grade', 'Elements', 'm³'],
       ...req.concrete.map((g) => [g.grade, g.elements, g.m3]),
+      [],
+      ['Material', 'Quantity', 'Unit'],
+      ...other.map((n) => [n.label, n.qty, n.unit]),
       [],
       ['Element', 'Type', 'Floor'],
       ...selected.map((e) => [e.code, e.type, `${e.buildingName} – ${e.levelName}`]),
@@ -91,7 +98,7 @@ export function MaterialRequiredPanel({
           </p>
         )}
         {norms.wastagePct ? <p className="hint">Includes {norms.wastagePct}% wastage.</p> : null}
-        {!nothing && (
+        {hasAny && (
           <button className="btn btn-small" onClick={download}>
             Download requirement (Excel)
           </button>
@@ -104,6 +111,27 @@ export function MaterialRequiredPanel({
             <b>Work already done.</b> All the work of {selected.length === 1 ? 'this element' : `these ${selected.length} elements`} is approved (100%), so no
             more material is needed.
           </div>
+        </div>
+      ) : nothing && other.length ? (
+        <div className="panel-section">
+          <h3 className="section-title">Material</h3>
+          <p className="muted small">These elements need no steel or concrete — this is what they need:</p>
+          <table className="table compact mr-table" data-testid="other-material">
+            <thead>
+              <tr>
+                <th>Material</th>
+                <th className="num">Quantity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {other.map((n) => (
+                <tr key={n.key}>
+                  <td>{n.label}</td>
+                  <td className="num">{formatQty(n.qty, n.unit)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : nothing ? (
         <div className="panel-section">

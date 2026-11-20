@@ -7,6 +7,8 @@ import { ELEMENT_TYPES, UNIT_LABELS, type ProgressEntry } from '../domain/types'
 import { todayISO } from '../domain/workflow';
 import { STATUS_COLORS, TYPE_LABELS } from '../lib/colors';
 import { useApp } from '../state/AppContext';
+import { usePlanning } from '../state/planning';
+import { isCompleted, isSubmitted, planEnd, planVsActual } from '../domain/planning';
 
 const ORDER: ActivityStatus[] = ['complete', 'in-progress', 'not-started', 'not-configured'];
 
@@ -28,6 +30,21 @@ const ICONS = {
 export function Dashboard() {
   const { data, loadError, go, role, session, setSelection } = useApp();
   const [viewing, setViewing] = useState<ProgressEntry | null>(null);
+  const { data: planning } = usePlanning();
+  // planning at a glance: what runs today, what is not reported, what is still a draft
+  const plan = useMemo(() => {
+    if (!planning || !data?.model) return null;
+    const t = todayISO();
+    const rows = planVsActual(planning, data.entries, data.elements, data.model.document?.activities ?? [], t);
+    const sub = rows.filter((r) => isSubmitted(r.plan));
+    return {
+      today: sub.filter((r) => r.plan.date <= t && planEnd(r.plan) >= t && !isCompleted(r)).length,
+      missed: sub.filter((r) => r.result === 'missed').length,
+      late: sub.filter((r) => r.result === 'late' && !isCompleted(r)).length,
+      drafts: rows.filter((r) => !isSubmitted(r.plan)).length,
+      done: sub.filter((r) => isCompleted(r)).length,
+    };
+  }, [planning, data]);
 
   const summaries = useMemo(() => {
     const acts = inWorkOrder(data?.model?.document?.activities ?? []);
@@ -122,6 +139,39 @@ export function Dashboard() {
               Not counted as progress
             </Kpi>
           </div>
+
+          {plan && (plan.today || plan.missed || plan.late || plan.drafts || plan.done) ? (
+            <section className="dash-card dash-plan">
+              <div className="dash-card-head">
+                <div>
+                  <h2>Planning</h2>
+                  <p>The submitted plan against the work entered.</p>
+                </div>
+                <button className="dash-view" onClick={() => go('planning')}>
+                  Open Planning
+                </button>
+              </div>
+              <div className="dash-plan-row">
+                <span>
+                  <b>{plan.today}</b> running today
+                </span>
+                <span className={plan.missed ? 'bad' : ''}>
+                  <b>{plan.missed}</b> not reported
+                </span>
+                <span className={plan.late ? 'warn' : ''}>
+                  <b>{plan.late}</b> late
+                </span>
+                <span className="good">
+                  <b>{plan.done}</b> completed
+                </span>
+                {plan.drafts > 0 && (
+                  <span className="muted">
+                    <b>{plan.drafts}</b> in draft, not submitted
+                  </span>
+                )}
+              </div>
+            </section>
+          ) : null}
 
           {returned > 0 && (
             <section className="dash-card dash-returned">

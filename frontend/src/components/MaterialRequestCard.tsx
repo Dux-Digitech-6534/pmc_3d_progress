@@ -100,7 +100,37 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
   const ready = lines.filter((l) => l.item && l.text.trim() !== '' && Number.isFinite(l.qty) && l.qty > 0);
   const badQty = lines.some((l) => l.item && l.text.trim() !== '' && !(Number.isFinite(l.entered) && l.entered >= 0));
 
-  if (!needs.length || role === 'owner') return null;
+  // requests already made for this project: shown even when the selection needs nothing new (or for the Owner)
+  const earlierBlock =
+    earlier && earlier.length > 0 ? (
+          <div className="mr-earlier">
+            <h4>
+              Already requested for this project <span className="muted">({earlier.length})</span>
+            </h4>
+            {(showAll ? earlier : earlier.slice(0, 5)).map((m) => (
+              <div key={m.name} className="mr-earlier-row">
+                <div>
+                  {IS_FRAPPE ? (
+                    <a href={`/app/material-request/${encodeURIComponent(m.name)}`} target="_blank" rel="noreferrer">
+                      <b>{m.name}</b>
+                    </a>
+                  ) : (
+                    <b>{m.name}</b>
+                  )}
+                  <span className="muted small"> · {new Date(`${m.date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+                  <div className="muted small">{m.items.map((i) => `${i.name} ${formatQty(i.qty)} ${i.uom}`).join(' · ')}</div>
+                </div>
+                <span className={`mr-state ${/reject|cancel/i.test(m.state) ? 'bad' : /approved|ordered|received|transferred|issued|completed/i.test(m.state) ? 'good' : ''}`}>{m.state}</span>
+              </div>
+            ))}
+            {earlier.length > 5 && (
+              <button className="link" onClick={() => setShowAll(!showAll)}>
+                {showAll ? 'Show fewer' : `Show all ${earlier.length}`}
+              </button>
+            )}
+          </div>
+    ) : null;
+  if (!needs.length || role === 'owner') return earlierBlock ? <div className="panel-section mr-card">{earlierBlock}</div> : null;
 
   async function run(what: 'draft' | 'submit') {
     if (busy) return;
@@ -225,34 +255,7 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
           </p>
         </>
       )}
-      {earlier && earlier.length > 0 && (
-        <div className="mr-earlier">
-          <h4>
-            Already requested for this project <span className="muted">({earlier.length})</span>
-          </h4>
-          {(showAll ? earlier : earlier.slice(0, 5)).map((m) => (
-            <div key={m.name} className="mr-earlier-row">
-              <div>
-                {IS_FRAPPE ? (
-                  <a href={`/app/material-request/${encodeURIComponent(m.name)}`} target="_blank" rel="noreferrer">
-                    <b>{m.name}</b>
-                  </a>
-                ) : (
-                  <b>{m.name}</b>
-                )}
-                <span className="muted small"> · {new Date(`${m.date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
-                <div className="muted small">{m.items.map((i) => `${i.name} ${formatQty(i.qty)} ${i.uom}`).join(' · ')}</div>
-              </div>
-              <span className={`mr-state ${/reject|cancel/i.test(m.state) ? 'bad' : /approved|ordered|received|transferred|issued|completed/i.test(m.state) ? 'good' : ''}`}>{m.state}</span>
-            </div>
-          ))}
-          {earlier.length > 5 && (
-            <button className="link" onClick={() => setShowAll(!showAll)}>
-              {showAll ? 'Show fewer' : `Show all ${earlier.length}`}
-            </button>
-          )}
-        </div>
-      )}
+      {earlierBlock}
     </div>
   );
 }
