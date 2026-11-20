@@ -104,7 +104,7 @@ export function MaterialRequiredPanel({
       [],
       [{ v: 'Elements covered', s: 'label' }],
       ['Sr', 'Element', 'Type', 'Building – Floor'].map((v) => ({ v, s: 'head' as const })),
-      ...selected.map((el, i) => [{ v: i + 1, s: 'int' as const }, { v: el.code, s: 'cell' as const }, { v: el.type, s: 'cell' as const }, { v: `${el.buildingName} – ${el.levelName}`, s: 'cell' as const }]),
+      ...selected.map((el, i) => [{ v: i + 1, s: 'int' as const }, { v: el.code, s: 'cell' as const }, { v: el.type.charAt(0).toUpperCase() + el.type.slice(1), s: 'cell' as const }, { v: `${el.buildingName} – ${el.levelName}`, s: 'cell' as const }]),
       [],
       [],
       [],
