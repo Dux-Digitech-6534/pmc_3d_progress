@@ -1,3 +1,5 @@
+import { saveBlob } from './download';
+
 // Writes a small formatted .xlsx (one sheet) in the browser without a library: an .xlsx file is a zip of
 // XML parts. Enough for printable sheets: a few fixed cell styles, column widths, merged cells.
 
@@ -178,13 +180,5 @@ export function buildXlsx(spec: SheetSpec): Uint8Array {
 }
 
 export function downloadXlsx(fileName: string, spec: SheetSpec) {
-  const blob = new Blob([buildXlsx(spec) as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  saveBlob(fileName, new Blob([buildXlsx(spec) as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
 }
