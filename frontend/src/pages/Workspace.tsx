@@ -33,11 +33,10 @@ interface PlanGroup {
  * "Awaiting approval" instead of "Not started" so it is clear the entry exists. The Owner sees
  * approved progress only.
  */
-// colour steps of an element (meeting 16-11): not started → started → sent for approval (blue) → approved (green)
-type ViewStatus = ActivityStatus | 'awaiting' | 'started';
-const STATUS_ORDER: ViewStatus[] = ['not-started', 'started', 'awaiting', 'in-progress', 'complete', 'not-configured', 'not-applicable'];
-const VIEW_LABELS: Record<ViewStatus, string> = { ...ACTIVITY_STATUS_LABELS, awaiting: 'Awaiting approval', started: 'Started' };
-const VIEW_COLORS: Record<ViewStatus, string> = { ...STATUS_COLORS, awaiting: AWAITING_COLOR, started: '#a855f7' };
+type ViewStatus = ActivityStatus | 'awaiting';
+const STATUS_ORDER: ViewStatus[] = ['not-started', 'awaiting', 'in-progress', 'complete', 'not-configured', 'not-applicable'];
+const VIEW_LABELS: Record<ViewStatus, string> = { ...ACTIVITY_STATUS_LABELS, awaiting: 'Awaiting approval' };
+const VIEW_COLORS: Record<ViewStatus, string> = { ...STATUS_COLORS, awaiting: AWAITING_COLOR };
 const OVERALL = '__all__';
 const fmtShort = (ymd: string) => new Date(`${ymd}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
@@ -160,19 +159,13 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
     }
   }, [role, todayPlan]);
 
-  const startedKeys = useMemo(() => new Set((planning?.starts ?? []).map((s) => `${s.elementId}|${s.activityCode}`)), [planning]);
   const statusById = useMemo(() => {
     const m = new Map<string, ViewStatus>();
     if (viewActivity) {
-      for (const el of elements) {
-        let st = combinedStatus(viewActivity.activities.map((a) => computeActivityProgress(el, a, entries)), role !== 'owner');
-        // Work Done "Started" (a start date, no quantity yet) shows as Started instead of Not started
-        if (st === 'not-started' && viewActivity.activities.some((a) => startedKeys.has(`${el.id}|${a.code}`))) st = 'started';
-        m.set(el.id, st);
-      }
+      for (const el of elements) m.set(el.id, combinedStatus(viewActivity.activities.map((a) => computeActivityProgress(el, a, entries)), role !== 'owner'));
     }
     return m;
-  }, [elements, entries, viewActivity, role, startedKeys]);
+  }, [elements, entries, viewActivity, role]);
 
   const colors = useMemo(() => {
     const m = new Map<string, string>();
@@ -240,7 +233,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
   }, [setSelection, focusId]);
 
   const legendCounts = useMemo(() => {
-    const c: Record<ViewStatus, number> = { 'not-started': 0, started: 0, awaiting: 0, 'in-progress': 0, complete: 0, 'not-configured': 0, 'not-applicable': 0 };
+    const c: Record<ViewStatus, number> = { 'not-started': 0, awaiting: 0, 'in-progress': 0, complete: 0, 'not-configured': 0, 'not-applicable': 0 };
     statusById.forEach((s) => (c[s] += 1));
     return c;
   }, [statusById]);
@@ -426,7 +419,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
                 <div className="legend-title">
                   {viewActivity.name} {role === 'owner' ? '(approved only)' : '— counts approved work only'}
                 </div>
-                {STATUS_ORDER.filter((s) => (s !== 'not-applicable' && s !== 'awaiting' && s !== 'started') || legendCounts[s] > 0).map((s) => (
+                {STATUS_ORDER.filter((s) => (s !== 'not-applicable' && s !== 'awaiting') || legendCounts[s] > 0).map((s) => (
                   <div key={s} className="legend-row">
                     <span className="swatch" style={{ background: VIEW_COLORS[s] }} />
                     {VIEW_LABELS[s]} <span className="muted">({legendCounts[s]})</span>
