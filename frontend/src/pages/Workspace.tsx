@@ -1,5 +1,5 @@
 import { inWorkOrder } from '../domain/sequence';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ElementPanel } from '../components/ElementPanel';
 import { ElementPicker } from '../components/ElementPicker';
 import { MaterialRequiredPanel } from '../components/MaterialRequiredPanel';
@@ -9,6 +9,23 @@ import { ACTIVITY_STATUS_LABELS, computeActivityProgress, type ActivityProgress,
 import { ELEMENT_TYPES, VIEW_GROUPS, viewGroupOf, type ElementType, type ViewGroup } from '../domain/types';
 import { AWAITING_COLOR, STATUS_COLORS, TYPE_COLORS, TYPE_LABELS, SELECTION_COLOR } from '../lib/colors';
 import { useApp } from '../state/AppContext';
+import { usePlanning } from '../state/planning';
+import { isCompleted, isSubmitted, NO_WORK_CODE, planEnd, planVsActual } from '../domain/planning';
+import { todayISO } from '../domain/workflow';
+
+// "Today's plan" colours in 3D: the jobs planned for today, the planned jobs left over from earlier days
+const PLAN_TODAY_COLOR = '#f59e0b';
+const PLAN_LATE_COLOR = '#dc2626';
+const PLAN_DONE_COLOR = '#16a34a';
+const PLAN_NONE_COLOR = '#cbd5e1';
+const PLAN_VIEW = 'plan';
+
+interface PlanGroup {
+  code: string;
+  name: string;
+  ids: string[];
+  codes: string[];
+}
 
 /**
  * What the workspace shows per element. Progress itself only ever counts APPROVED quantities; for the
@@ -21,6 +38,7 @@ const STATUS_ORDER: ViewStatus[] = ['not-started', 'awaiting', 'in-progress', 'c
 const VIEW_LABELS: Record<ViewStatus, string> = { ...ACTIVITY_STATUS_LABELS, awaiting: 'Awaiting approval' };
 const VIEW_COLORS: Record<ViewStatus, string> = { ...STATUS_COLORS, awaiting: AWAITING_COLOR };
 const OVERALL = '__all__';
+const fmtShort = (ymd: string) => new Date(`${ymd}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
 /**
  * One status for an element over the activities that apply to it (a wall has no concreting):
@@ -69,7 +87,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
   const entries = useMemo(() => data?.entries ?? [], [data?.entries]);
   // the material screen shows no work progress: elements are coloured by type
   const viewActivity =
-    mode === 'material'
+    mode === 'material' || view === PLAN_VIEW
       ? null
       : view === OVERALL
         ? activities.length
@@ -79,8 +97,57 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
 
   // Fall back to a valid view if the model's activities differ.
   useEffect(() => {
-    if (view !== 'type' && view !== OVERALL && activities.length && !activities.some((a) => a.code === view)) setView(OVERALL);
+    if (view !== 'type' && view !== OVERALL && view !== PLAN_VIEW && activities.length && !activities.some((a) => a.code === view)) setView(OVERALL);
   }, [activities, view]);
+
+  // Today's plan (meeting 16-11: "this page opens with your plan"): the submitted jobs running today, and
+  // the jobs of earlier days not finished yet. Only for Work Done.
+  const { data: planning } = usePlanning();
+  const todayPlan = useMemo(() => {
+    if (mode !== 'work' || !planning || !data?.model) return null;
+    const t = todayISO();
+    const rows = planVsActual(planning, entries, elements, data.model.document?.activities ?? [], t).filter(
+      (r) => isSubmitted(r.plan) && r.plan.activityCode !== NO_WORK_CODE && r.result !== 'no-work' && r.plan.date <= t,
+    );
+    const group = (list: typeof rows) => {
+      const m = new Map<string, PlanGroup>();
+      for (const r of list) {
+        const code = r.plan.activityCode;
+        let g = m.get(code);
+        if (!g) m.set(code, (g = { code, name: r.activity?.name ?? code, ids: [], codes: [] }));
+        if (!g.ids.includes(r.plan.elementId)) {
+          g.ids.push(r.plan.elementId);
+          g.codes.push(r.element?.code ?? r.plan.elementId);
+        }
+      }
+      return [...m.values()];
+    };
+    const today = rows.filter((r) => planEnd(r.plan) >= t);
+    const late = rows.filter((r) => planEnd(r.plan) < t && !isCompleted(r));
+    return {
+      open: group(today.filter((r) => !isCompleted(r))),
+      done: group(today.filter((r) => isCompleted(r))),
+      late: group(late),
+      lateFrom: late.map((r) => planEnd(r.plan)).sort()[0],
+    };
+  }, [mode, planning, data?.model, entries, elements]);
+  const planIds = useMemo(() => {
+    const m = new Map<string, string>();
+    if (!todayPlan) return m;
+    for (const g of todayPlan.done) for (const id of g.ids) m.set(id, PLAN_DONE_COLOR);
+    for (const g of todayPlan.late) for (const id of g.ids) m.set(id, PLAN_LATE_COLOR);
+    for (const g of todayPlan.open) for (const id of g.ids) m.set(id, PLAN_TODAY_COLOR);
+    return m;
+  }, [todayPlan]);
+  const hasPlan = !!todayPlan && (todayPlan.open.length > 0 || todayPlan.late.length > 0 || todayPlan.done.length > 0);
+  // the site engineer's Work Done opens on today's plan once (the colour choice stays theirs afterwards)
+  const planOpened = useRef(false);
+  useEffect(() => {
+    if (!planOpened.current && role === 'site-engineer' && todayPlan && (todayPlan.open.length || todayPlan.late.length)) {
+      planOpened.current = true;
+      setView(PLAN_VIEW);
+    }
+  }, [role, todayPlan]);
 
   const statusById = useMemo(() => {
     const m = new Map<string, ViewStatus>();
@@ -92,9 +159,10 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
 
   const colors = useMemo(() => {
     const m = new Map<string, string>();
-    for (const el of elements) m.set(el.id, viewActivity ? VIEW_COLORS[statusById.get(el.id)!] : TYPE_COLORS[el.type]);
+    for (const el of elements)
+      m.set(el.id, view === PLAN_VIEW && mode === 'work' ? (planIds.get(el.id) ?? PLAN_NONE_COLOR) : viewActivity ? VIEW_COLORS[statusById.get(el.id)!] : TYPE_COLORS[el.type]);
     return m;
-  }, [elements, statusById, viewActivity]);
+  }, [elements, statusById, viewActivity, view, mode, planIds]);
 
   const levels = useMemo(() => data?.model?.document?.levels ?? [], [data?.model]);
 
@@ -224,6 +292,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
             <label className="inline">
               Colour by
               <select value={view} onChange={(e) => setView(e.target.value)} aria-label="Colour by">
+                <option value={PLAN_VIEW}>Today's plan</option>
                 <option value={OVERALL}>Overall progress (all work)</option>
                 {activities.map((a) => (
                   <option key={a.code} value={a.code}>
@@ -315,7 +384,27 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
             frameKey={data.model.key}
           />
           <div className="legend" aria-label="Legend">
-            {viewActivity ? (
+            {view === PLAN_VIEW && mode === 'work' ? (
+              <>
+                <div className="legend-title">Today's plan</div>
+                {(
+                  [
+                    [PLAN_TODAY_COLOR, 'Planned today', todayPlan?.open],
+                    [PLAN_LATE_COLOR, 'Earlier plan, not finished', todayPlan?.late],
+                    [PLAN_DONE_COLOR, 'Planned today, completed', todayPlan?.done],
+                  ] as [string, string, PlanGroup[] | undefined][]
+                ).map(([color, label, groups]) => (
+                  <div key={label} className="legend-row">
+                    <span className="swatch" style={{ background: color }} />
+                    {label} <span className="muted">({(groups ?? []).reduce((n, g) => n + g.ids.length, 0)})</span>
+                  </div>
+                ))}
+                <div className="legend-row">
+                  <span className="swatch" style={{ background: PLAN_NONE_COLOR }} />
+                  Not in today's plan
+                </div>
+              </>
+            ) : viewActivity ? (
               <>
                 <div className="legend-title">
                   {viewActivity.name} {role === 'owner' ? '(approved only)' : '— counts approved work only'}
@@ -376,6 +465,48 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
                 />
               ) : (
                 <MaterialRequiredPanel selected={[focusEl]} entries={entries} shown={0} onTickShown={() => undefined} withRequest={false} />
+              )}
+            </div>
+          )}
+          {mode === 'work' && todayPlan && (
+            <div className={`today-plan ${hasPlan ? '' : 'today-plan-empty'}`}>
+              <div className="today-plan-head">
+                <b>Today's plan</b>
+                <span className="muted small">{fmtShort(todayISO())}</span>
+                {hasPlan && view !== PLAN_VIEW && (
+                  <button className="link small" onClick={() => setView(PLAN_VIEW)}>
+                    Colour 3D by plan
+                  </button>
+                )}
+              </div>
+              {!hasPlan && <p className="muted small">Nothing planned for today. The plan is made in Planning.</p>}
+              {(
+                [
+                  ['open', todayPlan.open, ''],
+                  ['late', todayPlan.late, todayPlan.lateFrom ? `Not finished — planned till ${fmtShort(todayPlan.lateFrom)}` : ''],
+                  ['done', todayPlan.done, 'Completed'],
+                ] as [string, PlanGroup[], string][]
+              ).map(([kind, groups, note]) =>
+                groups.map((g) => (
+                  <div key={`${kind}-${g.code}`} className={`today-plan-row tp-${kind}`}>
+                    <div className="today-plan-main">
+                      <b>{g.name}</b>
+                      {note && <span className="tp-note">{note}</span>}
+                      <div className="small">{g.codes.join(', ')}</div>
+                    </div>
+                    {kind !== 'done' && (
+                      <button
+                        className="btn btn-small btn-primary"
+                        onClick={() => {
+                          setSelection(new Set(g.ids));
+                          setMobilePane('list');
+                        }}
+                      >
+                        Select {g.ids.length}
+                      </button>
+                    )}
+                  </div>
+                )),
               )}
             </div>
           )}

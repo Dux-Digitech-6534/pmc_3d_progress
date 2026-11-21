@@ -5,7 +5,7 @@ import { categoryStatus, elementLabel, ELEMENT_TYPE_LABELS, executiveSummary, pr
 import { inWorkOrder } from '../domain/sequence';
 import { UNIT_LABELS, type ElementType } from '../domain/types';
 import { todayISO } from '../domain/workflow';
-import { downloadText, toCsv } from '../lib/download';
+import { downloadXlsx, type Cell } from '../lib/xlsxWriter';
 import { useApp } from '../state/AppContext';
 import { completeDateOf, countResults, daysTaken, isSubmitted, planEnd, planVsActual, PLAN_RESULT_LABELS } from '../domain/planning';
 import { usePlanning } from '../state/planning';
@@ -114,41 +114,108 @@ export function Reports() {
     go('workspace');
   };
 
+  // the report as a printable Excel sheet (same three parts as the page)
   function download() {
     const acts = summary.activities;
-    const rows: (string | number)[][] = [
-      ['PMC Report', data!.project.name],
-      ['Dates', periodText],
-      ['Showing', scopeText],
-      ['Counted', countText],
-      [],
-      ['Work done'],
-      ['Activity', 'Quantity', 'Unit'],
-      ...acts.map((a) => [a.name, summary.totals[a.code] ?? 0, UNIT_LABELS[a.unit] ?? a.unit]),
-      [],
-      ['Work done by floor', '', ...acts.map((a) => `${a.name} (${UNIT_LABELS[a.unit] ?? a.unit})`)],
-      ...summary.byFloor.map((g) => [...g.label, ...acts.map((a) => g.qty[a.code] ?? 0)]),
-      [],
-      ['Where each element type stands (today)'],
-      ['Element type', 'Stage', 'Elements'],
-      ...statuses.flatMap(({ type: t, s }) => s.buckets.map((b) => [ELEMENT_TYPE_LABELS[t], b.label, b.elements.length])),
-      [],
-      ['Element', 'Stage', 'Started', 'Completed', 'Days'],
-      ...statuses.flatMap(({ s }) =>
-        s.rows
-          .filter((r) => !elementIdOk || r.element.id === elementIdOk)
-          .map((r) => {
-            const d = datesOf(r.element, r.stage);
-            return [elementLabel(r.element), r.label, d.started ?? '', d.done ?? '', d.days ?? ''];
-          }),
-      ),
-      [],
-      ['Plan vs actual'],
-      ['Element', 'Work', 'Planned from', 'Planned to', 'Started', 'Completed', 'Result', 'Detail'],
-      ...planRows.map((r) => [r.element ? elementLabel(r.element) : r.plan.elementId, r.activity?.name ?? r.plan.activityCode, r.plan.date, planEnd(r.plan), r.actualStart ?? '', r.actualDone ?? '', PLAN_RESULT_LABELS[r.result], r.detail]),
-    ];
-    downloadText(`pmc-report-${data!.project.id}-${todayISO()}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
+    const unit = (a: { unit: string }) => UNIT_LABELS[a.unit as keyof typeof UNIT_LABELS] ?? a.unit;
+    const ncol = Math.max(8, 5 + statusActs.length);
+    const last = String.fromCharCode(64 + ncol);
+    const pad = (r: (Cell | null)[]) => [...r, ...Array.from({ length: Math.max(ncol - r.length, 0) }, () => ({ v: '', s: 'plain' as const }))];
+    const head = (labels: string[]) => labels.map((v) => ({ v, s: 'head' as const }));
+    const rows: (Cell | null)[][] = [];
+    const merges: string[] = [`A1:${last}1`];
+    const add = (r: (Cell | null)[], merge?: string) => {
+      rows.push(r);
+      if (merge) merges.push(merge.replace(/#/g, String(rows.length)));
+    };
+    const section = (t: string) => add([{ v: t, s: 'label' }]);
+    const note = (t: string) => add([{ v: t, s: 'note' }], `A#:${last}#`);
+
+    add([{ v: 'PMC PROGRESS REPORT', s: 'title' }]);
+    add([{ v: 'Project', s: 'label' }, { v: `${data!.project.name} (${data!.project.id})`, s: 'plain' }, null, null, null, null, { v: 'Printed', s: 'label' }, { v: fmtDay(todayISO()), s: 'plain' }], 'B#:F#');
+    add([{ v: 'Dates', s: 'label' }, { v: periodText, s: 'plain' }], `B#:${last}#`);
+    add([{ v: 'Showing', s: 'label' }, { v: scopeText, s: 'plain' }], `B#:${last}#`);
+    add([{ v: 'Counted', s: 'label' }, { v: countText, s: 'plain' }], `B#:${last}#`);
+    add([]);
+
+    section('1. Work done');
+    if (acts.length) {
+      add(head(['Activity', 'Quantity', 'Unit']));
+      for (const a of acts) add([{ v: a.name, s: 'cell' }, { v: summary.totals[a.code] ?? 0, s: 'num' }, { v: unit(a), s: 'cell' }]);
+      if (summary.byFloor.length > 1) {
+        add([]);
+        add([{ v: 'Floor-wise', s: 'label' }]);
+        add(head(['Building – Floor', ...acts.map((a) => `${a.name} (${unit(a)})`)]));
+        for (const g of summary.byFloor) add([{ v: g.label.join(' – '), s: 'cell' }, ...acts.map((a) => ({ v: g.qty[a.code] ?? 0, s: 'num' as const }))]);
+      }
+    } else note('No work in these dates.');
+    add([]);
+
+    section('2. Element status (as of today)');
+    add(head(['Element type', 'Total', 'Complete', 'In progress', 'Not started', ...statusActs.map((a) => `${a.name} %`)]));
+    for (const { type: t, s } of statuses)
+      add([
+        { v: ELEMENT_TYPE_LABELS[t], s: 'cell' },
+        { v: s.rows.length, s: 'int' },
+        { v: s.counts.complete, s: 'int' },
+        { v: s.counts.going, s: 'int' },
+        { v: s.counts.notStarted, s: 'int' },
+        ...statusActs.map((a) => ({ v: pct(s.activityPercent[a.code]), s: 'cell' as const })),
+      ]);
+    add([
+      { v: 'Total', s: 'totalLabel' },
+      { v: statuses.reduce((n, x) => n + x.s.rows.length, 0), s: 'total' },
+      { v: statuses.reduce((n, x) => n + x.s.counts.complete, 0), s: 'total' },
+      { v: statuses.reduce((n, x) => n + x.s.counts.going, 0), s: 'total' },
+      { v: statuses.reduce((n, x) => n + x.s.counts.notStarted, 0), s: 'total' },
+      ...statusActs.map(() => ({ v: '', s: 'totalLabel' as const })),
+    ]);
+    add([]);
+    add([{ v: 'Element-wise', s: 'label' }]);
+    add(head(['Element', 'Type', 'Stage', 'Started', 'Completed', 'Days']));
+    for (const { type: t, s } of statuses)
+      for (const r of s.rows.filter((x) => !elementIdOk || x.element.id === elementIdOk)) {
+        const d = datesOf(r.element, r.stage);
+        add([
+          { v: elementLabel(r.element), s: 'cell' },
+          { v: ELEMENT_TYPE_LABELS[t], s: 'cell' },
+          { v: r.label, s: 'cell' },
+          { v: d.started ? fmtDay(d.started) : '—', s: 'cell' },
+          { v: d.done ? fmtDay(d.done) : '—', s: 'cell' },
+          d.days !== undefined && d.days !== null ? { v: d.days, s: 'int' } : { v: '—', s: 'cell' },
+        ]);
+      }
+    add([]);
+
+    section('3. Plan vs actual');
+    if (planRows.length) {
+      add(head(['Element', 'Work', 'Planned', 'Started', 'Completed', 'Result', 'Detail']), `G#:${last}#`);
+      for (const r of planRows)
+        add(
+          [
+            { v: r.element ? elementLabel(r.element) : r.plan.elementId, s: 'cell' },
+            { v: r.activity?.name ?? r.plan.activityCode, s: 'cell' },
+            { v: r.plan.date === planEnd(r.plan) ? fmtDay(r.plan.date) : `${fmtDay(r.plan.date)} – ${fmtDay(planEnd(r.plan))}`, s: 'cell' },
+            { v: r.actualStart ? fmtDay(r.actualStart) : '—', s: 'cell' },
+            { v: r.actualDone ? fmtDay(r.actualDone) : '—', s: 'cell' },
+            { v: PLAN_RESULT_LABELS[r.result], s: 'cell' },
+            { v: r.detail, s: 'cell' },
+          ],
+          `G#:${last}#`,
+        );
+    } else note('No submitted plan in these dates.');
+    add([]);
+    add([]);
+    add([null, { v: 'Prepared by (Site Engineer)', s: 'sign' }, null, { v: 'Checked by (PMC)', s: 'sign' }, null, null, { v: 'Approved by', s: 'sign' }]);
+
+    downloadXlsx(`pmc-report-${data!.project.id}-${todayISO()}.xlsx`, {
+      name: 'PMC Report',
+      cols: [38, 16, 22, 15, 15, 14, 16, ...Array.from({ length: ncol - 7 }, () => 16)],
+      rows: rows.map((r) => (r.length ? pad(r) : r)),
+      merges,
+    });
   }
+
 
   return (
     <div className="page rep-page">
@@ -157,7 +224,7 @@ export function Reports() {
         subtitle="How much work was done between two dates, and where the elements stand."
         actions={
           <button className="btn" onClick={download}>
-            Download Excel (CSV)
+            Download Excel
           </button>
         }
       />
