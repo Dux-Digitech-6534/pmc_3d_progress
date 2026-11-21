@@ -181,10 +181,11 @@ export function Planning() {
       )}
       <ErrorList errors={errors} />
 
-      {canPlan && (
-        <section className="dash-card plan-new">
-          <h2 className="plan-h">Plan new work</h2>
+      <section className="dash-card plan-new">
+        <h2 className="plan-h">{canPlan ? 'Plan new work' : 'Show the plan of'}</h2>
+        {!canPlan && <p className="muted small">Only the Site Engineer makes the plan. Choose the elements to see their plan below.</p>}
 
+        {canPlan && (
           <div className="plan-step">
             <span className="plan-num">1</span>
             <div>
@@ -212,9 +213,10 @@ export function Planning() {
               </div>
             </div>
           </div>
+        )}
 
           <div className="plan-step">
-            <span className="plan-num">2</span>
+            {canPlan && <span className="plan-num">2</span>}
             <div className="plan-grow">
               <div className="plan-step-title">Which elements?</div>
               <div className="plan-seg plan-types">
@@ -247,6 +249,8 @@ export function Planning() {
             </div>
           </div>
 
+          {canPlan && (
+          <>
           <div className="plan-step">
             <span className="plan-num">3</span>
             <div>
@@ -297,8 +301,9 @@ export function Planning() {
                 : `${picked.size} element${picked.size === 1 ? '' : 's'} × ${works.size} work = ${jobs} job${jobs === 1 ? '' : 's'}`}
             </span>
           </div>
-        </section>
-      )}
+          </>
+          )}
+      </section>
 
       <section className="dash-card">
         <div className="dash-card-head">
@@ -345,7 +350,7 @@ export function Planning() {
         {!planning ? (
           <Spinner />
         ) : groups.length === 0 ? (
-          <p className="rep-empty">{view === 'draft' ? 'No draft plan. Plan new work above.' : view === 'submitted' ? 'Nothing submitted and open.' : 'No planned job is finished yet.'}</p>
+          <p className="rep-empty">{view === 'draft' ? (canPlan ? 'No draft plan. Plan new work above.' : 'No draft plan.') : view === 'submitted' ? 'Nothing submitted and open.' : 'No planned job is finished yet.'}</p>
         ) : (
           groups.map(([k, list]) => {
             const c = countResults(list);
