@@ -5037,3 +5037,26 @@ input[type='radio'] {
 .tp-done .tp-note {
   color: #15803d;
 }
+
+/* Today's plan: the chosen row stands out */
+.today-plan-row {
+  flex-wrap: wrap;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+.today-plan-row.tp-on {
+  background: linear-gradient(135deg, #ccfbf1, #e0f2fe);
+  border-left-color: #0f766e;
+  box-shadow: 0 0 0 2px #14b8a6, 0 6px 16px rgba(15, 118, 110, 0.18);
+}
+.tp-selected {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+  font-weight: 700;
+}
+.tp-hint {
+  flex-basis: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f766e;
+}

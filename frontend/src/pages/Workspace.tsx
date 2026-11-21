@@ -33,10 +33,11 @@ interface PlanGroup {
  * "Awaiting approval" instead of "Not started" so it is clear the entry exists. The Owner sees
  * approved progress only.
  */
-type ViewStatus = ActivityStatus | 'awaiting';
-const STATUS_ORDER: ViewStatus[] = ['not-started', 'awaiting', 'in-progress', 'complete', 'not-configured', 'not-applicable'];
-const VIEW_LABELS: Record<ViewStatus, string> = { ...ACTIVITY_STATUS_LABELS, awaiting: 'Awaiting approval' };
-const VIEW_COLORS: Record<ViewStatus, string> = { ...STATUS_COLORS, awaiting: AWAITING_COLOR };
+// colour steps of an element (meeting 16-11): not started → started → sent for approval (blue) → approved (green)
+type ViewStatus = ActivityStatus | 'awaiting' | 'started';
+const STATUS_ORDER: ViewStatus[] = ['not-started', 'started', 'awaiting', 'in-progress', 'complete', 'not-configured', 'not-applicable'];
+const VIEW_LABELS: Record<ViewStatus, string> = { ...ACTIVITY_STATUS_LABELS, awaiting: 'Awaiting approval', started: 'Started' };
+const VIEW_COLORS: Record<ViewStatus, string> = { ...STATUS_COLORS, awaiting: AWAITING_COLOR, started: '#a855f7' };
 const OVERALL = '__all__';
 const fmtShort = (ymd: string) => new Date(`${ymd}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
@@ -141,6 +142,16 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
   }, [todayPlan]);
   const hasPlan = !!todayPlan && (todayPlan.open.length > 0 || todayPlan.late.length > 0 || todayPlan.done.length > 0);
   // the site engineer's Work Done opens on today's plan once (the colour choice stays theirs afterwards)
+  // the plan row last chosen: its elements and work (the form ticks that work)
+  const [planPick, setPlanPick] = useState<{ ids: string; code: string } | null>(null);
+  const pickPlan = (g: PlanGroup) => {
+    const set = new Set(g.ids);
+    setSelection(set);
+    setPlanPick({ ids: elements.filter((e) => set.has(e.id)).map((e) => e.id).join(','), code: g.code });
+    setMobilePane('list');
+    // bring the work form into view
+    setTimeout(() => document.querySelector('.ws-right .work-done')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+  };
   const planOpened = useRef(false);
   useEffect(() => {
     if (!planOpened.current && role === 'site-engineer' && todayPlan && (todayPlan.open.length || todayPlan.late.length)) {
@@ -149,13 +160,19 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
     }
   }, [role, todayPlan]);
 
+  const startedKeys = useMemo(() => new Set((planning?.starts ?? []).map((s) => `${s.elementId}|${s.activityCode}`)), [planning]);
   const statusById = useMemo(() => {
     const m = new Map<string, ViewStatus>();
     if (viewActivity) {
-      for (const el of elements) m.set(el.id, combinedStatus(viewActivity.activities.map((a) => computeActivityProgress(el, a, entries)), role !== 'owner'));
+      for (const el of elements) {
+        let st = combinedStatus(viewActivity.activities.map((a) => computeActivityProgress(el, a, entries)), role !== 'owner');
+        // Work Done "Started" (a start date, no quantity yet) shows as Started instead of Not started
+        if (st === 'not-started' && viewActivity.activities.some((a) => startedKeys.has(`${el.id}|${a.code}`))) st = 'started';
+        m.set(el.id, st);
+      }
     }
     return m;
-  }, [elements, entries, viewActivity, role]);
+  }, [elements, entries, viewActivity, role, startedKeys]);
 
   const colors = useMemo(() => {
     const m = new Map<string, string>();
@@ -223,7 +240,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
   }, [setSelection, focusId]);
 
   const legendCounts = useMemo(() => {
-    const c: Record<ViewStatus, number> = { 'not-started': 0, awaiting: 0, 'in-progress': 0, complete: 0, 'not-configured': 0, 'not-applicable': 0 };
+    const c: Record<ViewStatus, number> = { 'not-started': 0, started: 0, awaiting: 0, 'in-progress': 0, complete: 0, 'not-configured': 0, 'not-applicable': 0 };
     statusById.forEach((s) => (c[s] += 1));
     return c;
   }, [statusById]);
@@ -409,7 +426,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
                 <div className="legend-title">
                   {viewActivity.name} {role === 'owner' ? '(approved only)' : '— counts approved work only'}
                 </div>
-                {STATUS_ORDER.filter((s) => (s !== 'not-applicable' && s !== 'awaiting') || legendCounts[s] > 0).map((s) => (
+                {STATUS_ORDER.filter((s) => (s !== 'not-applicable' && s !== 'awaiting' && s !== 'started') || legendCounts[s] > 0).map((s) => (
                   <div key={s} className="legend-row">
                     <span className="swatch" style={{ background: VIEW_COLORS[s] }} />
                     {VIEW_LABELS[s]} <span className="muted">({legendCounts[s]})</span>
@@ -487,26 +504,29 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
                   ['done', todayPlan.done, 'Completed'],
                 ] as [string, PlanGroup[], string][]
               ).map(([kind, groups, note]) =>
-                groups.map((g) => (
-                  <div key={`${kind}-${g.code}`} className={`today-plan-row tp-${kind}`}>
+                groups.map((g) => {
+                  const on = kind !== 'done' && selection.size === g.ids.length && g.ids.every((id) => selection.has(id));
+                  return (
+                  <div key={`${kind}-${g.code}`} className={`today-plan-row tp-${kind} ${on ? 'tp-on' : ''}`}>
                     <div className="today-plan-main">
                       <b>{g.name}</b>
                       {note && <span className="tp-note">{note}</span>}
                       <div className="small">{g.codes.join(', ')}</div>
                     </div>
-                    {kind !== 'done' && (
-                      <button
-                        className="btn btn-small btn-primary"
-                        onClick={() => {
-                          setSelection(new Set(g.ids));
-                          setMobilePane('list');
-                        }}
-                      >
-                        Select {g.ids.length}
-                      </button>
-                    )}
+                    {kind !== 'done' &&
+                      (on ? (
+                        <button className="btn btn-small tp-selected" onClick={() => setSelection(new Set())} title="Unselect">
+                          ✓ Selected
+                        </button>
+                      ) : (
+                        <button className="btn btn-small btn-primary" onClick={() => pickPlan(g)}>
+                          Select {g.ids.length}
+                        </button>
+                      ))}
+                    {on && <div className="tp-hint">Selected — {g.name} is ticked below. Choose Started or Completed and press OK.</div>}
                   </div>
-                )),
+                  );
+                }),
               )}
             </div>
           )}
@@ -535,6 +555,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
               projectName={data.project.name}
               modelKey={data.model.key}
               onOpen={setFocusId}
+              startWith={planPick}
             />
           ) : (
             <MaterialRequiredPanel

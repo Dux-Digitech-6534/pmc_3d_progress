@@ -25,7 +25,9 @@ export function ElementPanel({
   modelKey,
   onOpen,
   detailsOnly,
+  startWith,
 }: {
+  startWith?: { ids: string; code: string } | null;
   selected: ElementRecord[];
   activities: ActivityDef[];
   entries: ProgressEntry[];
@@ -70,7 +72,7 @@ export function ElementPanel({
         <div className="panel-section">
           <h3 className="section-title">Work done</h3>
           {permissions.canCreate(role) ? (
-            <WorkDoneForm elements={selected} activities={activities} entries={entries} />
+            <WorkDoneForm elements={selected} activities={activities} entries={entries} startWith={startWith} />
           ) : (
             <p className="muted">{ROLE_LABELS[role]} can view progress only. {IS_FRAPPE ? 'A PMC Site Engineer records work.' : 'Switch to Site Engineer to record work (demo role switch).'}</p>
           )}

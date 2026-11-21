@@ -21,10 +21,13 @@ export function WorkDoneForm({
   elements,
   activities: allActivities,
   entries,
+  startWith,
 }: {
   elements: ElementRecord[];
   activities: ActivityDef[];
   entries: ProgressEntry[];
+  /** From "Today's plan": these elements were selected for this work — tick it. */
+  startWith?: { ids: string; code: string } | null;
 }) {
   const { repo, role, notify, refresh } = useApp();
   // Activities that apply to at least one ticked element.
@@ -44,11 +47,11 @@ export function WorkDoneForm({
 
   const ids = elements.map((e) => e.id).join(',');
   useEffect(() => {
-    // Selection changed: start the ticks again.
-    setTicked(new Set());
+    // Selection changed: start the ticks again (with the planned work ticked when chosen from Today's plan).
+    setTicked(startWith && startWith.ids === ids ? new Set([startWith.code]) : new Set());
     setErrors([]);
     requestIds.current.clear();
-  }, [ids]);
+  }, [ids, startWith]);
 
   const pct = percent.trim() === '' ? Number.NaN : Number(percent);
   const pctOk = Number.isFinite(pct) && pct > 0 && pct <= 100;
