@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ConfirmDialog, EmptyState } from './components/ui';
+import { PhoneSelectSheet } from './components/PhoneSelectSheet';
 import { IS_FRAPPE } from './config';
 import { loadDemoData, storageIsPersistent } from './data/appRepository';
 import { errorMessages } from './data/repository';
@@ -271,6 +272,8 @@ function Shell() {
           </button>
         </nav>
       )}
+
+      <PhoneSelectSheet />
 
       <div className="toasts" aria-live="polite">
         {toasts.map((t) => (
