@@ -4946,3 +4946,33 @@ input[type='radio'] {
     animation: none !important;
   }
 }
+
+/* Material Required: work sent for approval is still counted — warning */
+.mr-pending-warn {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.mr-pending-warn ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+/* Material Request: the requirement Excel next to the request */
+.mr-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mr-head .section-title {
+  margin: 0;
+}
+.mr-head + .mr-fields,
+.mr-head + p {
+  margin-top: 10px;
+}
+.mr-saved-actions {
+  margin-top: 8px;
+}

@@ -16,7 +16,18 @@ const inDays = (n: number) => new Date(Date.now() + n * 864e5).toISOString().sli
  * Material Request for the material the selected elements need: the materials come from the
  * elements, the engineer types each quantity, saves it as a draft and then submits it for approval.
  */
-export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialRequired; elementIds: string; bagKg: number }) {
+export function MaterialRequestCard({
+  req,
+  elementIds,
+  bagKg,
+  onDownload,
+}: {
+  req: MaterialRequired;
+  elementIds: string;
+  bagKg: number;
+  /** Requirement Excel of the selection; with the request number once the request is saved. */
+  onDownload?: (mrName?: string) => void;
+}) {
   const { repo, role, notify, data } = useApp();
   const projectId = data?.project.id ?? '';
   const [items, setItems] = useState<ErpItem[] | null>(null);
@@ -167,7 +178,14 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
   const locked = !!saved;
   return (
     <div className="panel-section mr-card">
-      <h3 className="section-title">Material Request</h3>
+      <div className="mr-head">
+        <h3 className="section-title">Material Request</h3>
+        {onDownload && !saved && (
+          <button className="btn btn-small" onClick={() => onDownload()}>
+            Download requirement (Excel)
+          </button>
+        )}
+      </div>
       {items === null ? (
         <p className="muted small">Reading items…</p>
       ) : (
@@ -237,6 +255,13 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
                 <a href={`/app/material-request/${encodeURIComponent(saved.name)}`} target="_blank" rel="noreferrer">
                   Open
                 </a>
+              )}
+              {onDownload && (
+                <div className="mr-saved-actions">
+                  <button className="btn btn-small" onClick={() => onDownload(saved.name)}>
+                    Download requirement (Excel)
+                  </button>
+                </div>
               )}
             </div>
           )}

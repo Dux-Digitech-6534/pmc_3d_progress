@@ -27,7 +27,7 @@ export function MaterialRequiredPanel({
   /** Offer an ERPNext Material Request for the material (not in the one-element details card). */
   withRequest?: boolean;
 }) {
-  const { data } = useApp();
+  const { data, role } = useApp();
   const norms = normsOf(data?.model?.document);
   const req = useMemo(() => materialRequired(selected, entries, norms, 'balance'), [selected, entries, norms]);
   // elements whose planned work is all approved: nothing more to bring for them
@@ -38,6 +38,19 @@ export function MaterialRequiredPanel({
       return used.length > 0 && used.every((p) => p.status === 'complete');
     });
   }, [data?.model, selected, entries]);
+
+  // work entered and sent to the PMC but not approved yet: still counted as needed, so warn before asking again
+  const pending = useMemo(() => {
+    const ids = new Set(selected.map((e) => e.id));
+    const byEl = new Map<string, Set<string>>();
+    for (const e of entries) {
+      if (e.status !== 'Submitted' || !ids.has(e.elementId)) continue;
+      let s = byEl.get(e.elementCode);
+      if (!s) byEl.set(e.elementCode, (s = new Set()));
+      s.add(e.activityName);
+    }
+    return [...byEl.entries()].map(([code, acts]) => ({ code, acts: [...acts] })).sort((a, b) => a.code.localeCompare(b.code));
+  }, [selected, entries]);
 
   if (!selected.length) {
     return (
@@ -62,7 +75,8 @@ export function MaterialRequiredPanel({
   const hasAny = !nothing || other.length > 0;
 
   // "Download requirement" (meeting 16-11): a formatted Excel sheet that reads like a material requisition
-  function download() {
+  // mrName: the Material Request this sheet goes with (printed in the header)
+  function download(mrName?: string) {
     const day = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
     const types = Object.entries(
       selected.reduce<Record<string, number>>((m, el) => ((m[el.type] = (m[el.type] ?? 0) + 1), m), {}),
@@ -87,7 +101,9 @@ export function MaterialRequiredPanel({
       [{ v: 'MATERIAL REQUIREMENT', s: 'title' }],
       [{ v: 'Project', s: 'label' }, data?.project.name ?? '', null, null, { v: 'Date', s: 'label' }, day],
       [{ v: 'Location', s: 'label' }, floors],
-      [{ v: 'Elements', s: 'label' }, `${selected.length} (${types})`],
+      mrName
+        ? [{ v: 'Elements', s: 'label' }, `${selected.length} (${types})`, null, null, { v: 'Request No.', s: 'label' }, mrName]
+        : [{ v: 'Elements', s: 'label' }, `${selected.length} (${types})`],
       [{ v: `Quantities from the 3D model and BOQ of the selected elements${norms.wastagePct ? `, ${norms.wastagePct}% wastage included` : ''}; rounded up for ordering.`, s: 'note' }],
       [],
       ['Sr', 'Material', 'Specification', 'Quantity', 'Unit', 'Remarks'].map((v) => ({ v, s: 'head' as const })),
@@ -117,7 +133,7 @@ export function MaterialRequiredPanel({
       cols: [11, 30, 26, 14, 9, 30],
       rows,
       // "Building – Floor" of the elements table spans D:F so it reads on one line
-      merges: ['A1:F1', 'B2:D2', 'B3:F3', 'B4:F4', 'A5:F5', ...Array.from({ length: selected.length + 1 }, (_, k) => `D${elHead + 1 + k}:F${elHead + 1 + k}`)],
+      merges: ['A1:F1', 'B2:D2', 'B3:F3', mrName ? 'B4:D4' : 'B4:F4', 'A5:F5', ...Array.from({ length: selected.length + 1 }, (_, k) => `D${elHead + 1 + k}:F${elHead + 1 + k}`)],
     });
   }
 
@@ -135,10 +151,27 @@ export function MaterialRequiredPanel({
           </p>
         )}
         {norms.wastagePct ? <p className="hint">Includes {norms.wastagePct}% wastage.</p> : null}
-        {hasAny && (
-          <button className="btn btn-small" onClick={download}>
+        {/* with the request form the button sits next to the request (and its number) */}
+        {hasAny && !(withRequest && role !== 'owner') && (
+          <button className="btn btn-small" onClick={() => download()}>
             Download requirement (Excel)
           </button>
+        )}
+        {pending.length > 0 && (
+          <div className="alert alert-warn mr-pending-warn" role="status">
+            <b>
+              Work already done on {pending.length === 1 ? '1 element' : `${pending.length} elements`}, waiting for PMC approval.
+            </b>{' '}
+            Its material is still counted below until the PMC approves it — check before asking for it again.
+            <ul>
+              {pending.slice(0, 8).map((p) => (
+                <li key={p.code}>
+                  <b>{p.code}</b> — {p.acts.join(', ')}
+                </li>
+              ))}
+              {pending.length > 8 && <li>+{pending.length - 8} more</li>}
+            </ul>
+          </div>
         )}
       </div>
 
@@ -251,7 +284,7 @@ export function MaterialRequiredPanel({
         </div>
       )}
 
-      {withRequest && <MaterialRequestCard req={req} elementIds={selected.map((e) => e.id).join(',')} bagKg={norms.bagKg} />}
+      {withRequest && <MaterialRequestCard req={req} elementIds={selected.map((e) => e.id).join(',')} bagKg={norms.bagKg} onDownload={hasAny ? download : undefined} />}
     </div>
   );
 }
