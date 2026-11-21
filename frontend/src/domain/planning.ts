@@ -144,7 +144,7 @@ export function planVsActual(
         detail = 'Work going on';
       } else {
         result = 'pending';
-        detail = p.date <= today ? 'Due now' : 'Planned';
+        detail = p.date <= today ? 'Due now' : 'Still to come';
       }
       return { plan: p, element: el, activity: a, result, reported, actualStart, actualDone, lateDays, detail };
     })

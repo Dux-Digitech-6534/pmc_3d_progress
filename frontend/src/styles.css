@@ -4976,3 +4976,8 @@ input[type='radio'] {
 .mr-saved-actions {
   margin-top: 8px;
 }
+
+.plan-why {
+  color: var(--amber, #b45309);
+  font-weight: 600;
+}

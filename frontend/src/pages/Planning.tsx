@@ -397,6 +397,8 @@ export function Planning() {
                     <div className="plan-item-main">
                       <b>{r.element?.code ?? r.plan.elementId}</b> <span>{r.activity?.name ?? r.plan.activityCode}</span>
                       <div className="muted small">{r.element ? `${r.element.buildingName} – ${r.element.levelName}` : ''}</div>
+                      {/* planned "No work": its reason, so the draft shows why */}
+                      {r.plan.activityCode === NO_WORK_CODE && view === 'draft' && r.plan.note && <div className="small plan-why">Why: {r.plan.note}</div>}
                     </div>
                     {/* plan vs actual on the same line: planned dates, real start, real finish */}
                     <div className="plan-dates-row">
