@@ -1296,16 +1296,16 @@ export function ModelBuilder() {
                 </div>
                 <div className="steel-row">
                   <label className="inline check">
-                    <input type="checkbox" checked={spec.chhajja.enabled} onChange={(e) => setSpec({ chhajja: { ...spec.chhajja, enabled: e.target.checked } })} /> Chhajja on outer
+                    <input type="checkbox" checked={spec.chhajja.enabled} onChange={(e) => setSpec({ chhajja: { ...spec.chhajja, enabled: e.target.checked } })} /> Sunshade on outer
                     walls
                   </label>
                   <label className="inline">
                     <span className="muted small">projection</span>
-                    <N value={spec.chhajja.projection} onChange={(projection) => setSpec({ chhajja: { ...spec.chhajja, projection } })} label="Chhajja projection" width={65} />
+                    <N value={spec.chhajja.projection} onChange={(projection) => setSpec({ chhajja: { ...spec.chhajja, projection } })} label="Sunshade projection" width={65} />
                   </label>
                   <label className="inline">
                     <span className="muted small">thick</span>
-                    <N value={spec.chhajja.t} onChange={(t) => setSpec({ chhajja: { ...spec.chhajja, t } })} label="Chhajja thickness" width={60} />
+                    <N value={spec.chhajja.t} onChange={(t) => setSpec({ chhajja: { ...spec.chhajja, t } })} label="Sunshade thickness" width={60} />
                   </label>
                   <label className="inline check">
                     <input type="checkbox" checked={spec.chhajja.overDoors} onChange={(e) => setSpec({ chhajja: { ...spec.chhajja, overDoors: e.target.checked } })} /> over doors
@@ -1505,7 +1505,7 @@ const KIND_LABEL: Record<ElementRef['kind'], string> = {
   wall: 'Wall',
   opening: 'Door / window',
   lintel: 'Lintel',
-  chhajja: 'Chhajja',
+  chhajja: 'Sunshade',
   slab: 'Roof slab',
   free: 'Element',
   extra: 'Element added by hand',
@@ -1732,8 +1732,8 @@ function BuilderElementPanel({
         <div className="pick-row">
           <span>Projection / thick (mm)</span>
           <span>
-            <N value={spec.chhajja.projection} onChange={(projection) => set({ chhajja: { ...spec.chhajja, projection } })} label="Chhajja projection" width={58} /> /{' '}
-            <N value={spec.chhajja.t} onChange={(t) => set({ chhajja: { ...spec.chhajja, t } })} label="Chhajja thickness" width={52} />
+            <N value={spec.chhajja.projection} onChange={(projection) => set({ chhajja: { ...spec.chhajja, projection } })} label="Sunshade projection" width={58} /> /{' '}
+            <N value={spec.chhajja.t} onChange={(t) => set({ chhajja: { ...spec.chhajja, t } })} label="Sunshade thickness" width={52} />
           </span>
         </div>
       );
@@ -2183,7 +2183,7 @@ function RoomsCard({ spec, setSpec }: { spec: BuilderSpec; setSpec: (patch: Part
           openings, {spec.lintel.h} mm deep
         </label>
         <label className="inline">
-          <input type="checkbox" checked={spec.chhajja.enabled} onChange={(e) => setSpec({ chhajja: { ...spec.chhajja, enabled: e.target.checked } })} /> Chhajja over
+          <input type="checkbox" checked={spec.chhajja.enabled} onChange={(e) => setSpec({ chhajja: { ...spec.chhajja, enabled: e.target.checked } })} /> Sunshade over
           outside windows{spec.chhajja.overDoors ? ' and doors' : ''}, {spec.chhajja.projection} mm out
         </label>
         <label className="inline">

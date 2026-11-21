@@ -376,7 +376,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
   if (spec.slab.enabled && !(spec.slab.overhang >= 0)) errors.push('Slab overhang cannot be negative.');
   if (spec.walls.enabled && !pos(spec.walls.t)) errors.push('Wall thickness must be positive (mm).');
   if (spec.lintel.enabled && (!pos(spec.lintel.h) || !(spec.lintel.bearing >= 0))) errors.push('Lintel depth must be positive and bearing 0 or more (mm).');
-  if (spec.chhajja.enabled && (!pos(spec.chhajja.projection) || !pos(spec.chhajja.t))) errors.push('Chhajja projection and thickness must be positive (mm).');
+  if (spec.chhajja.enabled && (!pos(spec.chhajja.projection) || !pos(spec.chhajja.t))) errors.push('Sunshade projection and thickness must be positive (mm).');
   (['footing', 'column', 'beam', 'slab'] as const).forEach((k) => {
     if (!(spec.steel[k] >= 0)) errors.push(`Steel rate for ${k} must be 0 or more (kg/m³).`);
   });
@@ -667,7 +667,7 @@ export function buildModel(spec: BuilderSpec): BuildResult {
               levelId: 'GF',
               geometry: { shape: 'box', position: cp, size: ax ? [r(cl, 4), r(ct, 4), r(pr, 4)] : [r(pr, 4), r(ct, 4), r(cl, 4)] },
               plannedQuantities: qty(cl * pr * ct, cl * pr + (cl + 2 * pr) * ct, spec.steel.slab),
-              notes: `Chhajja ${spec.chhajja.projection} mm projection, ${spec.chhajja.t} mm thick over ${ot.mark}`,
+              notes: `Sunshade ${spec.chhajja.projection} mm projection, ${spec.chhajja.t} mm thick over ${ot.mark}`,
             });
             refs[`${prefix}-CHJ-${key}-${n + 1}`] = { kind: 'chhajja', code: chhajjaCode, row };
             sum.chhajjas++;

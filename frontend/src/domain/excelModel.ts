@@ -139,7 +139,8 @@ export function workbookToModel(book: WorkbookValues): ExcelModelResult {
   const usedBy = new Map<string, Set<string>>();
   const out = elements.rows.map((r, i) => {
     const code = str(r.elementcode);
-    const type = str(r.type).toLowerCase();
+    // "Sunshade" is the English name of a chhajja
+    const type = ((t) => (t === 'sunshade' ? 'chhajja' : t))(str(r.type).toLowerCase());
     const label = code || `row ${elements.rowNo[i]}`;
     if (!code) errors.push(`Elements row ${elements.rowNo[i]}: "Element Code" is empty.`);
     const g = (c: string) => num(elements, i, c, label, false) ?? 0;

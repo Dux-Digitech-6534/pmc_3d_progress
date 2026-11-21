@@ -23,7 +23,7 @@ export const ELEMENT_TYPE_LABELS: Record<ElementType, string> = {
   slab: 'Slab',
   wall: 'Wall',
   lintel: 'Lintel',
-  chhajja: 'Chhajja',
+  chhajja: 'Sunshade',
   door: 'Door',
   window: 'Window',
 };

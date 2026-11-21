@@ -28,7 +28,7 @@ export const TYPE_LABELS: Record<ElementType, string> = {
   slab: 'Slab',
   wall: 'Wall',
   lintel: 'Lintel',
-  chhajja: 'Chhajja',
+  chhajja: 'Sunshade',
   door: 'Door',
   window: 'Window',
 };
