@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ConfirmDialog, EmptyState } from './components/ui';
 import { IS_FRAPPE } from './config';
 import { loadDemoData, storageIsPersistent } from './data/appRepository';
@@ -30,6 +30,14 @@ const NAV: { page: Page; label: string; icon: string }[] = [
   ...(IS_FRAPPE ? [] : [{ page: 'builder' as Page, label: 'Model Builder', icon: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4' }]),
 ];
 
+// phones: the bottom tab bar (the rest stays in the ≡ menu, reached by "More")
+const TAB_PAGES: Page[] = ['dashboard', 'workspace', 'planning', 'reports'];
+const TAB_LABELS: Partial<Record<Page, string>> = { dashboard: 'Home', workspace: 'Work', planning: 'Plan', reports: 'Reports' };
+const TABS = TAB_PAGES.map((p) => {
+  const n = NAV.find((x) => x.page === p)!;
+  return { page: p, icon: n.icon, label: TAB_LABELS[p] ?? n.label };
+});
+
 export default function App() {
   return (
     <AppProvider>
@@ -49,11 +57,15 @@ function Shell() {
   // phones: the menu folds behind a ≡ button
   const [menuOpen, setMenuOpen] = useState(false);
   const current = NAV.find((n) => n.page === page);
+  // a new page opens at its top (phones scroll the whole window)
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [page]);
   // No project yet: every page except the ones that create a model shows the welcome screen.
   const empty = !loading && projects.length === 0 && page !== 'builder' && page !== 'models';
 
   return (
-    <div className="app">
+    <div className={`app ${!noAccess && !empty ? 'has-tabbar' : ''}`}>
       <nav className={`sidebar ${menuOpen ? 'menu-open' : ''}`} aria-label="Main">
         <button className="menu-toggle" aria-expanded={menuOpen} aria-label={menuOpen ? 'Close menu' : 'Open menu'} onClick={() => setMenuOpen((o) => !o)}>
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -218,6 +230,47 @@ function Shell() {
           {!noAccess && page === 'models' && <ModelRegister />}
         </main>
       </div>
+
+      {/* phones: tapping outside the "More" sheet closes it */}
+      {menuOpen && !noAccess && !empty && <div className="sheet-backdrop" onClick={() => setMenuOpen(false)} aria-hidden />}
+      {/* phones: the main pages as app tabs at the bottom; "More" opens the full menu */}
+      {!noAccess && !empty && (
+        <nav className="tabbar" aria-label="Quick">
+          {TABS.map((t) => {
+            const on = !menuOpen && page === t.page;
+            return (
+              <button
+                key={t.page}
+                className={on ? 'on' : ''}
+                aria-current={on ? 'page' : undefined}
+                onClick={() => {
+                  setMenuOpen(false);
+                  go(t.page);
+                }}
+              >
+                <span className="tab-icon" aria-hidden>
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                    <path d={t.icon} />
+                  </svg>
+                </span>
+                <span className="tab-label">{t.label}</span>
+              </button>
+            );
+          })}
+          <button
+            className={menuOpen || !TABS.some((t) => t.page === page) ? 'on' : ''}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            <span className="tab-icon" aria-hidden>
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+                <path d="M5 12h.01M12 12h.01M19 12h.01" strokeWidth="3.2" />
+              </svg>
+            </span>
+            <span className="tab-label">More</span>
+          </button>
+        </nav>
+      )}
 
       <div className="toasts" aria-live="polite">
         {toasts.map((t) => (

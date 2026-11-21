@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { EmptyState, ErrorList, PageHeader, Spinner } from '../components/ui';
+import { EmptyState, ErrorList, PageHeader, Spinner, PageLoading } from '../components/ui';
 import { IS_FRAPPE } from '../config';
 import { errorMessages, type ItemMap } from '../data/repository';
 import { materialRequired } from '../domain/materialRequired';
@@ -138,7 +138,7 @@ export function MaterialVariation() {
       .map(([code, m]) => ({ code, name: seen.get(code)!, value: kindValue(m) }));
   }, [lines, itemMap]);
 
-  if (!data) return <Spinner label="Loading project…" />;
+  if (!data) return <PageLoading label="Loading project…" />;
   if (!data.model) {
     return (
       <EmptyState

@@ -4483,3 +4483,286 @@ input[type='radio'] {
     animation: none !important;
   }
 }
+
+/* ---- phones v3: app tab bar at the bottom, live progress ring, shimmer while loading ---- */
+.tabbar,
+.skel {
+  display: none;
+}
+@property --p {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+@media (max-width: 760px) {
+  .tabbar {
+    display: flex;
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    z-index: 40;
+    padding: 6px;
+    gap: 2px;
+    border-radius: 20px;
+    background: rgba(15, 39, 71, 0.94);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 12px 30px rgba(15, 39, 71, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    animation: tabbar-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .tabbar button {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 2px 5px;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    color: rgba(219, 231, 243, 0.7);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.2s, background 0.25s, transform 0.15s;
+  }
+  .tabbar button:active {
+    transform: scale(0.92);
+  }
+  .tab-icon {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 28px;
+    border-radius: 999px;
+    transition: background 0.3s, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .tabbar button.on {
+    color: #fff;
+  }
+  .tabbar button.on .tab-icon {
+    background: linear-gradient(135deg, #2dd4bf, #0f766e);
+    box-shadow: 0 4px 14px rgba(45, 212, 191, 0.45);
+    transform: translateY(-2px);
+    animation: icon-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  .tab-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  /* room for the tab bar under every page */
+  .content {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  }
+  .ws-m-3d .viewer-wrap {
+    height: calc(100vh - 300px);
+  }
+  .toasts {
+    left: 12px;
+    right: 12px;
+    bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* dashboard: compact hero with the progress ring in the corner, filling up when it opens */
+  .dash-hero {
+    padding: 20px 18px;
+    border-radius: 18px;
+  }
+  .dash-eyebrow,
+  .dash-hero h1,
+  .dash-hero p {
+    padding-right: 96px;
+  }
+  .dash-ring {
+    display: grid;
+    position: absolute;
+    top: 16px;
+    right: 14px;
+    width: 88px;
+    height: 88px;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.06), 0 8px 24px rgba(45, 212, 191, 0.3);
+    animation: ring-fill 1.2s 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .dash-ring-inner {
+    width: 70px;
+    height: 70px;
+  }
+  .dash-ring-inner b {
+    font-size: 20px;
+  }
+  .dash-ring-inner span {
+    display: none;
+  }
+  .dash-ring::after {
+    content: 'done';
+    position: absolute;
+    bottom: 20px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #99f6e4;
+  }
+  .dash-ring-inner b {
+    margin-top: -8px;
+  }
+  .dash-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .dash-kpi {
+    border-radius: 16px;
+  }
+  .dash-kpi-sub {
+    display: none;
+  }
+
+  /* loading: placeholder cards with a light sweep instead of a spinner */
+  .page-spinner {
+    display: none;
+  }
+  .skel {
+    display: block;
+  }
+  .skel > div,
+  .skel-row > div {
+    border-radius: 14px;
+    background: linear-gradient(100deg, #e6ecf3 30%, #f5f8fb 50%, #e6ecf3 70%);
+    background-size: 300% 100%;
+    animation: skel-sweep 1.3s ease-in-out infinite;
+  }
+  .skel-hero {
+    height: 150px;
+    margin-bottom: 14px;
+    border-radius: 18px !important;
+  }
+  .skel-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 18px;
+    background: none !important;
+    animation: none !important;
+  }
+  .skel-card {
+    height: 86px;
+  }
+  .skel-line {
+    height: 14px;
+    margin-bottom: 10px;
+    border-radius: 7px !important;
+  }
+  .skel-line.short {
+    width: 60%;
+  }
+  .skel-block {
+    height: 120px;
+    margin: 8px 0 16px;
+  }
+}
+@keyframes tabbar-in {
+  from { opacity: 0; transform: translateY(40px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ring-fill {
+  from { --p: 0; transform: rotate(-90deg) scale(0.7); opacity: 0; }
+  60% { opacity: 1; }
+  to { transform: none; }
+}
+@keyframes skel-sweep {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) {
+  .tabbar,
+  .tabbar button.on .tab-icon,
+  .dash-ring,
+  .skel > div {
+    animation: none !important;
+  }
+}
+
+/* ---- phones v3b: with the bottom tab bar the top ≡ button goes; "More" opens the menu as a sheet above the tabs ---- */
+.sheet-backdrop {
+  display: none;
+}
+@media (max-width: 760px) {
+  .has-tabbar .menu-toggle,
+  .has-tabbar .sidebar.menu-open .sidebar-foot {
+    display: none;
+  }
+  .has-tabbar .menu-current {
+    margin-left: auto;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(45, 212, 191, 0.14);
+    border: 1px solid rgba(45, 212, 191, 0.3);
+  }
+  .has-tabbar .sidebar.menu-open ul {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    z-index: 39;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    width: auto;
+    max-height: 62vh;
+    overflow: auto;
+    padding: 12px;
+    border-radius: 20px;
+    background: rgba(15, 39, 71, 0.97);
+    box-shadow: 0 -10px 40px rgba(15, 39, 71, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    animation: sheet-up 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .has-tabbar .sidebar.menu-open li button {
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    height: 100%;
+    min-height: 78px;
+    padding: 10px 4px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.05);
+    text-align: center;
+    font-size: 11.5px;
+    line-height: 1.25;
+  }
+  .has-tabbar .sidebar.menu-open li button.active {
+    background: linear-gradient(135deg, rgba(45, 212, 191, 0.35), rgba(15, 118, 110, 0.5));
+  }
+  .has-tabbar .sidebar.menu-open .nav-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+  }
+  .has-tabbar .sidebar.menu-open .nav-label {
+    white-space: normal;
+  }
+  .sheet-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 15;
+    background: rgba(15, 23, 42, 0.45);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    animation: fade-in 0.2s ease both;
+  }
+}
+@keyframes sheet-up {
+  from { opacity: 0; transform: translateY(30px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) {
+  .has-tabbar .sidebar.menu-open ul,
+  .sheet-backdrop {
+    animation: none !important;
+  }
+}

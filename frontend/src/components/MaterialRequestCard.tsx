@@ -33,9 +33,12 @@ export function MaterialRequestCard({ req, elementIds, bagKg }: { req: MaterialR
   // requests already made for this project (so nobody asks twice without seeing it)
   const [earlier, setEarlier] = useState<MaterialRequestSummary[] | null>(null);
   const [showAll, setShowAll] = useState(false);
+  // The ERPNext project can be shared with an older PMC project (e.g. one deleted and made again), so only
+  // requests made since this PMC project was created are shown as "already requested".
+  const since = (data?.project.createdAt ?? '').slice(0, 10);
   const loadEarlier = (p: string) =>
     repo.listMaterialRequests(p).then(
-      (l) => setEarlier(l),
+      (l) => setEarlier(since ? l.filter((m) => !m.date || m.date >= since) : l),
       () => setEarlier([]),
     );
 

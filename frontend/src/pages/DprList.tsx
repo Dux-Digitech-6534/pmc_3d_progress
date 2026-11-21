@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { EntryDetailsModal } from '../components/EntryDetailsModal';
-import { EmptyState, fmtDate, PageHeader, Spinner, StatusBadge } from '../components/ui';
+import { EmptyState, fmtDate, PageHeader, Spinner, StatusBadge, PageLoading } from '../components/ui';
 import { formatQty } from '../domain/progress';
 import { ENTRY_STATUSES, UNIT_LABELS, type EntryStatus, type ProgressEntry } from '../domain/types';
 import { permissions, todayISO } from '../domain/workflow';
@@ -92,7 +92,7 @@ export function DprList() {
     downloadText(`pmc-dpr-${scope === 'current' ? data?.project.id ?? 'project' : 'all-projects'}-${todayISO()}.csv`, toCsv([header, ...body]), 'text/csv;charset=utf-8');
   }
 
-  if (!data) return <Spinner />;
+  if (!data) return <PageLoading />;
 
   return (
     <div className="page">

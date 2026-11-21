@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { EmptyState, ErrorList, PageHeader, Spinner } from '../components/ui';
+import { EmptyState, ErrorList, PageHeader, Spinner, PageLoading } from '../components/ui';
 import { errorMessages } from '../data/repository';
 import { countResults, isCompleted, isSubmitted, NO_WORK_CODE, planEnd, planVsActual, PLAN_RESULT_LABELS, type PlanRow } from '../domain/planning';
 import { ELEMENT_TYPE_LABELS } from '../domain/reports';
@@ -80,7 +80,7 @@ export function Planning() {
   }, [shown, view]);
   const missedAll = submitted.filter((r) => r.result === 'missed').length;
 
-  if (!data) return <Spinner />;
+  if (!data) return <PageLoading />;
   if (!data.model)
     return (
       <div className="page">

@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { normsOf } from '../domain/materials';
 import { materialRequired } from '../domain/materialRequired';
 import { computeActivityProgress, formatQty } from '../domain/progress';
-import type { ElementRecord, ProgressEntry } from '../domain/types';
+import type { ElementRecord, ElementType, ProgressEntry } from '../domain/types';
+import { ELEMENT_TYPE_LABELS } from '../domain/reports';
 import { downloadXlsx, type SheetSpec } from '../lib/xlsxWriter';
 import { requestNeeds } from '../domain/materialRequest';
 import { todayISO } from '../domain/workflow';
@@ -66,11 +67,12 @@ export function MaterialRequiredPanel({
     const types = Object.entries(
       selected.reduce<Record<string, number>>((m, el) => ((m[el.type] = (m[el.type] ?? 0) + 1), m), {}),
     )
-      .map(([t, n]) => `${n} ${t}${n === 1 ? '' : 's'}`)
+      .map(([t, n]) => `${n} ${(ELEMENT_TYPE_LABELS[t as ElementType] ?? t).toLowerCase()}${n === 1 ? '' : 's'}`)
       .join(', ');
     const floors = [...new Set(selected.map((el) => `${el.buildingName} – ${el.levelName}`))].join(', ');
     const up = (n: number, d = 0) => Math.ceil(n * 10 ** d - 1e-9) / 10 ** d;
-    const lines: { material: string; spec: string; qty: number; unit: string; int?: boolean; note?: string }[] = [
+    // Remarks stay blank: the engineer writes them on the sheet
+    const lines: { material: string; spec: string; qty: number; unit: string; int?: boolean }[] = [
       ...req.steel.map((st) => ({ material: 'Steel (TMT bar)', spec: st.dia ? `${st.dia} mm` : 'Size not set', qty: up(st.kg), unit: 'kg', int: true })),
       ...req.concrete.map((g) => ({ material: 'Concrete', spec: `${g.grade} · ${g.elements} element${g.elements === 1 ? '' : 's'}`, qty: up(g.m3, 2), unit: 'm³' })),
       ...other.map((n) => ({
@@ -79,7 +81,6 @@ export function MaterialRequiredPanel({
         qty: n.unit === 'bags' || n.unit === 'nos' ? up(n.qty) : up(n.qty, 2),
         unit: n.unit,
         int: n.unit === 'bags' || n.unit === 'nos',
-        note: n.kind === 'cement' || n.kind === 'sand' || n.kind === 'aggregate' ? (req.concrete.length ? 'for site-mixed concrete / mortar' : 'for mortar') : '',
       })),
     ];
     const rows: SheetSpec['rows'] = [
@@ -96,25 +97,27 @@ export function MaterialRequiredPanel({
         { v: l.spec, s: 'cell' as const },
         { v: l.qty, s: (l.int ? 'int' : 'num') as 'int' | 'num' },
         { v: l.unit, s: 'cell' as const },
-        { v: l.note ?? '', s: 'cell' as const },
+        { v: '', s: 'cell' as const },
       ]),
       ...(req.steel.length
         ? [[{ v: '', s: 'totalLabel' as const }, { v: 'Total steel', s: 'totalLabel' as const }, { v: '', s: 'totalLabel' as const }, { v: up(req.steelTotal), s: 'total' as const }, { v: 'kg', s: 'totalLabel' as const }, { v: `= ${(up(req.steelTotal) / 1000).toFixed(3)} MT`, s: 'totalLabel' as const }]]
         : []),
       [],
       [{ v: 'Elements covered', s: 'label' }],
-      ['Sr', 'Element', 'Type', 'Building – Floor'].map((v) => ({ v, s: 'head' as const })),
-      ...selected.map((el, i) => [{ v: i + 1, s: 'int' as const }, { v: el.code, s: 'cell' as const }, { v: el.type.charAt(0).toUpperCase() + el.type.slice(1), s: 'cell' as const }, { v: `${el.buildingName} – ${el.levelName}`, s: 'cell' as const }]),
+      ['Sr', 'Element', 'Type', 'Building – Floor', null, null].map((v) => (v === null ? { v: '', s: 'head' as const } : { v, s: 'head' as const })),
+      ...selected.map((el, i) => [{ v: i + 1, s: 'int' as const }, { v: el.code, s: 'cell' as const }, { v: ELEMENT_TYPE_LABELS[el.type] ?? el.type, s: 'cell' as const }, { v: `${el.buildingName} – ${el.levelName}`, s: 'cell' as const }, { v: '', s: 'cell' as const }, { v: '', s: 'cell' as const }]),
       [],
       [],
       [],
       [null, { v: 'Prepared by (Site Engineer)', s: 'sign' }, null, { v: 'Checked by (PMC)', s: 'sign' }, null, { v: 'Approved by', s: 'sign' }],
     ];
+    const elHead = rows.findIndex((r) => r.length === 6 && !!r[3] && typeof r[3] === 'object' && r[3].v === 'Building – Floor');
     downloadXlsx(`material-requirement-${data?.project.id ?? 'project'}-${todayISO()}.xlsx`, {
       name: 'Material Requirement',
-      cols: [6, 30, 26, 14, 9, 30],
+      cols: [11, 30, 26, 14, 9, 30],
       rows,
-      merges: ['A1:F1', 'B2:D2', 'B3:F3', 'B4:F4', 'A5:F5'],
+      // "Building – Floor" of the elements table spans D:F so it reads on one line
+      merges: ['A1:F1', 'B2:D2', 'B3:F3', 'B4:F4', 'A5:F5', ...Array.from({ length: selected.length + 1 }, (_, k) => `D${elHead + 1 + k}:F${elHead + 1 + k}`)],
     });
   }
 

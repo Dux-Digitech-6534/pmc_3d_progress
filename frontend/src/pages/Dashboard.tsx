@@ -1,7 +1,7 @@
 import { inWorkOrder } from '../domain/sequence';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { EntryDetailsModal } from '../components/EntryDetailsModal';
-import { EmptyState, Spinner, StatusBadge } from '../components/ui';
+import { EmptyState, StatusBadge, PageLoading } from '../components/ui';
 import { ACTIVITY_STATUS_LABELS, computeActivityProgress, formatQty, summarizeActivity, type ActivityStatus } from '../domain/progress';
 import { ELEMENT_TYPES, UNIT_LABELS, type ProgressEntry } from '../domain/types';
 import { todayISO } from '../domain/workflow';
@@ -9,6 +9,28 @@ import { STATUS_COLORS, TYPE_LABELS } from '../lib/colors';
 import { useApp } from '../state/AppContext';
 import { usePlanning } from '../state/planning';
 import { isCompleted, isSubmitted, planEnd, planVsActual } from '../domain/planning';
+
+/** Phones: numbers count up from 0 when the dashboard opens (desktop and reduced motion: shown at once). */
+function CountUp({ value }: { value: number }) {
+  const animate = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(max-width: 760px)').matches && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const [n, setN] = useState(animate ? 0 : value);
+  useEffect(() => {
+    if (!animate || !value) {
+      setN(value);
+      return;
+    }
+    let raf = 0;
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const k = Math.min((t - t0) / 900, 1);
+      setN(Math.round(value * (1 - Math.pow(1 - k, 3))));
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value, animate]);
+  return <>{n}</>;
+}
 
 const ORDER: ActivityStatus[] = ['complete', 'in-progress', 'not-started', 'not-configured'];
 
@@ -61,7 +83,7 @@ export function Dashboard() {
   }, [data]);
 
   if (loadError) return <EmptyState title="Could not load project data">{loadError}</EmptyState>;
-  if (!data) return <Spinner />;
+  if (!data) return <PageLoading />;
 
   const { project, model, elements, entries } = data;
   const now = new Date();
@@ -112,7 +134,9 @@ export function Dashboard() {
         {model && (
           <div className="dash-ring" style={{ ['--p' as string]: donePct }} title={`${doneElements} of ${elements.length} elements have all their work approved`}>
             <div className="dash-ring-inner">
-              <b>{donePct}%</b>
+              <b>
+                <CountUp value={donePct} />%
+              </b>
               <span>
                 {doneElements} / {elements.length}
                 <br />
@@ -126,16 +150,20 @@ export function Dashboard() {
       {model && (
         <>
           <div className="dash-kpis">
-            <Kpi tone="navy" icon={ICONS.cube} label="Elements" value={elements.length} onClick={() => go('workspace')}>
+            <Kpi tone="navy" icon={ICONS.cube} label="Elements" value={<CountUp value={elements.length} />} onClick={() => go('workspace')}>
               {counts.map((c) => `${c.n} ${TYPE_LABELS[c.t].toLowerCase()}${c.n === 1 ? '' : 's'}`).join(' · ')}
             </Kpi>
-            <Kpi tone="amber" icon={ICONS.clock} label="Pending PMC review" value={pending.length} onClick={() => go('dpr')}>
+            <Kpi tone="amber" icon={ICONS.clock} label="Pending PMC review" value={<CountUp value={pending.length} />} onClick={() => go('dpr')}>
               {role === 'pmc-reviewer' ? 'Open the DPR list to review' : 'Submitted, not yet counted'}
             </Kpi>
-            <Kpi tone="teal" icon={ICONS.today} label="Reported today" value={todays.length} onClick={() => go('dpr')}>
+            <Kpi tone="teal" icon={ICONS.today} label="Reported today" value={<CountUp value={todays.length} />} onClick={() => go('dpr')}>
               Sent today{todaysDrafts ? ` · ${todaysDrafts} more in draft, not sent` : ''}
             </Kpi>
-            <Kpi tone="rose" icon={ICONS.draft} label="Drafts / returned" value={`${drafts} / ${returned}`} onClick={() => go('dpr')}>
+            <Kpi tone="rose" icon={ICONS.draft} label="Drafts / returned" value={
+                <>
+                  <CountUp value={drafts} /> / <CountUp value={returned} />
+                </>
+              } onClick={() => go('dpr')}>
               Not counted as progress
             </Kpi>
           </div>

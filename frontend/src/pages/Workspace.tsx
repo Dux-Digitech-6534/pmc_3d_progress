@@ -4,7 +4,7 @@ import { ElementPanel } from '../components/ElementPanel';
 import { ElementPicker } from '../components/ElementPicker';
 import { MaterialRequiredPanel } from '../components/MaterialRequiredPanel';
 import { ModelViewer } from '../components/ModelViewer';
-import { EmptyState, Spinner } from '../components/ui';
+import { EmptyState, PageLoading } from '../components/ui';
 import { ACTIVITY_STATUS_LABELS, computeActivityProgress, type ActivityProgress, type ActivityStatus } from '../domain/progress';
 import { ELEMENT_TYPES, VIEW_GROUPS, viewGroupOf, type ElementType, type ViewGroup } from '../domain/types';
 import { AWAITING_COLOR, STATUS_COLORS, TYPE_COLORS, TYPE_LABELS, SELECTION_COLOR } from '../lib/colors';
@@ -161,7 +161,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
   }, [statusById]);
 
   if (loadError) return <EmptyState title="Could not load project data">{loadError}</EmptyState>;
-  if (!data) return <Spinner label="Loading project…" />;
+  if (!data) return <PageLoading label="Loading project…" />;
   if (!data.model) {
     return (
       <EmptyState

@@ -1,6 +1,6 @@
 import { IS_FRAPPE } from '../config';
 import { useEffect, useState } from 'react';
-import { EmptyState, fmtDateTime, PageHeader, Spinner } from '../components/ui';
+import { EmptyState, fmtDateTime, PageHeader, PageLoading } from '../components/ui';
 import type { ModelRecord } from '../domain/types';
 import { useApp } from '../state/AppContext';
 
@@ -16,7 +16,7 @@ export function Projects() {
     };
   }, [repo, data]);
 
-  if (!projects.length) return <Spinner label="Loading projects…" />;
+  if (!projects.length) return <PageLoading label="Loading projects…" />;
 
   return (
     <div className="page">

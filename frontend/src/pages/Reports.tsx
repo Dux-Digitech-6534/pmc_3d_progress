@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { EmptyState, PageHeader, Spinner } from '../components/ui';
+import { EmptyState, PageHeader, PageLoading } from '../components/ui';
 import { formatQty } from '../domain/progress';
 import { categoryStatus, elementLabel, ELEMENT_TYPE_LABELS, executiveSummary, presetRange, type CountMode } from '../domain/reports';
 import { inWorkOrder } from '../domain/sequence';
@@ -88,7 +88,7 @@ export function Reports() {
 
   const statusActs = inWorkOrder(activities.filter((a) => statuses.some((x) => x.s.activityPercent[a.code] !== null && x.s.activityPercent[a.code] !== undefined)));
 
-  if (!data) return <Spinner />;
+  if (!data) return <PageLoading />;
   if (!data.model)
     return (
       <div className="page">

@@ -30,6 +30,29 @@ export function ProgressBar({ percent, status }: { percent: number | null; statu
   );
 }
 
+/** A whole page loading: the spinner on desktop, grey placeholder cards that shimmer on phones. */
+export function PageLoading({ label = 'Loading…' }: { label?: string }) {
+  return (
+    <>
+      <div className="page-spinner">
+        <Spinner label={label} />
+      </div>
+      <div className="page skel" role="status" aria-label={label}>
+        <div className="skel-hero" />
+        <div className="skel-row">
+          <div className="skel-card" />
+          <div className="skel-card" />
+        </div>
+        <div className="skel-line" />
+        <div className="skel-line short" />
+        <div className="skel-block" />
+        <div className="skel-line" />
+        <div className="skel-line short" />
+      </div>
+    </>
+  );
+}
+
 export function Spinner({ label = 'Loading…' }: { label?: string }) {
   return (
     <div className="spinner-wrap" role="status">
