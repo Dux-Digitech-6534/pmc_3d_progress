@@ -63,7 +63,16 @@ function Shell() {
         {!menuOpen && !empty && current && <span className="menu-current">{current.label}</span>}
         <div className="brand">
           <span className="brand-mark" aria-hidden>
-            ◆
+            <span className="brand-diamond">◆</span>
+            {/* phones: a small turning 3D cube instead of the diamond */}
+            <span className="cube3d">
+              <i className="f1" />
+              <i className="f2" />
+              <i className="f3" />
+              <i className="f4" />
+              <i className="f5" />
+              <i className="f6" />
+            </span>
           </span>
           <div>
             <div className="brand-name">PMC Progress</div>
