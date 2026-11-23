@@ -236,3 +236,45 @@ export function categoryStatus(elements: ElementRecord[], entries: ProgressEntry
   counts.going = rows.length - counts.complete - counts.notStarted - counts.noPlan;
   return { activities: acts, rows, buckets: [...map.values()].sort((a, b) => rank(a.stage) - rank(b.stage)), activityPercent, counts };
 }
+
+// ---------------------------------------------------------------- work done for billing
+
+export interface WorkLine {
+  date: string;
+  element: ElementRecord;
+  activity: ActivityDef;
+  quantity: number;
+  status: ProgressEntry['status'];
+  remarks: string;
+}
+
+/**
+ * The work done in a period entry by entry (meeting 21-11: "work done in Excel, to make the bill"):
+ * the same entries as the executive summary (same dates, building, type, element and approved /
+ * waiting rule), by date, then building, floor and element.
+ */
+export function workDoneLines(elements: ElementRecord[], entries: ProgressEntry[], activities: ActivityDef[], f: SummaryFilter): WorkLine[] {
+  const byId = new Map(elements.map((e) => [e.id, e]));
+  const acts = new Map(activities.map((a) => [a.code, a]));
+  const order = new Map(elements.map((e, i) => [e.id, i]));
+  const out: WorkLine[] = [];
+  for (const e of entries) {
+    if (!counts(e, f.mode)) continue;
+    if (f.from && e.date < f.from) continue;
+    if (f.to && e.date > f.to) continue;
+    const el = byId.get(e.elementId);
+    const a = acts.get(e.activityCode);
+    if (!el || !a || e.unit !== a.unit || !Number.isFinite(e.quantity) || e.quantity <= 0) continue;
+    if (f.buildingId && el.buildingId !== f.buildingId) continue;
+    if (f.type && el.type !== f.type) continue;
+    if (f.elementId && el.id !== f.elementId) continue;
+    out.push({ date: e.date, element: el, activity: a, quantity: roundQty(e.quantity), status: e.status, remarks: e.remarks ?? '' });
+  }
+  const work = inWorkOrder(activities).map((a) => a.code);
+  return out.sort(
+    (x, y) =>
+      x.date.localeCompare(y.date) ||
+      (order.get(x.element.id) ?? 0) - (order.get(y.element.id) ?? 0) ||
+      work.indexOf(x.activity.code) - work.indexOf(y.activity.code),
+  );
+}

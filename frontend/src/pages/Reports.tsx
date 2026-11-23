@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { EmptyState, PageHeader, PageLoading } from '../components/ui';
 import { formatQty } from '../domain/progress';
-import { categoryStatus, elementLabel, ELEMENT_TYPE_LABELS, executiveSummary, presetRange, type CountMode } from '../domain/reports';
+import { categoryStatus, elementLabel, ELEMENT_TYPE_LABELS, executiveSummary, presetRange, workDoneLines, type CountMode } from '../domain/reports';
 import { inWorkOrder } from '../domain/sequence';
 import { UNIT_LABELS, type ElementType } from '../domain/types';
 import { todayISO } from '../domain/workflow';
@@ -123,6 +123,63 @@ export function Reports() {
     go('workspace');
   };
 
+  // meeting 21-11: the work done of these dates entry by entry, to make the bill (same filters as the page)
+  function downloadBill() {
+    const lines = workDoneLines(elements, entries, activities, { from: dates.from, to: dates.to, buildingId, type, elementId: elementIdOk, mode });
+    const unit = (a: { unit: string }) => UNIT_LABELS[a.unit as keyof typeof UNIT_LABELS] ?? a.unit;
+    const rows: (Cell | null)[][] = [];
+    const merges: string[] = ['A1:I1'];
+    const add = (r: (Cell | null)[], merge?: string) => {
+      rows.push(r);
+      if (merge) merges.push(merge.replace(/#/g, String(rows.length)));
+    };
+    add([{ v: 'WORK DONE — FOR BILLING', s: 'title' }]);
+    add([{ v: 'Project', s: 'label' }, { v: `${data!.project.name} (${data!.project.id})`, s: 'plain' }, null, null, null, null, { v: 'Printed', s: 'label' }, { v: fmtDay(todayISO()), s: 'plain' }], 'B#:F#');
+    add([{ v: 'Dates', s: 'label' }, { v: periodText, s: 'plain' }], 'B#:I#');
+    add([{ v: 'Showing', s: 'label' }, { v: scopeText, s: 'plain' }], 'B#:I#');
+    add([{ v: 'Counted', s: 'label' }, { v: countText, s: 'plain' }], 'B#:I#');
+    add([]);
+    // totals first: what the bill is for
+    const totals = new Map<string, { name: string; unit: string; qty: number; n: number }>();
+    for (const l of lines) {
+      const t = totals.get(l.activity.code) ?? { name: l.activity.name, unit: unit(l.activity), qty: 0, n: 0 };
+      t.qty += l.quantity;
+      t.n += 1;
+      totals.set(l.activity.code, t);
+    }
+    add([{ v: '1. Total work done', s: 'label' }]);
+    if (totals.size) {
+      add(['Work', 'Quantity', 'Unit', 'Entries'].map((v) => ({ v, s: 'head' as const })));
+      for (const t of totals.values()) add([{ v: t.name, s: 'cell' }, { v: Math.round(t.qty * 1000) / 1000, s: 'num' }, { v: t.unit, s: 'cell' }, { v: t.n, s: 'int' }]);
+    } else add([{ v: 'No work in these dates.', s: 'note' }], 'A#:I#');
+    add([]);
+    add([{ v: '2. Entry-wise', s: 'label' }]);
+    add(['Sr', 'Date', 'Element', 'Building – Floor', 'Type', 'Work', 'Quantity', 'Unit', 'Status / remarks'].map((v) => ({ v, s: 'head' as const })));
+    lines.forEach((l, i) =>
+      add([
+        { v: i + 1, s: 'int' },
+        { v: fmtDay(l.date), s: 'cell' },
+        { v: l.element.code, s: 'cell' },
+        { v: `${l.element.buildingName} – ${l.element.levelName}`, s: 'cell' },
+        { v: ELEMENT_TYPE_LABELS[l.element.type] ?? l.element.type, s: 'cell' },
+        { v: l.activity.name, s: 'cell' },
+        { v: l.quantity, s: 'num' },
+        { v: unit(l.activity), s: 'cell' },
+        { v: [l.status === 'Approved' ? 'Approved' : 'Waiting for approval', l.remarks].filter(Boolean).join(' · '), s: 'cell' },
+      ]),
+    );
+    add([]);
+    add([]);
+    add([]);
+    add([null, { v: 'Prepared by (Site Engineer)', s: 'sign' }, null, null, { v: 'Checked by (PMC)', s: 'sign' }, null, null, { v: 'Approved by', s: 'sign' }]);
+    downloadXlsx(`work-done-for-bill-${data!.project.id}-${dates.from || 'start'}-to-${dates.to || todayISO()}.xlsx`, {
+      name: 'Work done',
+      cols: [7, 12, 14, 26, 11, 16, 11, 7, 44],
+      rows,
+      merges,
+    });
+  }
+
   // the report as a printable Excel sheet (same three parts as the page)
   function download() {
     const acts = summary.activities;
@@ -232,9 +289,14 @@ export function Reports() {
         title="Reports"
         subtitle="How much work was done between two dates, and where the elements stand."
         actions={
-          <button className="btn" onClick={download}>
-            Download Excel
-          </button>
+          <div className="rep-downloads">
+            <button className="btn" onClick={download}>
+              Download Excel
+            </button>
+            <button className="btn" onClick={downloadBill} title="Every entry of these dates, element by element, with totals — for making the bill">
+              Work done for bill (Excel)
+            </button>
+          </div>
         }
       />
 

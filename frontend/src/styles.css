@@ -5308,3 +5308,10 @@ input[type='radio'] {
   border-style: dashed;
   border-width: 1.5px;
 }
+
+/* Reports: the two downloads side by side */
+.rep-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
