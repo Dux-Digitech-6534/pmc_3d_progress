@@ -53,8 +53,8 @@ export function PhotoPicker({
           ))}
         </div>
       )}
-      <label className={`btn btn-small ${room <= 0 || disabled ? 'disabled' : ''}`}>
-        Attach photo
+      <label className={`btn photo-add ${room <= 0 || disabled ? 'disabled' : ''}`}>
+        📷 Add photos <span className="muted small">({pending.length + existing.length}/{MAX_PHOTOS})</span>
         <input
           type="file"
           accept="image/jpeg,image/png,image/webp,image/gif"

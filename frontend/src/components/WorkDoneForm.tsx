@@ -11,6 +11,7 @@ import { newRequestId, useApp } from '../state/AppContext';
 import { setPlanning, usePlanning } from '../state/planning';
 import { PhotoPicker } from './Photos';
 import { ErrorList } from './ui';
+import { CONCRETE_CODE, cubeErrors, cubeRemarks, nextCubeNo } from '../domain/cubeTest';
 
 /**
  * Work done for the ticked elements: tick the activities, then "Started" (the start date is kept) or
@@ -29,12 +30,19 @@ export function WorkDoneForm({
   /** From "Today's plan": these elements were selected for this work — tick it. */
   startWith?: { ids: string; code: string } | null;
 }) {
-  const { repo, role, notify, refresh } = useApp();
+  const { repo, role, notify, refresh, data } = useApp();
   // Activities that apply to at least one ticked element.
   const activities = useMemo(() => allActivities.filter((a) => elements.some((el) => activityApplies(a, el.type))), [allActivities, elements]);
   const [ticked, setTicked] = useState<Set<string>>(() => new Set());
   const [kind, setKind] = useState<'started' | 'done'>('done');
-  const percent = '100';
+  // meeting 21-11, columns length-wise: a column is cast in lifts; "Lift 1 of 2" marks it 50 % done
+  const allColumns = elements.length > 0 && elements.every((el) => el.type === 'column');
+  const [lifts, setLifts] = useState(2);
+  const [lift, setLift] = useState(0); // 0 = full column
+  const percent = allColumns && lift > 0 ? String(Math.round((lift / lifts) * 1000) / 10) : '100';
+  // meeting 21-11, cube test: concreting gets a cube number from the system, with the slump
+  const [slump, setSlump] = useState('');
+  const [cubes, setCubes] = useState('3');
   const { data: planning } = usePlanning();
   const [date, setDate] = useState(todayISO());
   const [remarks, setRemarks] = useState('');
@@ -49,6 +57,7 @@ export function WorkDoneForm({
   useEffect(() => {
     // Selection changed: start the ticks again (with the planned work ticked when chosen from Today's plan).
     setTicked(startWith && startWith.ids === ids ? new Set([startWith.code]) : new Set());
+    setLift(0);
     setErrors([]);
     requestIds.current.clear();
   }, [ids, startWith]);
@@ -67,6 +76,9 @@ export function WorkDoneForm({
       }),
     [activities, elements, entries, planning],
   );
+
+  const concreting = kind === 'done' && ticked.has(CONCRETE_CODE) && activities.some((a) => a.code === CONCRETE_CODE);
+  const cubeNo = useMemo(() => nextCubeNo((data?.allEntries ?? []).map((e) => e.remarks)), [data?.allEntries]);
 
   const plans = useMemo(
     () => (pctOk ? activities.filter((a) => ticked.has(a.code)).map((a) => planWorkDone(elements, a, entries, pct)) : []),
@@ -155,9 +167,10 @@ export function WorkDoneForm({
     }
     if (!pctOk) errs.push('Work done must be between 1 and 100 %.');
     else if (ticked.size && !plans.some((p) => p.recording.length)) errs.push(`Nothing new to record — the selected work is already marked ${pct}% or more.`);
-    if (remarks.length > 500) errs.push('Remarks must be 500 characters or fewer.');
+    if (remarks.length > 400) errs.push('Remarks must be 400 characters or fewer.');
+    if (concreting) errs.push(...cubeErrors(slump, cubes));
     return errs;
-  }, [date, ticked, pctOk, pct, plans, remarks, outOfOrder, orderOk, kind, toStart]);
+  }, [date, ticked, pctOk, pct, plans, remarks, outOfOrder, orderOk, kind, toStart, concreting, slump, cubes]);
 
   function toggle(code: string) {
     setTicked((t) => {
@@ -224,10 +237,16 @@ export function WorkDoneForm({
         storedPhotos.current.set(f, meta);
         stored.push(meta);
       }
-      const note = remarks.trim() || `${pct}% done`;
+      const liftText = allColumns && lift > 0 ? `Lift ${lift} of ${lifts} (${pct}%)` : '';
+      const baseNote = [liftText, remarks.trim()].filter(Boolean).join(' — ') || `${pct}% done`;
       for (const plan of plans) {
         if (!plan.recording.length) continue;
         const code = plan.activity.code;
+        // the concreting entry carries the cube record first
+        const note =
+          code === CONCRETE_CODE && concreting
+            ? cubeRemarks({ cubeNo, slumpMm: Number(slump), cubes: Number(cubes) }, [liftText, remarks.trim()].filter(Boolean).join(' — '))
+            : baseNote;
         if (!requestIds.current.has(code)) requestIds.current.set(code, newRequestId());
         try {
           await repo.saveBatchEntries(
@@ -265,8 +284,9 @@ export function WorkDoneForm({
     }
     if (done.length) {
       notify(
-        `${done.join(', ')} marked ${pct}% done on ${elements.length} element${elements.length === 1 ? '' : 's'} — ${submit ? 'sent for PMC approval' : 'saved as draft'}.`,
+        `${done.join(', ')} marked ${pct}% done on ${elements.length} element${elements.length === 1 ? '' : 's'} — ${submit ? 'sent for PMC approval' : 'saved as draft'}.${doneCodes.has(CONCRETE_CODE) && concreting ? ` Cube number ${cubeNo} — write it on the cubes.` : ''}`,
       );
+      if (doneCodes.has(CONCRETE_CODE)) setSlump('');
       setTicked((t) => new Set([...t].filter((c) => !doneCodes.has(c))));
       if (!failed.length) {
         setRemarks('');
@@ -335,6 +355,35 @@ export function WorkDoneForm({
               <small>Work finished — goes for PMC approval</small>
             </button>
           </div>
+          {kind === 'done' && allColumns && (
+            <div className="wd-lift" role="group" aria-label="How much of the column">
+              <div className="wd-lift-head">
+                <b>Column done up to</b>
+                <label>
+                  Cast in
+                  <select value={lifts} onChange={(e) => (setLifts(Number(e.target.value)), setLift(0))} aria-label="Number of lifts">
+                    {[2, 3, 4].map((n) => (
+                      <option key={n} value={n}>
+                        {n} lifts
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="wd-lift-btns">
+                {Array.from({ length: lifts - 1 }, (_, i) => i + 1).map((n) => (
+                  <button type="button" key={n} className={`wd-lift-btn ${lift === n ? 'on' : ''}`} onClick={() => setLift(n)}>
+                    <b>Lift {n}</b>
+                    <small>{Math.round((n / lifts) * 100)}%</small>
+                  </button>
+                ))}
+                <button type="button" className={`wd-lift-btn ${lift === 0 ? 'on' : ''}`} onClick={() => setLift(0)}>
+                  <b>Full column</b>
+                  <small>100%</small>
+                </button>
+              </div>
+            </div>
+          )}
           <label className="wd-date">
             {kind === 'started' ? 'Start date' : 'Complete date'}
             <input type="date" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} />
@@ -362,15 +411,34 @@ export function WorkDoneForm({
             </div>
           )}
 
+          {concreting && (
+            <div className="wd-cube">
+              <div className="wd-cube-head">
+                <b>Cube test</b>
+                <span className="wd-cube-no">{cubeNo}</span>
+              </div>
+              <p className="hint">Write this number on the cubes of this pour.</p>
+              <div className="wd-cube-fields">
+                <label>
+                  Slump (mm) *
+                  <input type="number" inputMode="numeric" min={1} max={300} value={slump} onChange={(e) => setSlump(e.target.value)} placeholder="e.g. 75" />
+                </label>
+                <label>
+                  Cubes taken
+                  <input type="number" inputMode="numeric" min={1} max={30} value={cubes} onChange={(e) => setCubes(e.target.value)} />
+                </label>
+              </div>
+            </div>
+          )}
+
           {kind === 'done' && (
-          <details className="wd-more">
-            <summary>Remarks, photos</summary>
-            <label>
-              Remarks
-              <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} maxLength={500} placeholder="Optional" />
-            </label>
-            <PhotoPicker pending={pending} onChange={setPending} disabled={busy} />
-          </details>
+            <div className="wd-more wd-more-open">
+              <PhotoPicker pending={pending} onChange={setPending} disabled={busy} />
+              <label>
+                Remarks
+                <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} maxLength={400} placeholder="Optional" />
+              </label>
+            </div>
           )}
 
           <ErrorList errors={errors} />

@@ -67,8 +67,7 @@ export function ElementPanel({
           </p>
         </div>
         <ApproveTicked elements={selected} entries={entries} />
-        <DraftEntries elements={selected} entries={entries} />
-        <SelectionTotals elements={selected} activities={activities} entries={entries} />
+        {/* meeting 21-11: the work entry comes first; the totals and material of the selection go below it */}
         <div className="panel-section">
           <h3 className="section-title">Work done</h3>
           {permissions.canCreate(role) ? (
@@ -77,6 +76,8 @@ export function ElementPanel({
             <p className="muted">{ROLE_LABELS[role]} can view progress only. {IS_FRAPPE ? 'A PMC Site Engineer records work.' : 'Switch to Site Engineer to record work (demo role switch).'}</p>
           )}
         </div>
+        <DraftEntries elements={selected} entries={entries} />
+        <SelectionTotals elements={selected} activities={activities} entries={entries} />
       </div>
     );
   }
