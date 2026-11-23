@@ -262,3 +262,54 @@ def ensure_erp_project(project_id):
 			name = doc.name
 		frappe.defaults.set_global_default(_erp_key(project_id), name)
 	return {"erpProject": name, "erpProjectName": frappe.db.get_value("Project", name, "project_name") or name}
+
+
+# ---------------------------------------------------------------- concrete of a project (RMC / site mix)
+# How the project's concrete is ordered and the grade of each RCC element type, chosen in the app by the
+# PMC Reviewer. Kept per project in a global default like the planning: no DocType, no migrate.
+
+_CONCRETE_MODES = ("rmc", "site")
+_CONCRETE_GRADES = ("M15", "M20", "M25", "M30", "M35", "M40")
+_RCC_TYPES = ("footing", "column", "beam", "slab", "lintel", "chhajja")
+
+
+def _concrete_key(project_id):
+	return f"pmc3d_beta_concrete::{project_id}"
+
+
+def _concrete(project_id):
+	raw = frappe.defaults.get_global_default(_concrete_key(project_id))
+	try:
+		data = json.loads(raw) if raw else {}
+	except ValueError:
+		data = {}
+	grades = data.get("gradeByType") or {}
+	return {
+		"mode": data.get("mode") if data.get("mode") in _CONCRETE_MODES else "rmc",
+		"gradeByType": {t: g for t, g in grades.items() if t in _RCC_TYPES and g in _CONCRETE_GRADES},
+	}
+
+
+@frappe.whitelist()
+def get_concrete_settings(project_id):
+	_require_reader()
+	return _concrete(project_id)
+
+
+@frappe.whitelist(methods=["POST"])
+def save_concrete_settings(project_id, mode, grade_by_type=None, role=None):
+	_act_as(role)
+	if role != "pmc-reviewer":
+		_throw("Only the PMC Reviewer can change the concrete settings.", frappe.PermissionError)
+	if not frappe.db.exists("PMC Project", project_id):
+		_throw(f"Project {project_id} was not found.", frappe.DoesNotExistError)
+	if mode not in _CONCRETE_MODES:
+		_throw("Choose ready-mix (RMC) or mixed on site.")
+	grades = _parse(grade_by_type) or {}
+	if not isinstance(grades, dict):
+		_throw("Grades are not valid.")
+	for t, g in grades.items():
+		if t not in _RCC_TYPES or g not in _CONCRETE_GRADES:
+			_throw(f"{g} is not a concrete grade for {t}.")
+	frappe.defaults.set_global_default(_concrete_key(project_id), json.dumps({"mode": mode, "gradeByType": grades}))
+	return _concrete(project_id)

@@ -11,6 +11,8 @@ import { requestNeeds } from '../domain/materialRequest';
 import { todayISO } from '../domain/workflow';
 import { useApp } from '../state/AppContext';
 import { MaterialRequestCard } from './MaterialRequestCard';
+import { ConcreteSettingsBar } from './ConcreteSettingsBar';
+import { useConcrete } from '../state/concrete';
 import { EmptyState, Modal } from './ui';
 
 /** Right panel in "Material required" mode: what the ticked elements need, steel by bar size, concrete by grade. */
@@ -41,7 +43,10 @@ export function MaterialRequiredPanel({
     [previewUrl],
   );
   const norms = normsOf(data?.model?.document);
-  const req = useMemo(() => materialRequired(selected, entries, norms, 'balance'), [selected, entries, norms]);
+  // the project's concrete: ready-mix or site mix, grade per type chosen in the app
+  const { settings: concrete } = useConcrete();
+  const req = useMemo(() => materialRequired(selected, entries, norms, 'balance', concrete), [selected, entries, norms, concrete]);
+  const rmc = concrete.mode === 'rmc';
   // elements whose planned work is all approved: nothing more to bring for them
   const done = useMemo(() => {
     const acts = data?.model?.document?.activities ?? [];
@@ -66,6 +71,8 @@ export function MaterialRequiredPanel({
 
   if (!selected.length) {
     return (
+      <>
+      {withRequest && <div className="panel-section"><ConcreteSettingsBar /></div>}
       <EmptyState
         title="No element selected"
         action={
@@ -77,13 +84,14 @@ export function MaterialRequiredPanel({
         Select the elements to be cast or built next (e.g. all slabs of the first floor) above, or click them in the 3D view — the steel by bar size and the
         concrete by grade they need is shown here.
       </EmptyState>
+      </>
     );
   }
 
   // the summary the PMC asked for: steel by bar size and concrete by grade (no "Other" list)
   const nothing = !req.steel.length && !req.concrete.length;
   // walls, plaster …: no steel or concrete, but bricks, cement, sand (the same lines the Material Request asks for)
-  const other = requestNeeds(req).filter((n) => n.kind !== 'steel' && n.kind !== 'concrete');
+  const other = requestNeeds(req, concrete.mode).filter((n) => n.kind !== 'steel' && n.kind !== 'concrete');
   const hasAny = !nothing || other.length > 0;
 
   // the lines of the requirement, the same in the Excel sheet and the WhatsApp picture
@@ -98,7 +106,7 @@ export function MaterialRequiredPanel({
   function requirementLines(): { material: string; spec: string; qty: number; unit: string; int?: boolean }[] {
     return [
       ...req.steel.map((st) => ({ material: 'Steel (TMT bar)', spec: st.dia ? `${st.dia} mm` : 'Size not set', qty: up(st.kg), unit: 'kg', int: true })),
-      ...req.concrete.map((g) => ({ material: 'Concrete', spec: `${g.grade} (ready-mix) · ${g.elements} element${g.elements === 1 ? '' : 's'}`, qty: up(g.m3, 2), unit: 'm³' })),
+      ...req.concrete.map((g) => ({ material: 'Concrete', spec: `${g.grade} (${rmc ? 'ready-mix' : 'mixed on site'}) · ${g.elements} element${g.elements === 1 ? '' : 's'}`, qty: up(g.m3, 2), unit: 'm³' })),
       ...other.map((n) => ({
         material: n.label,
         spec: n.kind === 'cement' ? `OPC, ${norms.bagKg || 50} kg bag` : n.kind === 'aggregate' ? '20 mm' : '',
@@ -117,7 +125,7 @@ export function MaterialRequiredPanel({
         l.material === 'Steel (TMT bar)'
           ? { material: `Steel ${l.spec}`, spec: 'TMT bar', qty: formatQty(l.qty), unit: l.unit }
           : l.material === 'Concrete'
-            ? { material: `Concrete ${l.spec.split(' ')[0]}`, spec: 'Ready-mix (RMC)', qty: formatQty(l.qty), unit: l.unit }
+            ? { material: `Concrete ${l.spec.split(' ')[0]}`, spec: rmc ? 'Ready-mix (RMC)' : 'Mixed on site — cement, sand, gitti below', qty: formatQty(l.qty), unit: l.unit }
             : { material: l.material, spec: l.spec, qty: formatQty(l.qty), unit: l.unit },
       );
       if (req.steel.length > 1) lines.push({ material: 'Total steel', spec: `= ${(up(req.steelTotal) / 1000).toFixed(3)} MT`, qty: formatQty(up(req.steelTotal)), unit: 'kg' });
@@ -262,6 +270,7 @@ export function MaterialRequiredPanel({
         </Modal>
       )}
       <div className="panel-section">
+        {withRequest && <ConcreteSettingsBar />}
         <h2 className="panel-title">{selected.length === 1 ? selected[0].code : `${selected.length} elements selected`}</h2>
         {selected.length > 1 && (
           <p className="muted small">
@@ -415,6 +424,7 @@ export function MaterialRequiredPanel({
           req={req}
           elementIds={selected.map((e) => e.id).join(',')}
           bagKg={norms.bagKg}
+          mode={concrete.mode}
           onDownload={hasAny ? download : undefined}
           onShare={hasAny ? (mr) => void share(mr) : undefined}
           sharing={sharing}

@@ -1,3 +1,4 @@
+import { cleanConcreteSettings, type ConcreteSettings } from '../domain/concrete';
 import { resolveBatchQuantities } from '../domain/allocation';
 import { validateModelDocument } from '../domain/modelValidation';
 import type { ActivityDef, ElementRecord, HistoryItem, ModelRecord, ProgressEntry, Project, Role, Unit } from '../domain/types';
@@ -800,6 +801,19 @@ export class LocalRepository implements PmcRepository {
   }
   private planner(role: Role) {
     if (role !== 'site-engineer' && role !== 'pmc-reviewer') throw new RepositoryError('forbidden', 'Only a PMC Site Engineer or PMC Reviewer can change the planning.');
+  }
+
+  getConcreteSettings(projectId: string): Promise<ConcreteSettings> {
+    return this.op(() => cleanConcreteSettings(this.read<unknown>(`${STORAGE_PREFIX}concrete.${projectId}`, {})));
+  }
+
+  saveConcreteSettings(projectId: string, settings: ConcreteSettings, role: Role): Promise<ConcreteSettings> {
+    return this.op(() => {
+      if (role !== 'pmc-reviewer') throw new RepositoryError('forbidden', 'Only the PMC Reviewer can change the concrete settings.');
+      const clean = cleanConcreteSettings(settings);
+      this.write(`${STORAGE_PREFIX}concrete.${projectId}`, clean);
+      return clean;
+    });
   }
 
   getPlanning(projectId: string): Promise<PlanningData> {

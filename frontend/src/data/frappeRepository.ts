@@ -1,3 +1,4 @@
+import { cleanConcreteSettings, type ConcreteSettings } from '../domain/concrete';
 import type { ReviewDecision } from '../domain/workflow';
 import type { ElementRecord, ModelRecord, ProgressEntry, Project, Role } from '../domain/types';
 import { elementsFromModel } from './elements';
@@ -251,6 +252,16 @@ export class FrappeRepository implements PmcRepository {
   ensureErpProject(projectId: string) {
     // beta: the linked ERPNext project must belong to the Material Request company, else it is re-linked
     return call<{ erpProject: string; erpProjectName: string }>('beta_api.ensure_erp_project', { project_id: projectId });
+  }
+
+  async getConcreteSettings(projectId: string) {
+    return cleanConcreteSettings(await call<unknown>('beta_api.get_concrete_settings', { project_id: projectId }, 'GET'));
+  }
+
+  async saveConcreteSettings(projectId: string, settings: ConcreteSettings, role: Role) {
+    return cleanConcreteSettings(
+      await call<unknown>('beta_api.save_concrete_settings', { project_id: projectId, mode: settings.mode, grade_by_type: JSON.stringify(settings.gradeByType), role }),
+    );
   }
 
   // planning lives in pmc_3d_progress/beta_api.py (reports-mobile branch)

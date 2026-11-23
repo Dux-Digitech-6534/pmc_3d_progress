@@ -3,6 +3,7 @@
 // the ERP item that is that material, in its stock unit.
 
 import type { MaterialRequired } from './materialRequired';
+import type { ConcreteMode } from './concrete';
 import { matchItem, toReportUnit, type MaterialKind } from './materialVariation';
 
 export interface RequestNeed {
@@ -23,7 +24,7 @@ export interface RequestNeed {
  * RMC order (meeting 21-11) — not split into cement, sand and gitti; cement and sand are only for
  * brickwork and plaster.
  */
-export function requestNeeds(req: MaterialRequired): RequestNeed[] {
+export function requestNeeds(req: MaterialRequired, mode: ConcreteMode = 'rmc'): RequestNeed[] {
   const out: RequestNeed[] = req.steel.map((s) => ({
     key: `steel:${s.dia}`,
     label: s.dia ? `Steel ${s.dia} mm` : 'Steel (size not set)',
@@ -32,6 +33,15 @@ export function requestNeeds(req: MaterialRequired): RequestNeed[] {
     qty: s.kg,
     unit: 'kg',
   }));
+  // mixed on site: cement, sand and gitti for the concrete too, no ready-mix line
+  if (mode === 'site') {
+    const add = (kind: MaterialKind, label: string, qty: number, unit: string) => qty > 0 && out.push({ key: kind, label, kind, qty, unit });
+    add('cement', 'Cement', req.materials.cement, 'bags');
+    add('sand', 'Sand', req.materials.sand, 'm³');
+    add('aggregate', 'Aggregate (gitti)', req.materials.aggregate, 'm³');
+    add('bricks', 'Bricks', req.materials.bricks, 'nos');
+    return out.filter((n) => n.qty > 0);
+  }
   for (const c of req.concrete) {
     const grade = c.grade === 'Other' ? undefined : c.grade;
     out.push({ key: `concrete:${c.grade}`, label: grade ? `Concrete ${grade}` : 'Concrete (grade not set)', kind: 'concrete', grade, qty: c.m3, unit: 'm³' });

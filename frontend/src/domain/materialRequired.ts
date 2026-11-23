@@ -1,4 +1,5 @@
 import { addMaterials, approvedOf, emptyMaterials, materialsFor, plannedOf, RCC_ELEMENT_TYPES, type MaterialNorms, type MaterialQty, type RccType } from './materials';
+import { gradeOf, mixOf, type ConcreteSettings } from './concrete';
 import { roundQty } from './progress';
 import type { ElementRecord, ProgressEntry } from './types';
 
@@ -36,7 +37,11 @@ function balanceOf(el: ElementRecord, entries: ProgressEntry[]): Record<string, 
   return Object.fromEntries(Object.entries(plannedOf(el)).map(([k, q]) => [k, Math.max(q - (done[k] ?? 0), 0)]));
 }
 
-export function materialRequired(elements: ElementRecord[], entries: ProgressEntry[], norms: MaterialNorms, basis: RequiredBasis): MaterialRequired {
+/**
+ * settings: the project's concrete settings (grade per type chosen in the app). Given, each element's
+ * concrete is also worked out with the cement / sand / gitti mix of its own grade (site mix).
+ */
+export function materialRequired(elements: ElementRecord[], entries: ProgressEntry[], norms: MaterialNorms, basis: RequiredBasis, settings?: ConcreteSettings): MaterialRequired {
   const w = 1 + (norms.wastagePct || 0) / 100;
   const byGrade = new Map<string, { m3: number; elements: Set<string> }>();
   const byDia = new Map<number, number>();
@@ -49,14 +54,15 @@ export function materialRequired(elements: ElementRecord[], entries: ProgressEnt
   let fromTypical = 0;
   for (const el of elements) {
     const q = basis === 'planned' ? plannedOf(el) : basis === 'done' ? approvedOf(el, entries) : balanceOf(el, entries);
-    materials = addMaterials(materials, materialsFor(q, norms));
+    const grade = settings ? gradeOf(el, norms, settings) : el.concreteGrade?.trim() || (isRcc(el.type) && norms.gradeByType[el.type]) || 'Other';
+    // site mix: the concrete part with the mix of the element's grade
+    materials = addMaterials(materials, materialsFor(q, settings ? { ...norms, concrete: mixOf(grade, norms) } : norms));
     nonConcrete = addMaterials(nonConcrete, materialsFor({ BRICK: q.BRICK ?? 0, PLAST: q.PLAST ?? 0 }, norms));
     shut += q.SHUT ?? 0;
     brick += q.BRICK ?? 0;
     plast += q.PLAST ?? 0;
     const conc = q.CONC ?? 0;
     if (conc > 0) {
-      const grade = el.concreteGrade?.trim() || (isRcc(el.type) && norms.gradeByType[el.type]) || 'Other';
       const g = byGrade.get(grade) ?? { m3: 0, elements: new Set<string>() };
       g.m3 += conc;
       g.elements.add(el.id);

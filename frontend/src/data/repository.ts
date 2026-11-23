@@ -1,3 +1,4 @@
+import type { ConcreteSettings } from '../domain/concrete';
 import type { ReviewDecision } from '../domain/workflow';
 import type { PlanningData } from '../domain/planning';
 import type { QuantityMode } from '../domain/allocation';
@@ -68,6 +69,11 @@ export interface PmcRepository {
   saveVariationSettings(projectId: string, change: { erpProject?: string; itemMap?: ItemMap }): Promise<VariationSettings>;
   /** The ERPNext project of a PMC project — linked before, found by the same name, or created — so nobody has to pick it. */
   ensureErpProject(projectId: string): Promise<{ erpProject: string; erpProjectName: string }>;
+
+  /** Concrete of a project: ready-mix or site mix, and the grade per element type (beta_api.py on the server). */
+  getConcreteSettings(projectId: string): Promise<ConcreteSettings>;
+  /** Only the PMC Reviewer changes them. */
+  saveConcreteSettings(projectId: string, settings: ConcreteSettings, role: Role): Promise<ConcreteSettings>;
 
   // ---- planning (reports-mobile branch; on the server in pmc_3d_progress/beta_api.py) ----
   getPlanning(projectId: string): Promise<PlanningData>;

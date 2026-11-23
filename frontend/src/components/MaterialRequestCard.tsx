@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { ConcreteMode } from '../domain/concrete';
 import { WhatsAppIcon } from './MaterialRequiredPanel';
 import { IS_FRAPPE } from '../config';
 import { errorMessages, type ErpItem, type MaterialRequestSummary } from '../data/repository';
@@ -24,7 +25,10 @@ export function MaterialRequestCard({
   onDownload,
   onShare,
   sharing,
+  mode = 'rmc',
 }: {
+  /** The project's concrete: ready-mix (grade + m³) or site mix (cement, sand, gitti). */
+  mode?: ConcreteMode;
   req: MaterialRequired;
   elementIds: string;
   bagKg: number;
@@ -100,7 +104,7 @@ export function MaterialRequestCard({
     setErrors([]);
   }, [elementIds]);
 
-  const needs = useMemo(() => requestNeeds(req), [req]);
+  const needs = useMemo(() => requestNeeds(req, mode), [req, mode]);
   const lines = useMemo(
     () =>
       needs.map((n) => {

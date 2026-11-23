@@ -5315,3 +5315,100 @@ input[type='radio'] {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Material Required: concrete of the project (RMC / site mix, grade per type) */
+.concrete-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 12.5px;
+}
+.concrete-bar-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.concrete-bar-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+  color: var(--muted);
+}
+.concrete-mode {
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 12px;
+}
+.concrete-mode-rmc {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.concrete-mode-site {
+  background: #fef3c7;
+  color: #92400e;
+}
+.concrete-grades {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--muted);
+}
+.concrete-grades b {
+  color: var(--text);
+}
+.concrete-modes {
+  display: grid;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  margin: 0 0 14px;
+}
+.concrete-modes legend {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.concrete-mode-opt {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.concrete-mode-opt.on {
+  border-color: #0f766e;
+  background: #ecfdf5;
+}
+.concrete-mode-opt span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.concrete-mode-opt small {
+  color: var(--muted);
+}
+.concrete-grade-head {
+  margin: 0 0 8px;
+}
+.concrete-grade-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px 16px;
+}
+.concrete-grade-list label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
