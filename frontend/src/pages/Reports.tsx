@@ -21,7 +21,7 @@ const tone = (stage: string) => (stage === 'complete' ? 'done' : stage === 'not-
  * Filters: dates, building, element type, one element. Read only: it never changes any entry.
  */
 export function Reports() {
-  const { data, go, setSelection } = useApp();
+  const { data, go, setSelection, canPlan } = useApp();
   const [mode, setMode] = useState<CountMode>('approved');
   const [dates, setDates] = useState(() => presetRange('month'));
   const [buildingId, setBuildingId] = useState('');
@@ -253,8 +253,10 @@ export function Reports() {
       }
     add([]);
 
-    section('3. Plan vs actual');
-    if (planRows.length) {
+    if (canPlan) section('3. Plan vs actual');
+    if (!canPlan) {
+      // Planning is not shown to this user
+    } else if (planRows.length) {
       add(head(['Element', 'Work', 'Planned', 'Started', 'Completed', 'Result', 'Detail']), `G#:${last}#`);
       for (const r of planRows)
         add(
@@ -595,7 +597,8 @@ export function Reports() {
         {!type && !element && statuses.length > 0 && <p className="rep-note">Press Details for the work-wise % (reinforcement, shuttering, concreting …). Click an element type to see its elements one by one.</p>}
       </section>
 
-      {/* ---------- 3. plan vs actual ---------- */}
+      {/* ---------- 3. plan vs actual (Planning: Administrator only) ---------- */}
+      {canPlan && (
       <section className="dash-card">
         <div className="dash-card-head">
           <div>
@@ -673,6 +676,7 @@ export function Reports() {
           </>
         )}
       </section>
+      )}
     </div>
   );
 }

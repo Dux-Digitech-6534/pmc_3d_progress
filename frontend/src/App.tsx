@@ -32,12 +32,13 @@ const NAV: { page: Page; label: string; icon: string }[] = [
 ];
 
 // phones: the bottom tab bar (the rest stays in the ≡ menu, reached by "More")
-const TAB_PAGES: Page[] = ['dashboard', 'workspace', 'planning', 'reports'];
-const TAB_LABELS: Partial<Record<Page, string>> = { dashboard: 'Home', workspace: 'Work', planning: 'Plan', reports: 'Reports' };
-const TABS = TAB_PAGES.map((p) => {
-  const n = NAV.find((x) => x.page === p)!;
-  return { page: p, icon: n.icon, label: TAB_LABELS[p] ?? n.label };
-});
+// without Planning (everyone but Administrator) the third tab is Material Required
+const TAB_LABELS: Partial<Record<Page, string>> = { dashboard: 'Home', workspace: 'Work', planning: 'Plan', material: 'Material', reports: 'Reports' };
+const tabsFor = (canPlan: boolean) =>
+  (['dashboard', 'workspace', canPlan ? 'planning' : 'material', 'reports'] as Page[]).map((p) => {
+    const n = NAV.find((x) => x.page === p)!;
+    return { page: p, icon: n.icon, label: TAB_LABELS[p] ?? n.label };
+  });
 
 export default function App() {
   return (
@@ -48,7 +49,13 @@ export default function App() {
 }
 
 function Shell() {
-  const { page, go, projects, projectId, setProjectId, role, setRole, data, repo, notify, toasts, dismissToast, setSelection, loading, refresh, session, sessionError } = useApp();
+  const { page, go, projects, projectId, setProjectId, role, setRole, data, repo, notify, toasts, dismissToast, setSelection, loading, refresh, session, sessionError, canPlan } = useApp();
+  const NAV_SHOWN = NAV.filter((n) => n.page !== 'planning' || canPlan);
+  const TABS = tabsFor(canPlan);
+  // Planning hidden: a saved "planning" page opens the Dashboard instead (once the user is known)
+  useEffect(() => {
+    if (page === 'planning' && !canPlan && (!IS_FRAPPE || session)) go('dashboard');
+  }, [page, canPlan, session, go]);
   // Frappe: only the roles this user has; locally the full demo role switch.
   const roleOptions = IS_FRAPPE ? (session?.roles ?? []) : (Object.keys(ROLE_LABELS) as Role[]);
   const noAccess = IS_FRAPPE && (!!sessionError || (session !== null && session.roles.length === 0));
@@ -93,7 +100,7 @@ function Shell() {
           </div>
         </div>
         <ul>
-          {NAV.map((n) => (
+          {NAV_SHOWN.map((n) => (
             <li key={n.page}>
               <button
                 className={page === n.page && !empty ? 'active' : ''}
@@ -226,7 +233,7 @@ function Shell() {
           {!noAccess && !empty && page === 'variation' && <MaterialVariation />}
           {!noAccess && !empty && page === 'dpr' && <DprList />}
           {!noAccess && !empty && page === 'reports' && <Reports />}
-          {!noAccess && !empty && page === 'planning' && <Planning />}
+          {!noAccess && !empty && page === 'planning' && canPlan && <Planning />}
           {!noAccess && page === 'builder' && !IS_FRAPPE && <ModelBuilder />}
           {!noAccess && page === 'models' && <ModelRegister />}
         </main>

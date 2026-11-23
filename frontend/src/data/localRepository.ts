@@ -738,6 +738,9 @@ export class LocalRepository implements PmcRepository {
         ['SAND-R', 'River Sand', 'Cft'],
         ['AGG-20', '20 mm Metal', 'Cum'],
         ['BRICK-R', 'Red Bricks', 'Nos'],
+        // ready-mix concrete, as created on the real ERPNext (concrete is requested by grade, in m³)
+        ['RMC M20', 'RMC M20', 'Cubic Meter'],
+        ['RMC M25', 'RMC M25', 'Cubic Meter'],
         ['DIESEL', 'Diesel', 'Litre'],
       ].map(([code, name, uom]) => ({ code, name, uom })),
     );

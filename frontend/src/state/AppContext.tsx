@@ -46,6 +46,8 @@ interface AppState {
   /** Frappe mode: the logged-in user and the PMC roles they may act as. null in local mode / while loading. */
   session: SessionInfo | null;
   sessionError: string | null;
+  /** Planning is shown only to Administrator for now (23-11); the other users do not see it. */
+  canPlan: boolean;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -184,6 +186,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dismissToast,
     session,
     sessionError,
+    canPlan: IS_FRAPPE ? session?.user === 'Administrator' : !new URLSearchParams(window.location.search).has('noplan'),
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

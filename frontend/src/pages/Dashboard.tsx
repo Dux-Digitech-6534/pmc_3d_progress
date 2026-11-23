@@ -50,7 +50,7 @@ const ICONS = {
 };
 
 export function Dashboard() {
-  const { data, loadError, go, role, session, setSelection } = useApp();
+  const { data, loadError, go, role, session, setSelection, canPlan } = useApp();
   const [viewing, setViewing] = useState<ProgressEntry | null>(null);
   const { data: planning } = usePlanning();
   // planning at a glance: what runs today, what is not reported, what is still a draft
@@ -173,7 +173,7 @@ export function Dashboard() {
             </Kpi>
           </div>
 
-          {plan && (plan.today || plan.missed || plan.late || plan.drafts || plan.done) ? (
+          {canPlan && plan && (plan.today || plan.missed || plan.late || plan.drafts || plan.done) ? (
             <section className="dash-card dash-plan">
               <div className="dash-card-head">
                 <div>

@@ -58,7 +58,7 @@ function combinedStatus(progress: ActivityProgress[], showAwaiting: boolean): Vi
  * (tick elements and see the material they need). Each keeps its own ticks.
  */
 export function Workspace({ mode }: { mode: 'work' | 'material' }) {
-  const { data, loading, loadError, selection: workSelection, setSelection: setWorkSelection, go, role } = useApp();
+  const { data, loading, loadError, selection: workSelection, setSelection: setWorkSelection, go, role, canPlan } = useApp();
   const [materialSelection, setMaterialSelection] = useState<Set<string>>(() => new Set());
   const selection = mode === 'work' ? workSelection : materialSelection;
   const setSelection = mode === 'work' ? setWorkSelection : setMaterialSelection;
@@ -104,7 +104,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
   // the jobs of earlier days not finished yet. Only for Work Done.
   const { data: planning } = usePlanning();
   const todayPlan = useMemo(() => {
-    if (mode !== 'work' || !planning || !data?.model) return null;
+    if (mode !== 'work' || !canPlan || !planning || !data?.model) return null;
     const t = todayISO();
     const rows = planVsActual(planning, entries, elements, data.model.document?.activities ?? [], t).filter(
       (r) => isSubmitted(r.plan) && r.plan.activityCode !== NO_WORK_CODE && r.result !== 'no-work' && r.plan.date <= t,
@@ -130,7 +130,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
       late: group(late),
       lateFrom: late.map((r) => planEnd(r.plan)).sort()[0],
     };
-  }, [mode, planning, data?.model, entries, elements]);
+  }, [mode, canPlan, planning, data?.model, entries, elements]);
   const planIds = useMemo(() => {
     const m = new Map<string, string>();
     if (!todayPlan) return m;
@@ -302,7 +302,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
             <label className="inline">
               Colour by
               <select value={view} onChange={(e) => setView(e.target.value)} aria-label="Colour by">
-                <option value={PLAN_VIEW}>Today's plan</option>
+                {canPlan && <option value={PLAN_VIEW}>Today's plan</option>}
                 <option value={OVERALL}>Overall progress (all work)</option>
                 {activities.map((a) => (
                   <option key={a.code} value={a.code}>
