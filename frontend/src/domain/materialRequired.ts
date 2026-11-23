@@ -24,6 +24,8 @@ export interface MaterialRequired {
   plasterM2: number;
   /** Cement, sand, aggregate, steel, bricks (wastage included). */
   materials: MaterialQty;
+  /** The same for brickwork and plaster only — concrete is ordered as ready-mix (grade + m³), not as cement, sand and gitti. */
+  nonConcrete: MaterialQty;
 }
 
 const isRcc = (t: string): t is RccType => (RCC_ELEMENT_TYPES as readonly string[]).includes(t);
@@ -42,11 +44,13 @@ export function materialRequired(elements: ElementRecord[], entries: ProgressEnt
   let brick = 0;
   let plast = 0;
   let materials = emptyMaterials();
+  let nonConcrete = emptyMaterials();
   let fromBbs = 0;
   let fromTypical = 0;
   for (const el of elements) {
     const q = basis === 'planned' ? plannedOf(el) : basis === 'done' ? approvedOf(el, entries) : balanceOf(el, entries);
     materials = addMaterials(materials, materialsFor(q, norms));
+    nonConcrete = addMaterials(nonConcrete, materialsFor({ BRICK: q.BRICK ?? 0, PLAST: q.PLAST ?? 0 }, norms));
     shut += q.SHUT ?? 0;
     brick += q.BRICK ?? 0;
     plast += q.PLAST ?? 0;
@@ -87,5 +91,6 @@ export function materialRequired(elements: ElementRecord[], entries: ProgressEnt
     brickworkM3: roundQty(brick * w, 3),
     plasterM2: roundQty(plast * w, 2),
     materials,
+    nonConcrete,
   };
 }

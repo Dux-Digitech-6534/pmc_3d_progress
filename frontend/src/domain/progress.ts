@@ -167,3 +167,31 @@ export function formatQty(n: number | null | undefined, unit?: string) {
   const s = n.toLocaleString('en-IN', { maximumFractionDigits: 3 });
   return unit ? `${s} ${unit}` : s;
 }
+
+/**
+ * Weightage of each work in the project progress % (meeting 21-11: "percentage from total quantity and
+ * executed quantity"). Works are in different units (kg, m², m³), so each work's own % (approved ÷
+ * planned) is weighted. Works not listed weigh 10.
+ */
+export const PROGRESS_WEIGHTS: Record<string, number> = { CONC: 40, REINF: 25, SHUT: 15, BRICK: 10, PLAST: 10 };
+const DEFAULT_WEIGHT = 10;
+
+export interface ProjectProgress {
+  /** Project progress %, 0–100, one decimal; null when nothing is planned. */
+  percent: number | null;
+  /** Each work with planned quantity: its own %, its weight and its share of the total (weights scaled to 100). */
+  parts: { code: string; name: string; percent: number; weight: number; share: number }[];
+}
+
+/** Project progress by quantity: the weighted average of each work's approved ÷ planned. */
+export function projectProgress(summaries: Pick<ActivitySummary, 'activity' | 'percent'>[], weights: Record<string, number> = PROGRESS_WEIGHTS): ProjectProgress {
+  const used = summaries.filter((s) => s.percent !== null);
+  const total = used.reduce((a, s) => a + (weights[s.activity.code] ?? DEFAULT_WEIGHT), 0);
+  if (!used.length || total <= 0) return { percent: null, parts: [] };
+  const parts = used.map((s) => {
+    const weight = weights[s.activity.code] ?? DEFAULT_WEIGHT;
+    return { code: s.activity.code, name: s.activity.name, percent: Math.min(s.percent!, 100), weight, share: roundQty((weight / total) * 100, 1) };
+  });
+  const percent = roundQty(parts.reduce((a, p) => a + (p.percent * p.weight) / total, 0), 1);
+  return { percent, parts };
+}

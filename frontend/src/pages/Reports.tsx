@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { EmptyState, PageHeader, PageLoading } from '../components/ui';
 import { formatQty } from '../domain/progress';
 import { categoryStatus, elementLabel, ELEMENT_TYPE_LABELS, executiveSummary, presetRange, type CountMode } from '../domain/reports';
@@ -28,6 +28,15 @@ export function Reports() {
   const [type, setType] = useState<ElementType | ''>('');
   const [elementId, setElementId] = useState('');
   const [showFloors, setShowFloors] = useState(false);
+  // element status (meeting 21-11): the counts in front, the work-wise % only when Details is pressed
+  const [openTypes, setOpenTypes] = useState<Set<ElementType>>(new Set());
+  const toggleType = (t: ElementType) =>
+    setOpenTypes((s) => {
+      const n = new Set(s);
+      if (n.has(t)) n.delete(t);
+      else n.add(t);
+      return n;
+    });
 
   const elements = useMemo(() => data?.elements ?? [], [data]);
   const entries = useMemo(() => data?.entries ?? [], [data]);
@@ -381,30 +390,67 @@ export function Reports() {
                   <th className="num">Complete</th>
                   <th className="num">In progress</th>
                   <th className="num">Not started</th>
-                  {statusActs.map((a) => (
-                    <th key={a.code} className="num">
-                      {a.name}
-                    </th>
-                  ))}
+                  <th className="num rep-details-head">
+                    {statusActs.length > 0 && (
+                      <button className="link small" onClick={() => setOpenTypes(openTypes.size === statuses.length ? new Set() : new Set(statuses.map((x) => x.type)))}>
+                        {openTypes.size === statuses.length ? 'Hide all' : 'Show all'}
+                      </button>
+                    )}
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {statuses.map(({ type: t, s }) => (
-                  <tr key={t} className="rep-click" onClick={() => (setType(t), setElementId(''))} title="Show these elements one by one">
-                    <td>
-                      <b>{ELEMENT_TYPE_LABELS[t]}</b>
-                    </td>
-                    <td className="num">{s.rows.length}</td>
-                    <td className="num rep-n-done">{s.counts.complete || '—'}</td>
-                    <td className="num rep-n-doing">{s.counts.going || '—'}</td>
-                    <td className="num">{s.counts.notStarted || '—'}</td>
-                    {statusActs.map((a) => (
-                      <td key={a.code} className="num">
-                        {pct(s.activityPercent[a.code])}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {statuses.map(({ type: t, s }) => {
+                  const open = openTypes.has(t);
+                  const acts = statusActs.filter((a) => s.activityPercent[a.code] !== null && s.activityPercent[a.code] !== undefined);
+                  return (
+                    <Fragment key={t}>
+                      <tr className={`rep-click ${open ? 'rep-open' : ''}`} onClick={() => (setType(t), setElementId(''))} title="Show these elements one by one">
+                        <td>
+                          <b>{ELEMENT_TYPE_LABELS[t]}</b>
+                        </td>
+                        <td className="num">{s.rows.length}</td>
+                        <td className="num rep-n-done">{s.counts.complete || '—'}</td>
+                        <td className="num rep-n-doing">{s.counts.going || '—'}</td>
+                        <td className="num">{s.counts.notStarted || '—'}</td>
+                        <td className="num">
+                          {acts.length > 0 && (
+                            <button
+                              className={`btn btn-small rep-details-btn ${open ? 'on' : ''}`}
+                              aria-expanded={open}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleType(t);
+                              }}
+                            >
+                              {open ? 'Hide' : 'Details'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {open && (
+                        <tr className="rep-details-row">
+                          <td colSpan={6}>
+                            <div className="rep-work-list">
+                              {acts.map((a) => {
+                                const v = s.activityPercent[a.code] ?? 0;
+                                return (
+                                  <div key={a.code} className="rep-work">
+                                    <span className="rep-work-name">{a.name}</span>
+                                    <span className="rep-work-bar">
+                                      <span style={{ width: `${Math.min(v, 100)}%` }} className={v >= 100 ? 'full' : ''} />
+                                    </span>
+                                    <b>{pct(v)}</b>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr>
@@ -413,9 +459,7 @@ export function Reports() {
                   <td className="num">{statuses.reduce((n, x) => n + x.s.counts.complete, 0)}</td>
                   <td className="num">{statuses.reduce((n, x) => n + x.s.counts.going, 0)}</td>
                   <td className="num">{statuses.reduce((n, x) => n + x.s.counts.notStarted, 0)}</td>
-                  {statusActs.map((a) => (
-                    <td key={a.code} />
-                  ))}
+                  <td />
                 </tr>
               </tfoot>
             </table>
@@ -486,7 +530,7 @@ export function Reports() {
             );
           })()
         )}
-        {!type && !element && statuses.length > 0 && <p className="rep-note">Click an element type to see its elements one by one.</p>}
+        {!type && !element && statuses.length > 0 && <p className="rep-note">Press Details for the work-wise % (reinforcement, shuttering, concreting …). Click an element type to see its elements one by one.</p>}
       </section>
 
       {/* ---------- 3. plan vs actual ---------- */}

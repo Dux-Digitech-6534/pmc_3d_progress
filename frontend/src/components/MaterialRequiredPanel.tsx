@@ -1,10 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { normsOf } from '../domain/materials';
 import { materialRequired } from '../domain/materialRequired';
 import { computeActivityProgress, formatQty } from '../domain/progress';
 import type { ElementRecord, ElementType, ProgressEntry } from '../domain/types';
 import { ELEMENT_TYPE_LABELS } from '../domain/reports';
 import { downloadXlsx, type SheetSpec } from '../lib/xlsxWriter';
+import { drawRequirementImage } from '../lib/requirementImage';
+import { shareToWhatsApp } from '../lib/share';
 import { requestNeeds } from '../domain/materialRequest';
 import { todayISO } from '../domain/workflow';
 import { useApp } from '../state/AppContext';
@@ -27,7 +29,8 @@ export function MaterialRequiredPanel({
   /** Offer an ERPNext Material Request for the material (not in the one-element details card). */
   withRequest?: boolean;
 }) {
-  const { data, role } = useApp();
+  const { data, role, session, notify } = useApp();
+  const [sharing, setSharing] = useState(false);
   const norms = normsOf(data?.model?.document);
   const req = useMemo(() => materialRequired(selected, entries, norms, 'balance'), [selected, entries, norms]);
   // elements whose planned work is all approved: nothing more to bring for them
@@ -71,24 +74,22 @@ export function MaterialRequiredPanel({
   // the summary the PMC asked for: steel by bar size and concrete by grade (no "Other" list)
   const nothing = !req.steel.length && !req.concrete.length;
   // walls, plaster …: no steel or concrete, but bricks, cement, sand (the same lines the Material Request asks for)
-  const other = requestNeeds(req).filter((n) => n.kind !== 'steel');
+  const other = requestNeeds(req).filter((n) => n.kind !== 'steel' && n.kind !== 'concrete');
   const hasAny = !nothing || other.length > 0;
 
-  // "Download requirement" (meeting 16-11): a formatted Excel sheet that reads like a material requisition
-  // mrName: the Material Request this sheet goes with (printed in the header)
-  function download(mrName?: string) {
-    const day = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    const types = Object.entries(
-      selected.reduce<Record<string, number>>((m, el) => ((m[el.type] = (m[el.type] ?? 0) + 1), m), {}),
-    )
+  // the lines of the requirement, the same in the Excel sheet and the WhatsApp picture
+  const day = () => new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const typesText = () =>
+    Object.entries(selected.reduce<Record<string, number>>((m, el) => ((m[el.type] = (m[el.type] ?? 0) + 1), m), {}))
       .map(([t, n]) => `${n} ${(ELEMENT_TYPE_LABELS[t as ElementType] ?? t).toLowerCase()}${n === 1 ? '' : 's'}`)
       .join(', ');
-    const floors = [...new Set(selected.map((el) => `${el.buildingName} – ${el.levelName}`))].join(', ');
-    const up = (n: number, d = 0) => Math.ceil(n * 10 ** d - 1e-9) / 10 ** d;
-    // Remarks stay blank: the engineer writes them on the sheet
-    const lines: { material: string; spec: string; qty: number; unit: string; int?: boolean }[] = [
+  const floorsText = () => [...new Set(selected.map((el) => `${el.buildingName} – ${el.levelName}`))].join(', ');
+  const up = (n: number, d = 0) => Math.ceil(n * 10 ** d - 1e-9) / 10 ** d;
+  // Remarks stay blank in the Excel: the engineer writes them on the sheet
+  function requirementLines(): { material: string; spec: string; qty: number; unit: string; int?: boolean }[] {
+    return [
       ...req.steel.map((st) => ({ material: 'Steel (TMT bar)', spec: st.dia ? `${st.dia} mm` : 'Size not set', qty: up(st.kg), unit: 'kg', int: true })),
-      ...req.concrete.map((g) => ({ material: 'Concrete', spec: `${g.grade} · ${g.elements} element${g.elements === 1 ? '' : 's'}`, qty: up(g.m3, 2), unit: 'm³' })),
+      ...req.concrete.map((g) => ({ material: 'Concrete', spec: `${g.grade} (ready-mix) · ${g.elements} element${g.elements === 1 ? '' : 's'}`, qty: up(g.m3, 2), unit: 'm³' })),
       ...other.map((n) => ({
         material: n.label,
         spec: n.kind === 'cement' ? `OPC, ${norms.bagKg || 50} kg bag` : n.kind === 'aggregate' ? '20 mm' : '',
@@ -97,9 +98,50 @@ export function MaterialRequiredPanel({
         int: n.unit === 'bags' || n.unit === 'nos',
       })),
     ];
+  }
+
+  // "Share on WhatsApp" (meeting 21-11): the requirement as a formatted picture, not text
+  async function share(mrName?: string) {
+    setSharing(true);
+    try {
+      const lines = requirementLines().map((l) =>
+        l.material === 'Steel (TMT bar)'
+          ? { material: `Steel ${l.spec}`, spec: 'TMT bar', qty: formatQty(l.qty), unit: l.unit }
+          : l.material === 'Concrete'
+            ? { material: `Concrete ${l.spec.split(' ')[0]}`, spec: 'Ready-mix (RMC)', qty: formatQty(l.qty), unit: l.unit }
+            : { material: l.material, spec: l.spec, qty: formatQty(l.qty), unit: l.unit },
+      );
+      if (req.steel.length > 1) lines.push({ material: 'Total steel', spec: `= ${(up(req.steelTotal) / 1000).toFixed(3)} MT`, qty: formatQty(up(req.steelTotal)), unit: 'kg' });
+      const blob = await drawRequirementImage({
+        project: data?.project.name ?? '',
+        date: day(),
+        location: floorsText(),
+        elements: `${selected.length} (${typesText()})`,
+        requestNo: mrName,
+        lines,
+        note: `Quantities from the 3D model and BOQ of the selected elements${norms.wastagePct ? `, ${norms.wastagePct}% wastage included` : ''}; rounded up for ordering.`,
+        by: session?.fullName || undefined,
+      });
+      const name = `material-requirement-${data?.project.id ?? 'project'}-${todayISO()}.png`;
+      const r = await shareToWhatsApp(blob, name, `Material requirement — ${data?.project.name ?? ''}${mrName ? ` (${mrName})` : ''}`);
+      if (r === 'copied') notify('Picture copied. WhatsApp Web is opening — choose the chat and press Ctrl+V to paste it, then send.', 'success');
+      else if (r === 'downloaded') notify('Picture downloaded. WhatsApp Web is opening — choose the chat and attach the picture from Downloads.', 'info');
+    } catch (e) {
+      notify(e instanceof Error ? e.message : 'Could not share the requirement.', 'error');
+    } finally {
+      setSharing(false);
+    }
+  }
+
+  // "Download requirement" (meeting 16-11): a formatted Excel sheet that reads like a material requisition
+  // mrName: the Material Request this sheet goes with (printed in the header)
+  function download(mrName?: string) {
+    const lines = requirementLines();
+    const floors = floorsText();
+    const types = typesText();
     const rows: SheetSpec['rows'] = [
       [{ v: 'MATERIAL REQUIREMENT', s: 'title' }],
-      [{ v: 'Project', s: 'label' }, data?.project.name ?? '', null, null, { v: 'Date', s: 'label' }, day],
+      [{ v: 'Project', s: 'label' }, data?.project.name ?? '', null, null, { v: 'Date', s: 'label' }, day()],
       [{ v: 'Location', s: 'label' }, floors],
       mrName
         ? [{ v: 'Elements', s: 'label' }, `${selected.length} (${types})`, null, null, { v: 'Request No.', s: 'label' }, mrName]
@@ -153,9 +195,14 @@ export function MaterialRequiredPanel({
         {norms.wastagePct ? <p className="hint">Includes {norms.wastagePct}% wastage.</p> : null}
         {/* with the request form the button sits next to the request (and its number) */}
         {hasAny && !(withRequest && role !== 'owner') && (
-          <button className="btn btn-small" onClick={() => download()}>
-            Download requirement (Excel)
-          </button>
+          <div className="mr-share-actions">
+            <button className="btn btn-small" onClick={() => download()}>
+              Download requirement (Excel)
+            </button>
+            <button className="btn btn-small btn-wa" onClick={() => void share()} disabled={sharing}>
+              <WhatsAppIcon /> {sharing ? 'Preparing…' : 'Share on WhatsApp'}
+            </button>
+          </div>
         )}
         {pending.length > 0 && (
           <div className="alert alert-warn mr-pending-warn" role="status">
@@ -284,7 +331,23 @@ export function MaterialRequiredPanel({
         </div>
       )}
 
-      {withRequest && <MaterialRequestCard req={req} elementIds={selected.map((e) => e.id).join(',')} bagKg={norms.bagKg} onDownload={hasAny ? download : undefined} />}
+      {withRequest && <MaterialRequestCard
+          req={req}
+          elementIds={selected.map((e) => e.id).join(',')}
+          bagKg={norms.bagKg}
+          onDownload={hasAny ? download : undefined}
+          onShare={hasAny ? (mr) => void share(mr) : undefined}
+          sharing={sharing}
+        />}
     </div>
+  );
+}
+
+/** WhatsApp mark for the share button. */
+export function WhatsAppIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden style={{ verticalAlign: '-2px' }}>
+      <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z" />
+    </svg>
   );
 }

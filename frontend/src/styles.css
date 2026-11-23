@@ -5060,3 +5060,122 @@ input[type='radio'] {
   font-weight: 600;
   color: #0f766e;
 }
+
+/* Dashboard: project progress % by quantity (meeting 21-11) */
+.dash-ring-wrap {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.dash-ring-sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+}
+.dash-weights {
+  margin-top: 6px;
+  font-size: 12.5px;
+}
+@media (max-width: 900px) {
+  /* the ring itself is hidden (desktop) or pinned in the hero corner (phone): the wrapper must not position it */
+  .dash-ring-wrap {
+    position: static;
+  }
+  .dash-ring-sub {
+    display: none;
+  }
+}
+
+/* Reports: element status — work-wise % behind a Details button (meeting 21-11) */
+.rep-details-head {
+  width: 1%;
+  white-space: nowrap;
+}
+.rep-details-btn {
+  min-width: 72px;
+}
+.rep-details-btn.on {
+  background: #0f2747;
+  border-color: #0f2747;
+  color: #fff;
+}
+.rep-status tr.rep-open > td {
+  background: #f1f6fb;
+}
+.rep-details-row > td {
+  background: #f8fafc;
+  padding: 8px 12px 12px;
+}
+.rep-work-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px 20px;
+}
+.rep-work {
+  display: grid;
+  grid-template-columns: 110px 1fr 48px;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.rep-work b {
+  text-align: right;
+}
+.rep-work-bar {
+  height: 8px;
+  border-radius: 99px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+.rep-work-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: #f59e0b;
+}
+.rep-work-bar > span.full {
+  background: #16a34a;
+}
+
+/* Share on WhatsApp (meeting 21-11) */
+.mr-share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.btn-wa {
+  background: #25d366;
+  border-color: #1ebe5b;
+  color: #fff;
+  font-weight: 600;
+}
+.btn-wa:hover:not(:disabled) {
+  background: #1ebe5b;
+}
+
+/* Coloured buttons keep their own colours on hover (the plain .btn hover turns the background light
+   grey, which hid the white text of these buttons) */
+.btn.rep-details-btn.on:hover:not(:disabled) {
+  background: #14335a;
+  border-color: #14335a;
+  color: #fff;
+}
+.btn.dash-btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.75);
+  color: #fff;
+}
+.btn.dash-btn-light:hover:not(:disabled) {
+  background: #e6f6f4;
+  border-color: #e6f6f4;
+  color: var(--navy);
+}
+.btn.tp-selected:hover:not(:disabled) {
+  background: #0b5f58;
+  border-color: #0b5f58;
+  color: #fff;
+}

@@ -2,7 +2,7 @@ import { inWorkOrder } from '../domain/sequence';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { EntryDetailsModal } from '../components/EntryDetailsModal';
 import { EmptyState, StatusBadge, PageLoading } from '../components/ui';
-import { ACTIVITY_STATUS_LABELS, computeActivityProgress, formatQty, summarizeActivity, type ActivityStatus } from '../domain/progress';
+import { ACTIVITY_STATUS_LABELS, computeActivityProgress, formatQty, projectProgress, summarizeActivity, type ActivityStatus } from '../domain/progress';
 import { ELEMENT_TYPES, UNIT_LABELS, type ProgressEntry } from '../domain/types';
 import { todayISO } from '../domain/workflow';
 import { STATUS_COLORS, TYPE_LABELS } from '../lib/colors';
@@ -73,6 +73,9 @@ export function Dashboard() {
     return acts.map((a) => summarizeActivity(data!.elements, a, data!.entries));
   }, [data]);
 
+  // project progress by quantity (meeting 21-11): each work's approved ÷ planned, weighted
+  const progress = useMemo(() => projectProgress(summaries), [summaries]);
+
   // elements whose planned work is all approved
   const doneElements = useMemo(() => {
     const acts = data?.model?.document?.activities ?? [];
@@ -101,7 +104,8 @@ export function Dashboard() {
     go('workspace');
   };
   const counts = ELEMENT_TYPES.map((t) => ({ t, n: elements.filter((e) => e.type === t).length })).filter((c) => c.n);
-  const donePct = elements.length ? Math.round((doneElements / elements.length) * 100) : 0;
+  const donePct = Math.round(progress.percent ?? 0);
+  const weightText = progress.parts.map((p) => `${p.name} ${p.share}%`).join(' · ');
 
   return (
     <div className="page page-wide dash">
@@ -132,16 +136,17 @@ export function Dashboard() {
           </div>
         </div>
         {model && (
-          <div className="dash-ring" style={{ ['--p' as string]: donePct }} title={`${doneElements} of ${elements.length} elements have all their work approved`}>
-            <div className="dash-ring-inner">
-              <b>
-                <CountUp value={donePct} />%
-              </b>
-              <span>
-                {doneElements} / {elements.length}
-                <br />
-                elements done
-              </span>
+          <div className="dash-ring-wrap">
+            <div className="dash-ring" style={{ ['--p' as string]: donePct }} title={`Project progress by quantity — approved work of each work against its planned quantity, weighted: ${weightText}`}>
+              <div className="dash-ring-inner">
+                <b>
+                  <CountUp value={donePct} />%
+                </b>
+                <span>project complete</span>
+              </div>
+            </div>
+            <div className="dash-ring-sub">
+              {doneElements} / {elements.length} elements fully done
             </div>
           </div>
         )}
@@ -256,6 +261,11 @@ export function Dashboard() {
               <div>
                 <h2>Activity progress</h2>
                 <p>Each activity in its own unit (kg, m², m³) — approved work against the planned quantity.</p>
+                {progress.percent !== null && (
+                  <p className="dash-weights">
+                    <b>Project {progress.percent}% complete</b> = weighted average of the works below ({weightText}).
+                  </p>
+                )}
               </div>
             </div>
             <div className="dash-acts" style={{ ['--cols' as string]: summaries.length <= 4 ? summaries.length || 1 : summaries.length % 4 === 0 ? 4 : 3 }}>

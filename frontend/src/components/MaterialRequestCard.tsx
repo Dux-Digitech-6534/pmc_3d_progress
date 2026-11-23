@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { WhatsAppIcon } from './MaterialRequiredPanel';
 import { IS_FRAPPE } from '../config';
 import { errorMessages, type ErpItem, type MaterialRequestSummary } from '../data/repository';
 import { inItemUnit, requestNeeds, suggestItem } from '../domain/materialRequest';
@@ -21,12 +22,17 @@ export function MaterialRequestCard({
   elementIds,
   bagKg,
   onDownload,
+  onShare,
+  sharing,
 }: {
   req: MaterialRequired;
   elementIds: string;
   bagKg: number;
   /** Requirement Excel of the selection; with the request number once the request is saved. */
   onDownload?: (mrName?: string) => void;
+  /** The same requirement as a picture, shared on WhatsApp. */
+  onShare?: (mrName?: string) => void;
+  sharing?: boolean;
 }) {
   const { repo, role, notify, data } = useApp();
   const projectId = data?.project.id ?? '';
@@ -181,9 +187,16 @@ export function MaterialRequestCard({
       <div className="mr-head">
         <h3 className="section-title">Material Request</h3>
         {onDownload && !saved && (
-          <button className="btn btn-small" onClick={() => onDownload()}>
-            Download requirement (Excel)
-          </button>
+          <div className="mr-share-actions">
+            <button className="btn btn-small" onClick={() => onDownload()}>
+              Download requirement (Excel)
+            </button>
+            {onShare && (
+              <button className="btn btn-small btn-wa" onClick={() => onShare()} disabled={sharing}>
+                <WhatsAppIcon /> {sharing ? 'Preparing…' : 'Share on WhatsApp'}
+              </button>
+            )}
+          </div>
         )}
       </div>
       {items === null ? (
@@ -261,6 +274,11 @@ export function MaterialRequestCard({
                   <button className="btn btn-small" onClick={() => onDownload(saved.name)}>
                     Download requirement (Excel)
                   </button>
+                  {onShare && (
+                    <button className="btn btn-small btn-wa" onClick={() => onShare(saved.name)} disabled={sharing}>
+                      <WhatsAppIcon /> {sharing ? 'Preparing…' : 'Share on WhatsApp'}
+                    </button>
+                  )}
                 </div>
               )}
             </div>

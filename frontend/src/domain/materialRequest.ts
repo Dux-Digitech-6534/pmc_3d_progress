@@ -1,5 +1,6 @@
 // Lines of an ERPNext Material Request from the material the selected elements need: steel per bar
-// size, cement, sand, gitti, bricks — each on the ERP item that is that material, in its stock unit.
+// size, concrete per grade (ready-mix, m³), and cement, sand, bricks for brickwork and plaster — each on
+// the ERP item that is that material, in its stock unit.
 
 import type { MaterialRequired } from './materialRequired';
 import { matchItem, toReportUnit, type MaterialKind } from './materialVariation';
@@ -10,12 +11,18 @@ export interface RequestNeed {
   label: string;
   kind: MaterialKind;
   dia?: number;
+  /** Concrete grade ("M25"). */
+  grade?: string;
   /** Quantity in the report unit (kg, bags, m³, nos). */
   qty: number;
   unit: string;
 }
 
-/** What to request for the needed material (site-mixed concrete: cement, sand and gitti; no ready-mix line). */
+/**
+ * What to request for the needed material. Concrete is asked as it is ordered — grade and m³, like an
+ * RMC order (meeting 21-11) — not split into cement, sand and gitti; cement and sand are only for
+ * brickwork and plaster.
+ */
 export function requestNeeds(req: MaterialRequired): RequestNeed[] {
   const out: RequestNeed[] = req.steel.map((s) => ({
     key: `steel:${s.dia}`,
@@ -25,11 +32,14 @@ export function requestNeeds(req: MaterialRequired): RequestNeed[] {
     qty: s.kg,
     unit: 'kg',
   }));
+  for (const c of req.concrete) {
+    const grade = c.grade === 'Other' ? undefined : c.grade;
+    out.push({ key: `concrete:${c.grade}`, label: grade ? `Concrete ${grade}` : 'Concrete (grade not set)', kind: 'concrete', grade, qty: c.m3, unit: 'm³' });
+  }
   const add = (kind: MaterialKind, label: string, qty: number, unit: string) => qty > 0 && out.push({ key: kind, label, kind, qty, unit });
-  add('cement', 'Cement', req.materials.cement, 'bags');
-  add('sand', 'Sand', req.materials.sand, 'm³');
-  add('aggregate', 'Aggregate (gitti)', req.materials.aggregate, 'm³');
-  add('bricks', 'Bricks', req.materials.bricks, 'nos');
+  add('cement', 'Cement', req.nonConcrete.cement, 'bags');
+  add('sand', 'Sand', req.nonConcrete.sand, 'm³');
+  add('bricks', 'Bricks', req.nonConcrete.bricks, 'nos');
   return out.filter((n) => n.qty > 0);
 }
 
@@ -43,7 +53,13 @@ export interface ItemLike {
 export function suggestItem(need: RequestNeed, items: ItemLike[], bagKg: number): ItemLike | undefined {
   return items.find((i) => {
     const m = matchItem(i.name, i.code);
-    return m?.kind === need.kind && (need.kind !== 'steel' || m.dia === need.dia) && toReportUnit(need.kind, 1, i.uom, bagKg) !== null;
+    return (
+      m?.kind === need.kind &&
+      (need.kind !== 'steel' || m.dia === need.dia) &&
+      // ready-mix of the same grade (an item without a grade in its name fits any grade)
+      (need.kind !== 'concrete' || !m.grade || !need.grade || m.grade === need.grade) &&
+      toReportUnit(need.kind, 1, i.uom, bagKg) !== null
+    );
   });
 }
 
