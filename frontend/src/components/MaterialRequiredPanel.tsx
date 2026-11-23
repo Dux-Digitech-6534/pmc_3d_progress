@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { normsOf } from '../domain/materials';
 import { materialRequired } from '../domain/materialRequired';
 import { computeActivityProgress, formatQty } from '../domain/progress';
@@ -6,12 +6,12 @@ import type { ElementRecord, ElementType, ProgressEntry } from '../domain/types'
 import { ELEMENT_TYPE_LABELS } from '../domain/reports';
 import { downloadXlsx, type SheetSpec } from '../lib/xlsxWriter';
 import { drawRequirementImage } from '../lib/requirementImage';
-import { shareToWhatsApp } from '../lib/share';
+import { copyImage, openWhatsAppWeb, saveImage, shareInApp, shareMode, shareOnPhone } from '../lib/share';
 import { requestNeeds } from '../domain/materialRequest';
 import { todayISO } from '../domain/workflow';
 import { useApp } from '../state/AppContext';
 import { MaterialRequestCard } from './MaterialRequestCard';
-import { EmptyState } from './ui';
+import { EmptyState, Modal } from './ui';
 
 /** Right panel in "Material required" mode: what the ticked elements need, steel by bar size, concrete by grade. */
 export function MaterialRequiredPanel({
@@ -31,6 +31,15 @@ export function MaterialRequiredPanel({
 }) {
   const { data, role, session, notify } = useApp();
   const [sharing, setSharing] = useState(false);
+  // computer: the picture is shown with the steps to send it in WhatsApp Web
+  const [preview, setPreview] = useState<{ url: string; blob: Blob; name: string; copied: boolean } | null>(null);
+  const previewUrl = preview?.url;
+  useEffect(
+    () => () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    },
+    [previewUrl],
+  );
   const norms = normsOf(data?.model?.document);
   const req = useMemo(() => materialRequired(selected, entries, norms, 'balance'), [selected, entries, norms]);
   // elements whose planned work is all approved: nothing more to bring for them
@@ -123,9 +132,23 @@ export function MaterialRequiredPanel({
         by: session?.fullName || undefined,
       });
       const name = `material-requirement-${data?.project.id ?? 'project'}-${todayISO()}.png`;
-      const r = await shareToWhatsApp(blob, name, `Material requirement — ${data?.project.name ?? ''}${mrName ? ` (${mrName})` : ''}`);
-      if (r === 'copied') notify('Picture copied. WhatsApp Web is opening — choose the chat and press Ctrl+V to paste it, then send.', 'success');
-      else if (r === 'downloaded') notify('Picture downloaded. WhatsApp Web is opening — choose the chat and attach the picture from Downloads.', 'info');
+      const text = `Material requirement — ${data?.project.name ?? ''}${mrName ? ` (${mrName})` : ''}`;
+      const mode = shareMode();
+      if (mode === 'android-app') {
+        // the app opens WhatsApp with the picture attached
+        await shareInApp(blob, name, text);
+      } else if (mode === 'old-app') {
+        saveImage(blob, name);
+        notify('This app version cannot open WhatsApp with the picture. The picture is saved in Downloads/PMC 3D — attach it in WhatsApp. Install the new app (v1.3) to send it directly.', 'info');
+      } else if (mode === 'phone') {
+        const r = await shareOnPhone(blob, name, text);
+        if (r === 'unsupported') {
+          saveImage(blob, name);
+          notify('The picture is downloaded — attach it in WhatsApp.', 'info');
+        }
+      } else {
+        setPreview({ url: URL.createObjectURL(blob), blob, name, copied: await copyImage(blob) });
+      }
     } catch (e) {
       notify(e instanceof Error ? e.message : 'Could not share the requirement.', 'error');
     } finally {
@@ -181,6 +204,63 @@ export function MaterialRequiredPanel({
 
   return (
     <div className="panel-scroll">
+      {preview && (
+        <Modal
+          title="Share on WhatsApp"
+          wide
+          onClose={() => setPreview(null)}
+          footer={
+            <>
+              <button className="btn" onClick={() => saveImage(preview.blob, preview.name)}>
+                Download picture
+              </button>
+              <button
+                className="btn"
+                onClick={() =>
+                  void copyImage(preview.blob).then((ok) => {
+                    setPreview({ ...preview, copied: ok });
+                    notify(ok ? 'Picture copied.' : 'This browser did not allow copying — use Download picture.', ok ? 'success' : 'error');
+                  })
+                }
+              >
+                Copy again
+              </button>
+              <button className="btn btn-wa" onClick={() => openWhatsAppWeb()}>
+                <WhatsAppIcon /> Open WhatsApp Web
+              </button>
+            </>
+          }
+        >
+          <div className="wa-preview">
+            <img src={preview.url} alt="Material requirement picture" />
+            <div className="wa-steps">
+              {preview.copied ? (
+                <div className="alert alert-success small">
+                  <b>✓ Picture copied.</b> It is ready to paste in WhatsApp.
+                </div>
+              ) : (
+                <div className="alert alert-warn small">This browser did not allow copying. Press Download picture and attach it in WhatsApp.</div>
+              )}
+              <ol>
+                <li>
+                  Press <b>Open WhatsApp Web</b>.
+                </li>
+                <li>Open the chat (person or group).</li>
+                <li>
+                  {preview.copied ? (
+                    <>
+                      Click in the message box and press <kbd>Ctrl</kbd> + <kbd>V</kbd> — the picture comes in.
+                    </>
+                  ) : (
+                    <>Attach the downloaded picture (📎 → Photos).</>
+                  )}
+                </li>
+                <li>Press Send.</li>
+              </ol>
+            </div>
+          </div>
+        </Modal>
+      )}
       <div className="panel-section">
         <h2 className="panel-title">{selected.length === 1 ? selected[0].code : `${selected.length} elements selected`}</h2>
         {selected.length > 1 && (
