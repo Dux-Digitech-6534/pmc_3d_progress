@@ -31,7 +31,9 @@ export function MaterialRequiredPanel({
   /** Offer an ERPNext Material Request for the material (not in the one-element details card). */
   withRequest?: boolean;
 }) {
-  const { data, role, session, notify } = useApp();
+  const { data, role, session, notify, hasErp } = useApp();
+  // the ERPNext Material Request form only where ERPNext is installed
+  const withErpRequest = withRequest && hasErp;
   const [sharing, setSharing] = useState(false);
   // computer: the picture is shown with the steps to send it in WhatsApp Web
   const [preview, setPreview] = useState<{ url: string; blob: Blob; name: string; copied: boolean } | null>(null);
@@ -283,7 +285,7 @@ export function MaterialRequiredPanel({
         )}
         {norms.wastagePct ? <p className="hint">Includes {norms.wastagePct}% wastage.</p> : null}
         {/* with the request form the button sits next to the request (and its number) */}
-        {hasAny && !(withRequest && role !== 'owner') && (
+        {hasAny && !(withErpRequest && role !== 'owner') && (
           <div className="mr-share-actions">
             <button className="btn btn-small" onClick={() => download()}>
               Download requirement (Excel)
@@ -420,7 +422,7 @@ export function MaterialRequiredPanel({
         </div>
       )}
 
-      {withRequest && <MaterialRequestCard
+      {withErpRequest && <MaterialRequestCard
           req={req}
           elementIds={selected.map((e) => e.id).join(',')}
           bagKg={norms.bagKg}

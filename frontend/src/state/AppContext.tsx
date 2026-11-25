@@ -48,6 +48,8 @@ interface AppState {
   sessionError: string | null;
   /** Planning is shown only to Administrator for now (23-11); the other users do not see it. */
   canPlan: boolean;
+  /** ERPNext on this site: Material Request and Material Variation need it (locally ?noerp hides them, to test). */
+  hasErp: boolean;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -187,6 +189,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     session,
     sessionError,
     canPlan: IS_FRAPPE ? session?.user === 'Administrator' : !new URLSearchParams(window.location.search).has('noplan'),
+    hasErp: IS_FRAPPE ? session?.erp !== false : !new URLSearchParams(window.location.search).has('noerp'),
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

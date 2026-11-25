@@ -317,6 +317,8 @@ def get_session():
 		"fullName": get_fullname(frappe.session.user),
 		"roles": _user_roles(),
 		"aiConfigured": is_configured(),
+		# a site without ERPNext (a client not on the ERP) has no Material Request / Material Variation
+		"erp": "erpnext" in frappe.get_installed_apps(),
 	}
 
 

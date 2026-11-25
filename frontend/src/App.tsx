@@ -49,13 +49,13 @@ export default function App() {
 }
 
 function Shell() {
-  const { page, go, projects, projectId, setProjectId, role, setRole, data, repo, notify, toasts, dismissToast, setSelection, loading, refresh, session, sessionError, canPlan } = useApp();
-  const NAV_SHOWN = NAV.filter((n) => n.page !== 'planning' || canPlan);
+  const { page, go, projects, projectId, setProjectId, role, setRole, data, repo, notify, toasts, dismissToast, setSelection, loading, refresh, session, sessionError, canPlan, hasErp } = useApp();
+  const NAV_SHOWN = NAV.filter((n) => (n.page !== 'planning' || canPlan) && (n.page !== 'variation' || hasErp));
   const TABS = tabsFor(canPlan);
   // Planning hidden: a saved "planning" page opens the Dashboard instead (once the user is known)
   useEffect(() => {
-    if (page === 'planning' && !canPlan && (!IS_FRAPPE || session)) go('dashboard');
-  }, [page, canPlan, session, go]);
+    if (((page === 'planning' && !canPlan) || (page === 'variation' && !hasErp)) && (!IS_FRAPPE || session)) go('dashboard');
+  }, [page, canPlan, hasErp, session, go]);
   // Frappe: only the roles this user has; locally the full demo role switch.
   const roleOptions = IS_FRAPPE ? (session?.roles ?? []) : (Object.keys(ROLE_LABELS) as Role[]);
   const noAccess = IS_FRAPPE && (!!sessionError || (session !== null && session.roles.length === 0));
@@ -230,7 +230,7 @@ function Shell() {
           {!noAccess && !empty && page === 'projects' && <Projects />}
           {!noAccess && !empty && page === 'workspace' && <Workspace key="work" mode="work" />}
           {!noAccess && !empty && page === 'material' && <Workspace key="material" mode="material" />}
-          {!noAccess && !empty && page === 'variation' && <MaterialVariation />}
+          {!noAccess && !empty && page === 'variation' && hasErp && <MaterialVariation />}
           {!noAccess && !empty && page === 'dpr' && <DprList />}
           {!noAccess && !empty && page === 'reports' && <Reports />}
           {!noAccess && !empty && page === 'planning' && canPlan && <Planning />}

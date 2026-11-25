@@ -312,6 +312,8 @@ export interface SessionInfo {
   fullName: string;
   roles: Role[];
   aiConfigured: boolean;
+  /** ERPNext installed on the site; absent on older servers (then taken as installed). */
+  erp?: boolean;
 }
 
 export const getSession = () => call<SessionInfo>(`${M}get_session`, {}, 'GET');
