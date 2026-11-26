@@ -73,7 +73,8 @@ function Shell() {
   const empty = !loading && projects.length === 0 && page !== 'builder' && page !== 'models';
 
   return (
-    <div className={`app ${!noAccess && !empty ? 'has-tabbar' : ''}`}>
+    // phones: the bottom tab bar is there with or without a project (without one its pages show the welcome)
+    <div className={`app ${!noAccess ? 'has-tabbar' : ''}`}>
       <nav className={`sidebar ${menuOpen ? 'menu-open' : ''}`} aria-label="Main">
         <button className="menu-toggle" aria-expanded={menuOpen} aria-label={menuOpen ? 'Close menu' : 'Open menu'} onClick={() => setMenuOpen((o) => !o)}>
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -240,9 +241,9 @@ function Shell() {
       </div>
 
       {/* phones: tapping outside the "More" sheet closes it */}
-      {menuOpen && !noAccess && !empty && <div className="sheet-backdrop" onClick={() => setMenuOpen(false)} aria-hidden />}
+      {menuOpen && !noAccess && <div className="sheet-backdrop" onClick={() => setMenuOpen(false)} aria-hidden />}
       {/* phones: the main pages as app tabs at the bottom; "More" opens the full menu */}
-      {!noAccess && !empty && (
+      {!noAccess && (
         <nav className="tabbar" aria-label="Quick">
           {TABS.map((t) => {
             const on = !menuOpen && page === t.page;
