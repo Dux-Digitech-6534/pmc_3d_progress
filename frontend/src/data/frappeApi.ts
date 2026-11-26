@@ -26,6 +26,19 @@ function headers(json = true): HeadersInit {
   };
 }
 
+/** Frappe messages carry HTML (<strong>, <br>, &quot; ...); the app shows them as plain text. */
+export function plainText(s: string): string {
+  return s
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&#x27;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
 /** Turn a Frappe error response into the same RepositoryError the local repository throws. */
 async function toError(res: Response): Promise<RepositoryError> {
   let body: { exc_type?: string; _server_messages?: string; message?: string; exception?: string } = {};
@@ -39,7 +52,7 @@ async function toError(res: Response): Promise<RepositoryError> {
     try {
       for (const m of JSON.parse(body._server_messages) as string[]) {
         const parsed = JSON.parse(m) as { message?: string };
-        if (parsed.message) messages.push(...String(parsed.message).split('\n'));
+        if (parsed.message) messages.push(...plainText(String(parsed.message)).split('\n').map((l) => l.trim()).filter(Boolean));
       }
     } catch {
       /* ignore malformed messages */
@@ -48,7 +61,7 @@ async function toError(res: Response): Promise<RepositoryError> {
   if (!messages.length) {
     if (res.status === 403) messages.push('You are not allowed to do this. Log in again, or ask for the right PMC role.');
     else if (res.status === 0 || res.status >= 500) messages.push(`The server had a problem (${res.status || 'network'}). Try again.`);
-    else messages.push(body.exception?.split('\n')[0] ?? `Request failed (${res.status}).`);
+    else messages.push(body.exception ? plainText(body.exception.split('\n')[0]) : `Request failed (${res.status}).`);
   }
   const code = EXC_CODES[body.exc_type ?? ''] ?? (res.status === 403 ? 'forbidden' : 'validation');
   return new RepositoryError(code, messages);
