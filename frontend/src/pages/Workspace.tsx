@@ -63,6 +63,14 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
   const selection = mode === 'work' ? workSelection : materialSelection;
   const setSelection = mode === 'work' ? setWorkSelection : setMaterialSelection;
   const [search, setSearch] = useState('');
+  // the colour key over the 3D view folds away; on phones it starts folded so it does not cover the model
+  const [legendOpen, setLegendOpen] = useState(() => !(typeof window !== 'undefined' && window.matchMedia?.('(max-width: 760px)').matches));
+  const legendHead = (text: React.ReactNode) => (
+    <button type="button" className="legend-title legend-toggle" aria-expanded={legendOpen} onClick={() => setLegendOpen((o) => !o)}>
+      <span>{text}</span>
+      <span className="legend-chev" aria-hidden="true">{legendOpen ? '▾' : '▸'}</span>
+    </button>
+  );
   const [typeFilter, setTypeFilter] = useState<'all' | ElementType>('all');
   const [levelFilter, setLevelFilter] = useState('all');
   const [view, setView] = useState<string>(OVERALL); // OVERALL, 'type' or an activity code
@@ -393,10 +401,10 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
             resetSignal={resetSignal}
             frameKey={data.model.key}
           />
-          <div className="legend" aria-label="Legend">
+          <div className={`legend${legendOpen ? '' : ' collapsed'}`} aria-label="Legend">
             {view === PLAN_VIEW && mode === 'work' ? (
               <>
-                <div className="legend-title">Today's plan</div>
+                {legendHead("Today's plan")}
                 {(
                   [
                     [PLAN_TODAY_COLOR, 'Planned today', todayPlan?.open],
@@ -416,9 +424,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
               </>
             ) : viewActivity ? (
               <>
-                <div className="legend-title">
-                  {viewActivity.name} {role === 'owner' ? '(approved only)' : '— counts approved work only'}
-                </div>
+                {legendHead(<>{viewActivity.name} {role === 'owner' ? '(approved only)' : '— counts approved work only'}</>)}
                 {STATUS_ORDER.filter((s) => (s !== 'not-applicable' && s !== 'awaiting') || legendCounts[s] > 0).map((s) => (
                   <div key={s} className="legend-row">
                     <span className="swatch" style={{ background: VIEW_COLORS[s] }} />
@@ -428,7 +434,7 @@ export function Workspace({ mode }: { mode: 'work' | 'material' }) {
               </>
             ) : (
               <>
-                <div className="legend-title">Element type</div>
+                {legendHead('Element type')}
                 {ELEMENT_TYPES.filter((t) => elements.some((e) => e.type === t)).map((t) => (
                   <div key={t} className="legend-row">
                     <span className="swatch" style={{ background: TYPE_COLORS[t] }} />
