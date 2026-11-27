@@ -5436,3 +5436,10 @@ input[type='radio'] {
   justify-content: space-between;
   gap: 8px;
 }
+
+/* phones: Planning is a desk job, not in the More menu */
+@media (max-width: 760px) {
+  .sidebar li.desktop-only {
+    display: none;
+  }
+}

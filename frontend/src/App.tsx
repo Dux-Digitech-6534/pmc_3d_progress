@@ -52,9 +52,10 @@ function Shell() {
   const { page, go, projects, projectId, setProjectId, role, setRole, data, repo, notify, toasts, dismissToast, setSelection, loading, refresh, session, sessionError, canPlan, hasErp } = useApp();
   const NAV_SHOWN = NAV.filter((n) => (n.page !== 'planning' || canPlan) && (n.page !== 'variation' || hasErp));
   const TABS = tabsFor();
-  // Planning hidden: a saved "planning" page opens the Dashboard instead (once the user is known)
+  // Planning hidden (no right, or a phone): a saved "planning" page opens the Dashboard instead (once the user is known)
   useEffect(() => {
-    if (((page === 'planning' && !canPlan) || (page === 'variation' && !hasErp)) && (!IS_FRAPPE || session)) go('dashboard');
+    const phone = !!window.matchMedia?.('(max-width: 760px)').matches;
+    if (((page === 'planning' && (!canPlan || phone)) || (page === 'variation' && !hasErp)) && (!IS_FRAPPE || session)) go('dashboard');
   }, [page, canPlan, hasErp, session, go]);
   // Frappe: only the roles this user has; locally the full demo role switch.
   const roleOptions = IS_FRAPPE ? (session?.roles ?? []) : (Object.keys(ROLE_LABELS) as Role[]);
@@ -102,7 +103,7 @@ function Shell() {
         </div>
         <ul>
           {NAV_SHOWN.map((n) => (
-            <li key={n.page}>
+            <li key={n.page} className={n.page === 'planning' ? 'desktop-only' : undefined}>
               <button
                 className={page === n.page && !empty ? 'active' : ''}
                 onClick={() => {
