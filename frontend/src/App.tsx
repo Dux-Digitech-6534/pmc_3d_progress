@@ -32,10 +32,10 @@ const NAV: { page: Page; label: string; icon: string }[] = [
 ];
 
 // phones: the bottom tab bar (the rest stays in the ≡ menu, reached by "More")
-// without Planning (everyone but Administrator) the third tab is Material Required
-const TAB_LABELS: Partial<Record<Page, string>> = { dashboard: 'Home', workspace: 'Work', planning: 'Plan', material: 'Material', reports: 'Reports' };
-const tabsFor = (canPlan: boolean) =>
-  (['dashboard', 'workspace', canPlan ? 'planning' : 'material', 'reports'] as Page[]).map((p) => {
+// the third tab is always Material Required: Plan is not a phone tab (Planning stays under More for whoever has it)
+const TAB_LABELS: Partial<Record<Page, string>> = { dashboard: 'Home', workspace: 'Work', material: 'Material', reports: 'Reports' };
+const tabsFor = () =>
+  (['dashboard', 'workspace', 'material', 'reports'] as Page[]).map((p) => {
     const n = NAV.find((x) => x.page === p)!;
     return { page: p, icon: n.icon, label: TAB_LABELS[p] ?? n.label };
   });
@@ -51,7 +51,7 @@ export default function App() {
 function Shell() {
   const { page, go, projects, projectId, setProjectId, role, setRole, data, repo, notify, toasts, dismissToast, setSelection, loading, refresh, session, sessionError, canPlan, hasErp } = useApp();
   const NAV_SHOWN = NAV.filter((n) => (n.page !== 'planning' || canPlan) && (n.page !== 'variation' || hasErp));
-  const TABS = tabsFor(canPlan);
+  const TABS = tabsFor();
   // Planning hidden: a saved "planning" page opens the Dashboard instead (once the user is known)
   useEffect(() => {
     if (((page === 'planning' && !canPlan) || (page === 'variation' && !hasErp)) && (!IS_FRAPPE || session)) go('dashboard');
